@@ -1,0 +1,32 @@
+##########################################################################
+# Copyright 2002 - Linux Online, Inc.  All rights reserved
+# This program may be distributed under the terms of the GNU General
+# Public License, Version 2, or (at your option) any later version.
+#
+# Project     : Email processing
+# Component   : /etc/mail/mimedefang/spam-deliver
+# Author      : Michael McLagan <Michael.McLagan@linux.org>
+# Creation    : 08-May-2002 14:03pm
+# Description : A list of hosts that we trust to insert legitimate X-Spam-*
+#               headers.  The filter only scans messages which either don't
+#               have the X-Spam-Scanner: header or have a header from an
+#               untrusted host.
+#
+# Current Revision:
+#
+# $Source$
+# $Revision$
+# $Author$
+# $Date$
+#
+# Revision History:
+# 
+# $Log$
+# Revision 1.1  2002/05/09 20:18:24  dfs
+# Added from Michael McLagan.
+#
+##########################################################################
+
+localhost
+localhost.localdomain
+

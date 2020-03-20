@@ -1,0 +1,278 @@
+#!/bin/bash
+
+##########################################################################
+# Copyright @2002, Roaring Penguin Software Inc.  All rights reserved.
+#
+# Project     : MIMEDefang
+# Component   : redhat/mimedefang-sysconfig
+# Author      : Michael McLagan <Michael.McLagan@linux.org>
+# Creation    : 02-May-2002 14:17
+# Description : This is the configuration file for the RedHat RPM
+#               init script.  It lives in /etc/sysconfig as mimedefang
+#
+#               Documents all variables used by the init script and gives
+#               recommended values.  For boolean variables, any value other
+#               than 'yes' (all lower case) means NO.
+#
+# Current Revision:
+#
+# $Source$
+# $Revision$
+# $Author$
+# $Date$
+#
+# Revision History:
+#
+# $Log$
+# Revision 1.10  2006/01/20 03:18:46  dfs
+# Updated init scripts to understand -R option to mimedefang.
+#
+# Revision 1.9  2006/01/17 23:05:44  dfs
+# Added filter_helo and supporting infrastructure.
+#
+# Revision 1.8  2005/10/14 16:16:54  dfs
+# Add "-z" option to mimedefang and mimedefang-multiplexor to set the
+# spool directory.
+#
+# Revision 1.7  2005/02/08 17:10:33  dfs
+# Added ALLOW_NEW_CONNECTIONS_TO_QUEUE variable in init script.
+# Added -q option to mimedefang.
+#
+# Revision 1.6  2004/10/28 20:31:21  dfs
+# Add MX_STATUS_UPDATES variable to shell script.
+#
+# Revision 1.5  2004/06/21 18:46:03  dfs
+# Add MX_MAP_SOCKET variable in init scripts.
+#
+# Revision 1.4  2004/02/23 16:43:23  dfs
+# Added MX_NOTIFIER option in sysconfig and init script.
+#
+# Revision 1.3  2003/11/10 14:57:16  dfs
+# Added MX_EMBED_PERL parameter.
+#
+# Revision 1.2  2003/08/06 02:09:58  dfs
+# Increased timeouts.
+#
+# Revision 1.1  2003/07/23 18:27:35  dfs
+# Made Red Hat files configurable.
+#
+# Revision 1.22  2003/07/23 18:13:52  dfs
+# Added MD_EXTRA setting.
+#
+# Revision 1.21  2003/07/02 16:35:43  dfs
+# Cleanups in preparation for 2.35 release.
+#
+# Revision 1.20  2003/06/20 18:03:14  dfs
+# Added queue stuff to init scripts.
+#
+# Revision 1.19  2003/05/27 14:50:21  dfs
+# Default quarantine dir is /var/spool/MD-Quarantine
+# Removed support for non-multiplexor operation.
+#
+# Revision 1.18  2003/04/21 16:27:46  dfs
+# Added SYSLOG_FACILITY to init scripts.
+# Fixed typo.
+#
+# Revision 1.17  2003/03/05 15:30:28  dfs
+# Added -L option
+#
+# Revision 1.16  2002/12/03 17:55:37  dfs
+# Minor tweaks.
+#
+# Revision 1.15  2002/09/18 15:47:49  dfs
+# Updated init scripts for "-T" option.
+#
+# Revision 1.14  2002/08/26 03:20:10  dfs
+# Set user to defang in RPM
+#
+# Revision 1.13  2002/06/13 14:58:28  dfs
+# Updated changelog.
+#
+# Revision 1.12  2002/06/11 13:36:10  dfs
+# Update scripts for recipient checks.
+#
+# Revision 1.11  2002/05/29 18:12:15  dfs
+# Put pid files and sockets in /var/spool/MIMEDefang instead of /var/run
+#
+# Revision 1.10  2002/05/15 12:55:02  dfs
+# Infrastructure for running multiplexor as non-root.
+#
+# Revision 1.9  2002/05/10 12:36:53  dfs
+# Changed MX_WORKER_RATE to MX_WORKER_DELAY; added MX_MIN_WORKER_DELAY.
+#
+# Revision 1.8  2002/05/08 16:55:17  dfs
+# Updated redhat init scripts for subfilter.
+#
+# Revision 1.7  2002/05/06 18:36:08  dfs
+# Added MX_WORKER_RATE to init scripts.
+#
+# Revision 1.6  2002/05/06 14:04:04  dfs
+# Cleanups.
+#
+# Revision 1.5  2002/05/03 14:24:24  dfs
+# Merge packaging patches.
+# Fixed typo.
+# Made default value for -n 10.
+#
+##########################################################################
+
+# The spool directory
+# SPOOLDIR=@SPOOLDIR@
+
+# The socket used by mimedefang to communicate with sendmail
+# SOCKET=$SPOOLDIR/mimedefang.sock
+
+# If you want to log messages like "Filter time is 156ms" to syslog,
+# uncomment the next line
+# LOG_FILTER_TIME=yes
+
+# Run the multiplexor and filters as this user, not root.  RECOMMENDED
+MX_USER=defang
+
+# If you want to keep spool directories around if the filter fails,
+# set the next one to yes
+# KEEP_FAILED_DIRECTORIES=no
+
+# If "yes", turn on the multiplexor relay checking function
+# MX_RELAY_CHECK=no
+
+# If "yes", turn on the multiplexor HELO checking function
+# MX_HELO_CHECK=no
+
+# If "yes", turn on the multiplexor sender checking function
+# MX_SENDER_CHECK=no
+
+# If "yes", turn on the multiplexor recipient checking function
+# MX_RECIPIENT_CHECK=no
+
+# Ask for filter_tick to be called every 60 seconds
+# MX_TICK_REQUEST=60
+
+# Run three tick bands
+# MX_TICK_PARALLEL=3
+
+# Set to yes if you want the milter and multiplexor sockets
+# to be group-writable.  This also makes files created by mimedefang
+# group-readable.
+MD_ALLOW_GROUP_ACCESS=no
+
+# Set to yes if you want the multiplexor to log events to syslog
+MX_LOG=yes
+
+# Number of workers reserved for connections from loopback.  Use -1
+# for default behaviour, 0 to allow loopback connections to queue,
+# or >0 to reserve workers for loopback connections
+LOOPBACK_RESERVED_CONNECTIONS=-1
+
+# Set to path name of UNIX-domain socket if you want to use MIMEDefang
+# with Sendmail's SOCKETMAP map type
+# MX_MAP_SOCKET=$SPOOLDIR/map.sock
+
+# Set to yes if you want to use an embedded Perl interpreter
+# MX_EMBED_PERL=yes
+
+# Set to the syslog facility.  Also set $SyslogFacility in your filter
+# SYSLOG_FACILITY=mail
+
+# The multiplexor does not start all workers at the same time.  Instead,
+# it starts one worker every MX_WORKER_DELAY seconds when the system is idle.
+# (If the system is busy, the multiplexor starts workers as incoming mail
+# requires attention.)
+# MX_WORKER_DELAY=3
+
+# The next setting is an absolute limit on worker activation.  The multiplexor
+# will NEVER activate a worker within MX_MIN_WORKER_DELAY seconds of another.
+# The default of zero means that the multiplexor will activate workers as
+# quickly as necessary to keep up with incoming mail.
+# MX_MIN_WORKER_DELAY=0
+
+# Set to yes if you want the multiplexor to log stats in
+# /var/log/mimdefang/md-stats  The /var/log/mimedefang directory
+# must exist and be writable by the user you're running MIMEDefang as.
+# MX_STATS=no
+
+# Set to yes if you want the stats file flushed after each entry
+# MX_FLUSH_STATS=no
+
+# Set to yes if you want the multiplexor to log stats to syslog
+# MX_STATS_SYSLOG=no
+
+# The socket used by the multiplexor
+# MX_SOCKET=$SPOOLDIR/mimedefang-multiplexor.sock
+
+# Maximum # of requests a process handles
+# MX_REQUESTS=200
+
+# Minimum number of processes to keep.  The default of 0 is probably
+# too low; we suggest 2 instead.
+MX_MINIMUM=2
+
+# If you want to allow the multiplexor to queue new connections when
+# all workers are busy, set this to yes
+ALLOW_NEW_CONNECTIONS_TO_QUEUE=yes
+
+# Maximum number of processes to run (mail received while this many
+# processes are running is rejected with a temporary failure, so be
+# wary of how many emails you receive at a time).  This applies only
+# if you DO use the multiplexor.  The default value of 2 is probably
+# too low; we suggest 10 instead
+MX_MAXIMUM=10
+
+# Uncomment to log worker status; it will be logged every
+# MX_LOG_WORKER_STATUS_INTERVAL seconds
+# MX_LOG_WORKER_STATUS_INTERVAL=30
+
+# Uncomment next line to have busy workers send status updates to the
+# multiplexor.  NOTE: Consumes one extra file descriptor per worker, plus
+# a bit of CPU time.
+# MX_STATUS_UPDATES=yes
+
+# Limit worker processes' resident-set size to this many kilobytes.  Default
+# is unlimited.
+# MX_MAX_RSS=10000
+
+# Limit total size of worker processes' memory space to this many kilobytes.
+# Default is unlimited.
+# MX_MAX_AS=30000
+
+# If you want to use the "notification" facility, set the appropriate port.
+# See the mimedefang-notify man page for details.
+# MX_NOTIFIER=inet:4567
+
+# Number of seconds a process should be idle before checking for
+# minimum number and killed
+# MX_IDLE=300
+
+# Limit number of concurrent recipok requests on a per-domain basis.
+# 0 means no limit
+MX_RECIPOK_PERDOMAIN_LIMIT=0
+
+# Number of seconds a process is allowed to scan an email before it is
+# considered dead.  The default is 30 seconds; we suggest 600.
+MX_BUSY=600
+
+# Multiplexor queue size -- default is 0 (no queueing)
+# MX_QUEUE_SIZE=10
+
+# Multiplexor queue timeout -- default is 30 seconds
+# MX_QUEUE_TIMEOUT=30
+
+# Any extra arguments to mimedefang
+# MD_EXTRA="-a auth_author"
+
+# SUBFILTER specifies which filter rules file to use
+# SUBFILTER=@CONFDIR_EVAL@/mimedefang-filter
+
+# I question why I'm including this as I see no real need for it
+# but in the interests of a flexible implementation, here goes!
+#
+# DO NOT CHANGE THIS VARIABLE LIGHTLY!!
+#
+# The filtering program used by mimedefang or the multiplexor. This is
+# *NOT* a replacement for @CONFDIR_EVAL@/mimedefang-filter!!!  It replaces
+# the entire mimedefang perl program, /usr/bin/mimedefang.pl and allows
+# a unique filtering agent to be used.  Read mimedefang-protocol man
+# page VERY carefully before you attempt to change this!
+#
+# FILTER=/usr/bin/mimedefang.pl
+

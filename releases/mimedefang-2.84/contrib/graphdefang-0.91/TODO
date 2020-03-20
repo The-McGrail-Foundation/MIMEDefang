@@ -1,0 +1,34 @@
+#
+# GraphDefang -- a set of tools to create graphs of your mimedefang
+#                spam and virus logs.
+#
+# Written by:    John Kirkland
+#                jpk@bl.org
+#
+# Copyright (c) 2002-2003, John Kirkland
+#=============================================================================
+
+
+TODO 
+
+* Add #@PERL@ instead of a hardcode perl binary to scripts and change install
+  files to rename xyz.pl.in to xyz.pl installing everything in the correct places
+
+* Figure out how to graph imap and pop3 separately when using dovecot - I believe 
+  event/dovecot/general just needs a sub that looks for both imap and pop3 lines 
+  (DONE)
+
+* Add filtering so you can look at spam and virus patterns only for a certain domain.
+  I'm interested in this because I host several domains with my sendmail install.
+  (DONE)
+
+* Add recipientdomain as an accumulator type so I can look at spam and virus totals
+  by domain on a single chart.
+
+* Add pie charts and histograms
+
+* Add data caching so we don't need to recalculate summary values that we've already seen.
+  (DONE)
+
+* Add more generalized sendmail send and receive stats to the graphs so we know
+  the significance of given spam counts.

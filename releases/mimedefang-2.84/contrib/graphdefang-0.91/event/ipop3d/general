@@ -1,0 +1,20 @@
+#!/usr/bin/perl -w
+
+# Oct 17 21:58:33 westover ipop3d[21207]: Login user=ben host=c68.115.81.145.roc.mn.charter.com [68.115.81.145] nmsgs=0/0
+
+$event{'ipop3d'}{'general'} = 
+sub {
+	if ($text =~ m/^Login user=(\S+) host=(\S+)/) {
+
+		if ($unixtime > $MaxDBUnixTime) {
+			my $user = $1;
+			my $host = $2;
+
+			$event = 'ipop3d';
+			$value1 = $user;
+			$value2 = $host;
+
+			$FoundNewRow = 1;
+		}
+	}
+};

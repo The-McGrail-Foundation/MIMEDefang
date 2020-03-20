@@ -1,0 +1,358 @@
+#!/usr/bin/perl
+#
+# Munin plugin to measure important MIMEDefang performance metrics.
+#
+# Copyright (C) 2011 Roaring Penguin Software Inc.
+#
+# The program may be distributed under the terms of the GNU General
+# Public License, version 2 or (at your option) any later version.
+
+use warnings;
+use strict;
+
+use File::Basename;
+use IO::Socket::UNIX;
+
+my $MX_SOCK = $ENV{'MX_SOCK'} || '/tmp/mx-read.sock';
+
+my $name = basename($0);
+
+# Allow forcing for test purposes:
+# Example: ./mimedefang_munin_plugin force scans_per_sec [config]
+if (defined($ARGV[0]) &&
+    defined($ARGV[1])) {
+	if ($ARGV[0] eq 'force') {
+		shift(@ARGV);
+		$name = shift(@ARGV);
+	}
+}
+
+
+call_munin_helper($name, $ARGV[0]);
+exit(0);
+
+sub get_mimedefang_data
+{
+	my ($cmd, $index) = @_;
+	my $sock = IO::Socket::UNIX->new(Type => SOCK_STREAM,
+					 Peer => $MX_SOCK);
+	unless ($sock) {
+		print STDERR "Could not connect to multiplexor socket.\n";
+		exit(1);
+	}
+
+	$sock->print("$cmd\n");
+	$sock->flush();
+	my $line = $sock->getline();
+	$sock->close();
+	unless ($line) {
+		print STDERR "No response from multiplexor.\n";
+		exit(1);
+	}
+	my @array = split(/\s+/, $line);
+	if ($index >= scalar(@array)) {
+		print STDERR "Invalid index (?) Internal error!\n";
+		exit(1);
+	}
+
+	return $array[$index];
+}
+
+sub print_config
+{
+	my($title, $var, $label, $info) = @_;
+	print "graph_category MIMEDefang\n";
+	print "graph_title $title\n";
+	print "graph_scale no\n";
+	print "graph_vlabel $var\n";
+	print "$var.label $label\n";
+	print "$var.type GAUGE\n";
+	print "graph_info $info\n";
+	exit(0);
+}
+
+sub call_munin_helper
+{
+	my ($name, $arg) = @_;
+
+	$arg ||= '';
+
+	$name =~ s/^mimedefang_//;
+	if (defined(&{'munin_handle_' . $name})) {
+		no strict 'refs';
+		&{'munin_handle_' . $name}($arg);
+		use strict 'refs';
+	} else {
+		munin_handle_default($name, $arg);
+	}
+}
+
+sub munin_handle_default
+{
+	my ($name, $arg) = @_;
+	if ($name eq 'munin_plugin') {
+		print STDERR "Please symlink this file to the measurement you want.\nRun 'perldoc $0' for more information.\n";
+	} else {
+		print STDERR "Unknown parameter '$name'\n";
+	}
+	exit(1);
+}
+
+sub munin_handle_busy_workers
+{
+	my ($arg) = @_;
+
+	print_config('Busy MIMEDefang Workers',
+		     'workers',
+		     'Busy workers',
+		     'The average number of busy MIMEDefang worker processes.') if ($arg eq 'config');
+
+	my $ans = get_mimedefang_data('load', 7);
+	print "workers.value $ans\n";
+	exit(0);
+}
+
+sub munin_handle_scan_time
+{
+	my ($arg) = @_;
+
+	print_config('MIMEDefang Scan Time',
+		     'time',
+		     'Scan time (ms)',
+		     'The average scan time in milliseconds.') if ($arg eq 'config');
+
+	my $ans = get_mimedefang_data('load', 11);
+	print "time.value $ans\n";
+	exit(0);
+}
+
+sub munin_handle_rcpt_time
+{
+	my ($arg) = @_;
+
+	print_config('MIMEDefang RCPT Time',
+		     'time',
+		     'RCPT time (ms)',
+		     'The average RCPT time in milliseconds.') if ($arg eq 'config');
+
+	my $ans = get_mimedefang_data('load-recipok', 11);
+	print "time.value $ans\n";
+	exit(0);
+}
+
+sub munin_handle_mail_time
+{
+	my ($arg) = @_;
+
+	print_config('MIMEDefang MAIL Time',
+		     'time',
+		     'MAIL time (ms)',
+		     'The average MAIL time in milliseconds.') if ($arg eq 'config');
+
+	my $ans = get_mimedefang_data('load-senderok', 11);
+	print "time.value $ans\n";
+	exit(0);
+}
+
+sub munin_handle_relay_time
+{
+	my ($arg) = @_;
+
+	print_config('MIMEDefang relayok Time',
+		     'time',
+		     'relayok time (ms)',
+		     'The average relayok time in milliseconds.') if ($arg eq 'config');
+
+	my $ans = get_mimedefang_data('load-relayok', 11);
+	print "time.value $ans\n";
+	exit(0);
+}
+
+sub munin_handle_scans_per_sec
+{
+	my ($arg) = @_;
+
+	print_config('MIMEDefang Scans per Second',
+		     'scans',
+		     'Scans per Second',
+		     'The number of scans per second.') if ($arg eq 'config');
+
+	my $ans = get_mimedefang_data('load', 3);
+
+	# Divide by ten minutes to get scans/second
+	$ans /= 600.0;
+	print "scans.value $ans\n";
+	exit(0);
+}
+
+sub munin_handle_rcpts_per_sec
+{
+	my ($arg) = @_;
+
+	print_config('MIMEDefang RCPTs per Second',
+		     'rcpts',
+		     'RCPTs per Second',
+		     'The number of RCPTs per second.') if ($arg eq 'config');
+
+	my $ans = get_mimedefang_data('load-recipok', 3);
+	$ans /= 600.0;
+	print "rcpts.value $ans\n";
+	exit(0);
+}
+
+sub munin_handle_mails_per_sec
+{
+	my ($arg) = @_;
+
+	print_config('MIMEDefang MAILs per Second',
+		     'mails',
+		     'MAILs per Second',
+		     'The number of MAILs per second.') if ($arg eq 'config');
+
+	my $ans = get_mimedefang_data('load-senderok', 3);
+	$ans /= 600.0;
+	print "mails.value $ans\n";
+	exit(0);
+}
+
+sub munin_handle_busy_workers_by_cmd
+{
+	my ($arg) = @_;
+
+	my @cmds = qw(scan relayok senderok recipok other);
+	my %counts;
+
+	# Config is different for this one
+	if ($arg eq 'config') {
+		print "graph_category MIMEDefang\n";
+		print "graph_title Busy Workers by Command\n";
+		print "graph_scale no\n";
+		print "graph_vlabel Workers\n";
+		print "graph_info Busy workers categorized by current command\n";
+		foreach my $cmd (@cmds) {
+			print "$cmd.label $cmd\n";
+			print "$cmd.type GAUGE\n";
+			if ($cmd eq 'scan') {
+				print "$cmd.draw AREA\n";
+			} else {
+				print "$cmd.draw STACK\n";
+			}
+		}
+		exit(0);
+	}
+
+	foreach my $cmd (@cmds) {
+		$counts{$cmd} = 0;
+	}
+
+	# Get the info
+	my $sock = IO::Socket::UNIX->new(Type => SOCK_STREAM,
+					 Peer => $MX_SOCK);
+	unless ($sock) {
+		print STDERR "Could not connect to multiplexor socket.\n";
+		exit(1);
+	}
+
+	$sock->print("busyworkers\n");
+	$sock->flush();
+	while (my $line = $sock->getline()) {
+		if ($line =~ /^\d+ [A-Z] \d+ (\S+)/) {
+			my $cmd = $1;
+			if ($cmd ne 'other' && grep { $_ eq $cmd } @cmds) {
+				$counts{$cmd}++;
+			} else {
+				$counts{other}++;
+			}
+		} else {
+			$counts{other}++;
+		}
+	}
+	$sock->close();
+
+	foreach my $cmd (@cmds) {
+		print "$cmd.value " . $counts{$cmd} . "\n";
+	}
+
+	exit(0);
+}
+
+sub munin_handle_relayoks_per_sec
+{
+	my ($arg) = @_;
+
+	print_config('MIMEDefang relayoks per Second',
+		     'relayoks',
+		     'relayoks per Second',
+		     'The number of relayoks per second.') if ($arg eq 'config');
+
+	my $ans = get_mimedefang_data('load-relayok', 3);
+	$ans /= 600.0;
+	print "relayoks.value $ans\n";
+	exit(0);
+}
+
+__END__
+
+=head1 NAME
+
+mimedefang_munin_plugin - Plugin to monitor various MIMEDefang statistics.
+
+=head1 CONFIGURATION
+
+The environment variable MX_SOCK should be set to a (world-readable)
+multiplexor socket.  See the -a option to L<mimedefang-multiplexor>.  If
+MX_SOCK is not set, the socket defaults to /tmp/mx-read.sock.
+
+=head1 USAGE
+
+This plugin returns different values depending on what its filename
+is.  You can make the following symbolic links in the munin plugins
+directory.  (All measurements are the average over the last 10 minutes
+unless otherwise indicated.)
+
+=over
+
+=item mimedefang_busy_workers
+
+Return the average number of busy workers.
+
+=item mimedefang_scan_time
+
+Return the scan time in milliseconds.
+
+=item mimedefang_rcpt_time
+
+Return the RCPT-handling time in milliseconds.
+
+=item mimedefang_mail_time
+
+Return the MAIL-handling time in milliseconds.
+
+=item mimedefang_relay_time
+
+Return the "relay_ok" handling time in milliseconds.
+
+=item mimedefang_scans_per_sec
+
+Return the number of scans per second.
+
+=item mimedefang_rcpts_per_sec
+
+Return the number of RCPTs per second.
+
+=item mimedefang_mails_per_sec
+
+Return the number of MAILs per second.
+
+=item mimedefang_relayoks_per_sec
+
+Return the number of "relay_oks" per second.
+
+=item mimedefang_busy_workers_by_cmd
+
+Return the busy workers by command.  Unlike the other measurements,
+this measurement is a snapshot, not an average over the last 10 minutes.
+As a result, graphs for this measurement are likely to be spikier than
+the other graphs.
+
+=back

@@ -1,0 +1,7 @@
+There have been reports of problems on IRIX with the cleanup routine
+in rm_r.c.  To work around this, invoke configure like this on IRIX:
+
+	./configure --enable-cleanup-with-rm [additional_options]
+
+--
+David.

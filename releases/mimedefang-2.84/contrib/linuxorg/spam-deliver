@@ -1,0 +1,40 @@
+##########################################################################
+# Copyright 2002 - Linux Online, Inc.  All rights reserved
+# This program may be distributed under the terms of the GNU General
+# Public License, Version 2, or (at your option) any later version.
+#
+# Project     : Email processing
+# Component   : /etc/mail/mimedefang/spam-deliver
+# Author      : Michael McLagan <Michael.McLagan@linux.org>
+# Creation    : 08-May-2002 14:03pm
+# Description : A list of regex expressions to match against the recipient
+#               of the current message.  It is used by the mimedefang filter
+#               to determine if a message declared to be SPAM/UCE by the
+#               SpamAssassin should be delivered rather than discarded. 
+#
+# Current Revision:
+#
+# $Source$
+# $Revision$
+# $Author$
+# $Date$
+#
+# Revision History:
+# 
+# $Log$
+# Revision 1.1  2002/05/09 20:18:24  dfs
+# Added from Michael McLagan.
+#
+##########################################################################
+
+# A couple of addresses that really should not have their mail thrown
+# away.  It could be someone complaining that they got spam from this
+# domain or a machine serving this domain.  The down side of this is 
+# that abuse@ and postmaster@ will receive undesirable spam messages.  
+# Not the best solution but losing valid complaints isn't tolerable 
+# in the least.
+
+^abuse@
+^postmaster@
+
+# Local entries

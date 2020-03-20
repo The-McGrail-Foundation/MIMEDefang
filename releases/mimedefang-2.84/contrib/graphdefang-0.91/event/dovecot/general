@@ -1,0 +1,36 @@
+#!/usr/bin/perl -w
+
+#Feb  5 23:50:04 intel1 dovecot: imap-login: Login: user=<kmcgrail>, method=PLAIN, rip=100.36.131.234, lip=38.124.232.10, mpid=15867, TLS, session=<vSFtXdVH3wBkJIPq>
+
+$event{'dovecot'}{'general'} = 
+sub {
+	#print "DEBUG: $text\n";
+	if ($text =~ m/^imap-login: Login: user=\<(\S+)\>,.*rip=(\S+)/) {
+		#print "DEBUG: match\n";
+		if ($unixtime > $MaxDBUnixTime) {
+			my $user = $1;
+			my $host = $2;
+
+			$event = 'dovecat-imapd';
+			$value1 = $user;
+			$value2 = $host;
+
+			$FoundNewRow = 1;
+		}
+	}
+
+	#print "DEBUG: $text\n";
+        if ($text =~ m/^pop3-login: Login: user=\<(\S+)\>,.*rip=(\S+)/) {
+                #print "DEBUG: match\n";
+                if ($unixtime > $MaxDBUnixTime) {
+                        my $user = $1;
+                        my $host = $2;
+
+                        $event = 'dovecat-pop3d';
+                        $value1 = $user;
+                        $value2 = $host;
+
+                        $FoundNewRow = 1;
+                }
+        }
+};

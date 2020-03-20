@@ -1,0 +1,279 @@
+.\" $Id$
+.\""
+.TH MIMEDEFANG 8 "8 February 2005"
+.UC 4
+.SH NAME
+mimedefang \- Sendmail MIME mail filter
+.SH SYNOPSIS
+
+.B mimedefang prcap
+
+.B mimedefang \fR-p \fIconnection\fR -m \fImx_socket_name\fR -U \fIuser\fR [\fIoptions\fR]
+
+.SH DESCRIPTION
+\fBmimedefang\fR is a filter built around Sendmail 8.11's \fImilter\fR
+API for mail filters.  It collects each incoming message and runs
+a filter on the message.  This is useful for deleting attachments
+which may be a security risk on poorly-designed systems like Microsoft
+Windows.
+
+\fBmimedefang\fR does not actually run the Perl filter; instead, it
+communicates with \fBmimedefang-multiplexor\fR(8), which manages a
+pool of persistent Perl processes.  See the \fBmimedefang-multiplexor\fR
+man page for additional information.
+
+.SH OPTIONS
+
+If you invoke \fBmimedefang\fR with the single argument
+\fBprcap\fR, it prints information about the version of Milter
+it is linked against and exits.  Otherwise, you should invoke
+\fBmimedefang\fR as shown in the second line of the SYNOPSIS.
+
+.TP
+.B \-U \fIuser\fR
+Runs \fBmimedefang\fR as \fIuser\fR rather than \fIroot\fR.  The
+\fIuser\fR argument must match the argument to
+\fBmimedefang-multiplexor\fR's \fB\-U\fR option as well.
+
+.TP
+.B \-y
+If the \fB\-y\fR command-line option is given, MIMEDefang will
+call smfi_setsymlist to set the list of macros it wants.  \fIThis function
+leaked memory in versions of Sendmail prior to 8.14.4\fR so by default
+we do not call it.  If you are running an older version of sendmail,
+you should explicitly set the list of macros you want in the Sendmail
+configuration file.
+
+.TP
+.B \-z \fIspooldir\fR
+Set the spool directory to \fIspooldir\fR.  If this option is omitted,
+the spool directory defaults to @SPOOLDIR@.
+
+.TP
+.B \-p \fIconnection\fR
+The \fB\-p\fR switch is required and specifies the \fImilter\fR connection
+type.  Typically, you should run \fBmimedefang\fR on the same computer
+as \fBsendmail\fR.  Therefore, you should use a UNIX-domain socket for
+the connection type.  The suggested value for the \fB\-p\fR switch is
+\fBmimedefang.sock\fR under the spool directory.
+
+.TP
+.B \-m \fImx_socket_name\fR
+Specifies the socket for communicating with
+\fBmimedefang-multiplexor\fR(8).  The \fImx_socket_name\fR specifies
+the path of the UNIX-domain socket.  See
+\fBmimedefang-multiplexor\fR(8) for details.
+
+.TP
+.B \-b \fIbacklog\fR
+Sets the "backlog" argument to the \fBlisten\fR(2) system call
+to \fIbacklog\fR.  If this option is omitted, then the operating-system
+default backlog is used.
+
+.TP
+\fB\-G\fR
+Normally, \fBmimedefang\fR uses a umask of 077 when creating the
+milter socket and files.  If you would like the socket to be readable
+and writeable by the group and files to be group-readable, supply the
+\fB\-G\fR option.  This causes the umask to be 007 whenever
+UNIX-domain sockets are created and 027 whenever files are created.
+\fINote\fR: if your milter library is too old to have the
+smfi_opensocket() function, the \fB\-G\fR option causes
+\fBmimedefang\fR to use a umask of 007 throughout its execution.
+
+Note that by default, @SPOOLDIR@ is created with mode 0700.
+If you use the \fB\-G\fR option, you probably should change
+the mode to 0750.
+
+.TP
+.B \-d
+The \fB\-d\fR switch causes \fBmimedefang\fR \fInot\fR to delete
+the temporary spool files it creates for incoming messages.  This is
+for debugging purposes only and should \fInever\fR be used on a
+production mail server.
+
+.TP
+.B \-r
+Causes \fBmimedefang\fR to perform a relay check before processing
+any messages.  It calls into a user-supplied Perl function
+called \fBfilter_relay\fR with the IP address and host name of the
+sending relay.  (See \fBmimedefang-filter\fR(5) for details.)
+
+.TP
+.B \-H
+Causes \fBmimedefang\fR to perform a HELO check before processing any
+messages.  It calls into a user-supplied Perl function called
+\fBfilter_helo\fR with the IP address and host name of the sending
+relay, and the HELO argument.  (See \fBmimedefang-filter\fR(5) for
+details.)
+
+
+.TP
+.B \-s
+Causes \fBmimedefang\fR to perform a sender check before processing
+the message body.  It calls into a user-supplied Perl function
+called \fBfilter_sender\fR with the envelope address of the sender.
+(See \fBmimedefang-filter\fR(5) for details.)
+
+.TP
+.B \-t
+Causes \fBmimedefang\fR to perform recipient checks before processing
+the message body.  It calls into a user-supplied Perl function
+called \fBfilter_recipient\fR with the envelope address of each recipient.
+(See \fBmimedefang-filter\fR(5) for details.)
+
+.TP
+.B \-q
+Permits the multiplexor to queue new connections.  See the section
+QUEUEING REQUESTS in the mimedefang-multiplexor man page.  Note that
+this option and the \fB\-R\fR option are mutually-exclusive.  If you
+supply \fB\-q\fR, then \fB\-R\fR is ignored.
+
+.TP
+.B \-k
+Causes \fBmimedefang\fR \fInot\fR to delete working directories if
+a filter fails.  This lets you obtain the message which caused the
+filter to fail and determine what went wrong.  \fBmimedefang\fR logs
+the directory containing the failed message using syslog.
+
+.TP
+.B \-P \fIfileName\fR
+Causes \fBmimedefang\fR to write its process-ID (after
+becoming a daemon) to the specified file.  The file will be
+owned by root.
+
+.TP
+.B \-o \fIfileName\fR
+Causes \fbmimedefang\fR to use \fIfileName\fR as a lock file to avoid
+multiple instances from running.  If you supply \fB\-P\fR but not
+\fB\-o\fR, then \fbmimedefang\fR constructs a lock file by appending
+".lock" to the pid file.  However, this is less secure than having a
+root-owned pid file in a root-owned directory and a lock file writable
+by the user named by the \fB\-U\fR option.  (The lock file must be
+writable by the \fB\-U\fR user.)
+
+.TP
+.B \-R \fInum\fR
+Normally, \fBmimedefang\fR tempfails a new SMTP connection if
+there are no free workers.  Supplying the \fB\-R\fR \fInum\fR option
+makes \fBmimedefang\fR tempfail new connections if there are fewer
+than \fInum\fR free workers, \fIunless\fR the connection is from the
+local host.  This allows you to favour connections from localhost so
+your clientmqueue doesn't build up.  Note that supplying \fB\-R 0\fR
+is subtly different from omitting the option; in this case, \fBmimedefang\fR
+permits new connections from localhost to queue, but not connections
+from other hosts (unless you also supply the \fB\-q\fR option.)
+
+The purpose of the \fB\-R\fR option is to reserve resources for
+clientmqueue runs.  Otherwise, on a very busy mail server, clientmqueue
+runs can starve for a long time, leading to delays for locally-generated
+or streamed mail.  We recommend using a small number for \fInum\fR;
+probably no more than 3 or 10% of the total number of workers (whichever
+is smaller.)
+
+Note that this option and the \fB\-q\fR option are mutually-exclusive.
+If you supply \fB\-q\fR, then \fB\-R\fR is ignored.
+
+.TP
+.B \-C
+Conserve file descriptors by opening and closing disk files more
+often.  (Disk files are never held open across Milter callbacks.)
+While this shortens the length of time a file descriptor is open, it
+also leaves more opportunities for the open to fail.  We do not
+recommend the use of this flag except on very busy systems that
+exhibit failures due to a shortage of file descriptors.
+
+.TP
+.B \-T
+Causes \fBmimedefang\fR to log the run-time of the Perl filter using
+syslog.
+
+.TP
+.B \-x \fIstring\fR
+Add \fIstring\fR as the content of the X-Scanned-By: header.  If you
+set \fIstring\fR to the empty string (i.e. \-x ""), then no X-Scanned-By:
+header will be added.
+
+.TP
+.B \-X
+Do not add an X-Scanned-By: header.  Specifying \-X is equivalent to
+specifying \-x "".
+
+.TP
+.B \-D
+Do not fork into the background and become a daemon.  Instead, stay
+in the foreground.  Useful mainly for debugging or if you have a
+supervisory process managing \fBmimedefang\fR.
+
+.TP
+.B \-M
+This option is obsolete; it is accepted for backward-compatibility,
+but is ignored.
+
+.TP
+.B \-N
+Normally, \fBmimedefang\fR sees all envelope recipients, even ones that
+Sendmail knows to be invalid.  If you don't want Sendmail to perform
+a milter callback for recipients it knows to be invalid, invoke
+\fBmimedefang\fR with the \-N flag.  \fIPlease note that this
+flag only works with Sendmail and Milter 8.14.0 and newer.  It has
+no effect if you're running an older version of Sendmail or Milter.\fR
+
+.TP
+\-S \fIfacility\fR
+Specifies the syslog facility for log messages.  The default is
+\fImail\fR.  See \fBopenlog\fR(3) for a list of valid facilities.
+You can use either the short name ("mail") or long name ("LOG_MAIL") for
+the facility name.
+
+.TP
+\-a \fImacro\fR
+Pass the value of the specified Sendmail macro through to the Perl filter.
+You can repeat the \-a option to write more macros than the built-in
+defaults.  Note that in addition to asking \fBmimedefang\fR to pass the
+macro value to the filter, you must configure Sendmail to pass the
+macro through to \fBmimedefang\fR using the confMILTER_MACROS_ENVFROM
+definition in Sendmail's m4 configuration file.
+
+.TP
+.B \-c
+Strip "bare" carriage-returns (CR) characters from the message body.
+A bare CR should never appear in an e-mail message.  Older versions
+of \fBmimedefang\fR used to strip them out automatically, but now they
+are left in by default.  The \fB\-c\fR option enables the older behavior.
+.TP
+.B \-h
+Print usage information and exit.
+
+.SH OPERATION
+
+When \fBmimedefang\fR starts, it connects to \fBsendmail\fR using the
+\fImilter\fR API.  (See the Sendmail 8.11 documentation.)  For each
+incoming message, \fBmimedefang\fR creates a temporary directory and
+saves information in the directory.  At various phases during the SMTP
+conversation, \fBmimedefang\fR communicates with \fBmimedefang-multiplexor\fR
+to perform various operations.  \fBmimedefang-multiplexor\fR manages a pool
+of persistent Perl processes that actually perform the mail scanning
+operations.
+
+.PP
+When a Perl process scans an e-mail, the temporary spool directory
+contains certain files; details of the communication protocol between
+\fBmimedefang\fR and the Perl script are in
+\fBmimedefang-protocol\fR(7).
+
+.SH WARNINGS
+\fBmimedefang\fR does violence to the flow of e-mail.  The Perl filter
+is quite picky and assumes that MIME e-mail messages are well-formed.
+While I have tried to make the script safe, I take \fIno responsibility\fR
+for lost or mangled e-mail messages or any security holes this script
+may introduce.
+
+.SH AUTHOR
+\fBmimedefang\fR was written by Dianne Skoll <dfs@roaringpenguin.com>.
+The \fBmimedefang\fR home page is \fIhttp://www.mimedefang.org/\fR.
+
+.SH SEE ALSO
+mimedefang.pl(8), mimedefang-filter(5), mimedefang-multiplexor(8), mimedefang-protocol(7)
+
+

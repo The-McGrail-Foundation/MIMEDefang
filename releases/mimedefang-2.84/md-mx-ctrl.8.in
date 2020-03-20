@@ -1,0 +1,280 @@
+.\" $Id$
+.\""
+.TH MD-MX-CTRL 8 "8 February 2005"
+.UC 4
+.SH NAME
+md-mx-ctrl \- Control mimedefang-multiplexor
+.SH SYNOPSIS
+.B md-mx-ctrl \fR[\fIoptions\fR] \fIcommand\fR
+
+.SH DESCRIPTION
+\fBmd-mx-ctrl\fR is a command-line tool for communicating with
+\fBmimedefang-multiplexor\fR(8).
+
+.SH OPTIONS
+.TP
+.B \-h
+Displays usage information.
+
+.TP
+.B \-s \fIpath\fR
+Specifies the path to the \fBmimedefang-multiplexor\fR socket.  If
+not specified, defaults to @SPOOLDIR@/mimedefang-multiplexor.sock.
+
+.TP
+.B \-i
+This flag causes \fBmd-mx-ctrl\fR to sit in a loop, reading commands
+on standard input and printing results to standard output.  It is
+intended for use by a monitoring program such as
+\fBwatch-mimedefang\fR.
+
+.SH COMMANDS
+
+The following commands are available:
+
+.TP
+.B status
+Prints the status of all worker Perl processes in human-readable format.
+
+.TP
+.B rawstatus
+Prints the status of all worker Perl processes in a format easy to
+parse by computer.  The result is a single line with six words on it.
+The words are separated by a single space character.
+
+Each character in the first word corresponds to a worker, and is "I"
+for an idle worker, "B" for a busy worker, "S" for a worker which is not
+running, and "K" for a worker which has been killed, but has not yet
+exited.  A worker is "idle" if there is a running Perl process waiting
+to do work.  "Busy" means the Perl process is currently filtering a
+message.  "S" means there is no associated Perl process with the
+worker, but one can be started if the load warrants.  Finally, "K"
+means the worker Perl process has been killed, but has yet to
+terminate.
+
+The second word is the total number of messages processed since the
+multiplexor started up.  The third word is the total number of workers
+which have been activated since the multiplexor started up.  (That is,
+it's a count of the number of times the multiplexor has forked and
+exec'd the Perl filter.)
+
+The fourth word is the size of the queue for request queuing, and the
+fifth word is the actual number of requests in the queue.  The sixth
+word is the number of seconds elapsed since the multiplexor was started.
+
+.TP
+.B barstatus
+Prints the status of busy workers and queued requests in a nice
+"bar chart" format.  This lets you keep an eye on things with a script
+like this:
+
+.nf
+	while true ; do
+		md-mx-ctrl barstatus
+		sleep 1
+	done
+.fi
+
+.TP
+.B histo
+Prints a histogram showing the number of workers that were busy each time
+a request was processed.  A single line is printed for the numbers
+from 1 up to the maximum number of workers.  Each line contains the count
+of busy workers (1, 2, 3 up to MX_MAXIMUM), a space, and the number of
+times that many workers were busy when a request was processed.
+
+.TP
+.B load
+Prints a table showing "load averages" for the last 10 seconds, 1 minute,
+5 minutes and 10 minutes.
+
+Each row in the table corresponds to a time interval, displayed in the
+first column.  The remaining columns in the table are:
+
+\fBMsgs:\fR The number of messages scanned within the row's time interval.
+
+\fBMsgs/Sec:\fR The average number of messages scanned per second within
+the row's time interval.
+
+\fBAvg Busy Workers:\fR The average number of busy workers whenever a
+message was scanned.  (If you are processing any mail at all, this
+number will be at least 1, because there is always 1 busy worker when a
+message is scanned.)
+
+If you have the \fBwatch\fR(1) command on your system, you can keep
+an eye on the load with this command:
+
+.nf
+	watch -n 10 md-mx-ctrl load
+.fi
+
+If you do not have \fBwatch\fR, the following shell script is a less
+fancy equivalent:
+
+.nf
+	#!/bin/sh
+	while true; do
+		clear
+		date
+		md-mx-ctrl load
+		sleep 10
+	done
+.fi
+
+.TP
+.B rawload
+
+Prints the load averages in computer-readable format.  The format
+consists of twenty-nine space-separated numbers:
+
+The first four are integers representing the number of messages
+scanned in the last 10 seconds, 1 minute, 5 minutes and 10 minutes.
+
+The second four are floating-point numbers representing the average
+number of busy workers in the last 10 seconds, 1 minute, 5 minutes and
+10 minutes.
+
+The third four are floating-point numbers representing the average
+time per scan in milliseconds over the last 10 seconds, 1 minute, 5
+minutes and 10 minutes.
+
+The fourth four are the number of worker activations (new workers started)
+over the last 10 seconds, 1 minute, 5 minutes and 10 minutes.
+
+The fifth four are the number of workers reaped (workers that have exited)
+over the last 10 seconds, 1 minute, 5 minutes and 10 minutes.
+
+The sixth four are the number of busy, idle, stopped and killed workers.
+
+The seventh four are the number of messages processed, the number of
+worker activations, the size of the request queue, and the number of requests
+actually on the queue.
+
+The final number is the number of seconds since the multiplexor was started.
+
+.TP
+.B load-relayok
+Similar to \fBload\fR, but shows timings for \fBfilter_relay\fR calls.
+
+.TP
+.B load-senderok
+Similar to \fBload\fR, but shows timings for \fBfilter_sender\fR calls.
+
+.TP
+.B load-recipok
+Similar to \fBload\fR, but shows timings for \fBfilter_recipient\fR calls.
+
+.TP
+.B rawload-relayok
+Similar to \fBrawload\fR, but shows timings for \fBfilter_relay\fR calls.
+Note that the worker activation and reap statistics are present, but always
+0.  They are only valid in a \fBrawload\fR command.
+
+.TP
+.B rawload-senderok
+Similar to \fBrawload\fR, but shows timings for \fBfilter_sender\fR calls.
+Note that the worker activation and reap statistics are present, but always
+0.  They are only valid in a \fBrawload\fR command.
+
+.TP
+.B rawload-recipok
+Similar to \fBrawload\fR, but shows timings for \fBfilter_recipient\fR calls.
+Note that the worker activation and reap statistics are present, but always
+0.  They are only valid in a \fBrawload\fR command.
+
+.TP
+.B load1 \fInsecs\fR
+The \fBload1\fR command displays the load for various commands over
+the last \fInsecs\fR seconds, where \fInsecs\fR is an integer from
+10 to 600.  The \fBload1\fR command combines the output of
+\fBload\fR, \fBload-relayok\fR, \fBload-senderokf\fR and \fBload-recipok\fR
+into one display.
+
+You might use the command like this:
+
+.nf
+	watch -n 10 md-mx-ctrl load1 60
+.fi
+
+.TP
+.B rawload1 \fInsecs\fR
+Returns the \fBload1\fR data in human-readable format.  The result is
+a line containing twenty-six space-separated numbers:
+
+The first three numbers are the number of scans performed in the last
+\fInsecs\fR seconds, the average number of busy workers when a scan was
+initiated and the average number of milliseconds per scan.
+
+The second three are the same measurements for \fBfilter_relay\fR calls.
+
+The third three are the same measurements for \fBfilter_sender\fR calls.
+
+The fourth three are the same measurements for \fBfilter_relay\fR calls.
+
+The thirteenth through sixteenth numbers are the number of busy, idle,
+stopped and killed workers, respectively.
+
+The seventeenth number is the number of scans since \fBmimedefang-multiplexor\fR
+was started.
+
+The eighteenth number is the number of times a new worker has been activated
+since program startup.
+
+The nineteenth number is the size of the request queue and the twentieth
+number is the actual number of queued requests.
+
+The twenty-first number is the time since program startup and the twenty-second
+number is a copy of \fInsecs\fR for convenience.
+
+The twenty-third through twenty-sixth numbers are the number of workers
+currently executing a scan, relayok, senderok and recipok command respectively.
+
+.TP
+.B workers
+Displays a list of workers and their process IDs.  Each line of output
+consists of a worker number, a status (I, B, K, or S), and for idle or
+busy workers, the process-ID of the worker.  For busy workers, the line
+may contain additional information about what the worker is doing.
+The command \fBslaves\fR is a deprecated synonym for this command.
+
+.TP
+.B busyworkers
+Similar to \fBworkers\fR, but only outputs a line for each busy worker.
+The command \fBbusyslaves\fR is a deprecated synonym for this command.
+
+.TP
+.B workerinfo \fR\fIn\fR
+Displays information about worker number \fIn\fR.
+The command \fBslaveinfo\fR is a deprecated synonym for this command.
+
+.TP
+.B reread
+Forces \fBmimedefang-multiplexor\fR to kill all idle workers, and terminate
+and restart busy workers when they become idle.  This forces a reread of
+filter rules.
+
+.TP
+.B msgs
+Prints the total number of messages scanned since the multiplexor started.
+
+.SH ADDITIONAL COMMANDS
+
+You can supply any other command and arguments to \fBmd-mx-ctrl\fR.
+It percent-encodes each command-line argument, glues the encoded
+arguments together with a single space between each, and sends the
+result to the multiplexor as a command.  This allows you to send
+arbitrary commands to your Perl workers.  See the section "EXTENDING
+MIMEDEFANG" in \fBmimedefang-filter\fR(5) for additional details.
+
+.SH PERMISSIONS
+
+\fBmd-mx-ctrl\fR uses the multiplexor's socket; therefore, it probably
+needs to be run as \fIroot\fR or the same user as \fBmimedefang-multiplexor\fR.
+
+.SH AUTHOR
+\fBmd-mx-ctrl\fR was written by Dianne Skoll <dfs@roaringpenguin.com>.
+The \fBmimedefang\fR home page is \fIhttp://www.mimedefang.org/\fR.
+
+.SH SEE ALSO
+mimedefang.pl(8), mimedefang-filter(5), mimedefang(8), mimedefang-protocol(7),
+watch-mimedefang(8)

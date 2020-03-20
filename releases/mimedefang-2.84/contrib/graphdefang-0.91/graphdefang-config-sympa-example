@@ -1,0 +1,264 @@
+#!/usr/bin/perl -w
+#
+# GraphDefang -- a set of tools to create graphs of your mimedefang
+#                spam and virus logs.
+#
+# Written by:    John Kirkland
+#                jpk@bl.org
+#
+# Copyright (c) 2002, John Kirkland
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or (at
+# your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+#=============================================================================
+
+#
+# Path to incoming log file
+#
+
+$DATAFILE = '/var/log/sympa.log';
+
+#
+# Output directory for png files that are created
+#
+
+$OUTPUT_DIR = '/home/jpk/public_html/sympa';
+
+# Set graph settings
+#
+# Possible settings:
+#
+# Name:               data_types (required)
+# Description:        Array of events from the mimedefang log file to
+#                     graph.
+# Supported Values:   These event names are not fixed.  If you put an event
+#                     in mimedefang-filter with md_log('event'), then you
+#                     can use it here.  The values used in the example
+#                     mimedefang-filter are 'spam', 'virus',
+#                     'suspicious_chars', 'message/partial', 'bad_filename',
+#                     'non_rfc822', 'non_multipart'.
+#                     'all' is also supported, but it must be listed by itself.
+#
+# Name:               graph_type (required)
+# Description:        Type of graph to output.
+# Supported Values:   'line' or 'stacked_bar'
+#
+# Name:               grouping (required)
+# Description:        Which value to graph from the md_log file.
+# Supported Values:   'summary', 'value1', 'value2', 'sender', 'recipient'
+#                     'subject'.  value1 and value2 are the optional
+#                     parameters that can be logged with the md_log command
+#                     from mimedefang-filter.
+#
+# Name:               grouping_times (required)
+# Description:        Array of Time intervals to use for grouping
+# Supported Values:   'hourly', 'daily', or 'monthly'
+#
+# Name:               top_n (optional)
+# Description:        Limit number of values to the top n.  This
+#                     value is recommended when looking at
+#                     senders, recipients, or subjects.
+#
+# Name:               value1_title (optional)
+# Description:        Title used in the header if value1 is
+#                     graphed.
+#
+# Name:               value2_title (optional)
+# Description:        Title used in the header if value2 is
+#                     graphed.
+#
+# Name:               filter (optional)
+# Description:        Regular expression filter that can be
+#                     used with value1, value2, sender, 
+#                     recipient, and subject
+#                     Common uses: 
+#                     '@westover.org' to filter sender or recipient by domain
+#                     '^(?:(?!klez).)*$' to filter OUT klez in a virusname
+#
+# Name:	              filter_name (optional)
+# Description:        If a filter is used, the filtername will be appended
+#                     to the Graph Title as "filtered by $filter_name" and
+#                     appended to the end of the filename.
+#
+# Name:               $GraphSettings{'title'} (optional)
+# Description:        Assigns a title for the chart.
+
+my %GraphSettings;
+
+#-------------------------------------------------------------
+
+%GraphSettings = ();
+%GraphSettings = (
+        'data_types'    => ['all'],
+        'graph_type'    => 'line',
+        'grouping'      => 'summary',
+        'grouping_times'=> ['hourly','daily','monthly'],
+        );
+push @GRAPHS, { %GraphSettings };
+
+#-------------------------------------------------------------
+
+%GraphSettings = ();
+%GraphSettings = (
+        'data_types'    => ['all'],
+        'graph_type'    => 'line',
+        'grouping'      => 'subject',
+	'filter'	=> 'dailywisdom-kjv',
+	'filter_name'	=> 'DailyWisdom-KJV',
+        'grouping_times'=> ['hourly','daily','monthly'],
+        );
+push @GRAPHS, { %GraphSettings };
+
+#-------------------------------------------------------------
+
+%GraphSettings = ();
+%GraphSettings = (
+        'data_types'    => ['all'],
+        'graph_type'    => 'line',
+        'grouping'      => 'subject',
+	'filter'	=> 'dailywisdom-niv',
+	'filter_name'	=> 'DailyWisdom-NIV',
+        'grouping_times'=> ['hourly','daily','monthly'],
+        );
+push @GRAPHS, { %GraphSettings };
+
+#-------------------------------------------------------------
+
+%GraphSettings = ();
+%GraphSettings = (
+        'data_types'    => ['all'],
+        'graph_type'    => 'line',
+        'grouping'      => 'subject',
+	'filter'	=> 'heartlight_',
+	'filter_name'	=> 'Heartlight',
+        'grouping_times'=> ['hourly','daily','monthly'],
+        );
+push @GRAPHS, { %GraphSettings };
+
+#-------------------------------------------------------------
+
+%GraphSettings = ();
+%GraphSettings = (
+        'data_types'    => ['all'],
+        'graph_type'    => 'line',
+        'grouping'      => 'subject',
+	'filter'	=> 'heartlight-update',
+	'filter_name'	=> 'Heartlight Update',
+        'grouping_times'=> ['hourly','daily','monthly'],
+        );
+push @GRAPHS, { %GraphSettings };
+
+#-------------------------------------------------------------
+
+%GraphSettings = ();
+%GraphSettings = (
+        'data_types'    => ['all'],
+        'graph_type'    => 'line',
+        'grouping'      => 'subject',
+	'filter'	=> 'myutmost',
+	'filter_name'	=> 'My Utmost',
+        'grouping_times'=> ['hourly','daily','monthly'],
+        );
+push @GRAPHS, { %GraphSettings };
+
+#-------------------------------------------------------------
+
+%GraphSettings = ();
+%GraphSettings = (
+        'data_types'    => ['all'],
+        'graph_type'    => 'line',
+        'grouping'      => 'subject',
+	'filter'	=> 'prayingwithpaul',
+	'filter_name'	=> 'Praying With Paul',
+        'grouping_times'=> ['hourly','daily','monthly'],
+        );
+push @GRAPHS, { %GraphSettings };
+
+#-------------------------------------------------------------
+
+%GraphSettings = ();
+%GraphSettings = (
+        'data_types'    => ['all'],
+        'graph_type'    => 'line',
+        'grouping'      => 'subject',
+	'filter'	=> 'quotemeal',
+	'filter_name'	=> 'Quote Meal',
+        'grouping_times'=> ['hourly','daily','monthly'],
+        );
+push @GRAPHS, { %GraphSettings };
+
+#-------------------------------------------------------------
+
+%GraphSettings = ();
+%GraphSettings = (
+        'data_types'    => ['all'],
+        'graph_type'    => 'line',
+        'grouping'      => 'subject',
+	'filter'	=> 'spurgeon',
+	'filter_name'	=> 'Spurgeon',
+        'grouping_times'=> ['hourly','daily','monthly'],
+        );
+push @GRAPHS, { %GraphSettings };
+
+#-------------------------------------------------------------
+
+%GraphSettings = ();
+%GraphSettings = (
+        'data_types'    => ['all'],
+        'graph_type'    => 'line',
+        'grouping'      => 'subject',
+	'filter'	=> 'todayspoll',
+	'filter_name'	=> 'Todays Poll',
+        'grouping_times'=> ['hourly','daily','monthly'],
+        );
+push @GRAPHS, { %GraphSettings };
+
+#-------------------------------------------------------------
+
+%GraphSettings = ();
+%GraphSettings = (
+        'data_types'    => ['all'],
+        'graph_type'    => 'line',
+        'grouping'      => 'subject',
+	'filter'	=> 'todaysverse_',
+	'filter_name'	=> 'Todays Verse',
+        'grouping_times'=> ['hourly','daily','monthly'],
+        );
+push @GRAPHS, { %GraphSettings };
+
+#-------------------------------------------------------------
+
+%GraphSettings = ();
+%GraphSettings = (
+        'data_types'    => ['all'],
+        'graph_type'    => 'line',
+        'grouping'      => 'subject',
+	'filter'	=> 'todaysverse-kjv',
+	'filter_name'	=> 'Todays Verse KJV',
+        'grouping_times'=> ['hourly','daily','monthly'],
+        );
+push @GRAPHS, { %GraphSettings };
+
+#-------------------------------------------------------------
+
+%GraphSettings = ();
+%GraphSettings = (
+        'data_types'    => ['all'],
+        'graph_type'    => 'line',
+        'grouping'      => 'subject',
+	'filter'	=> 'wjd',
+	'filter_name'	=> 'WJD',
+        'grouping_times'=> ['hourly','daily','monthly'],
+        );
+push @GRAPHS, { %GraphSettings };

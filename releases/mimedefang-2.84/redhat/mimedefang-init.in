@@ -1,0 +1,324 @@
+#!/bin/bash
+
+##########################################################################
+# Copyright @2002, Roaring Penguin Software Inc.  All rights reserved.
+#
+# Project     : MIMEDefang
+# Component   : redhat/mimedefang-init
+# Author      : Michael McLagan <Michael.McLagan@linux.org>
+# Creation    : 30-Apr-2002 13:42
+# Description : This is the init script for the RedHat RPM.  It lives
+#               in /etc/rc.d/init.d as mimedefang and is called by
+#               init during system startup.
+#
+#               Uses redhat/mimedefang-sysconfig (/etc/sysconfig/mimedefang)
+#               to set various variables used as parameters to start the 
+#               mimedefang and mimedefang-multiplexor daemons.
+#
+#               Based on init scripts provided by RedHat and others.
+#
+#               mimedefang should be started before sendmail and stopped
+#               after sendmail.  The values in the chkconfig: line below
+#               are based on those in the default (RedHat issued) sendmail
+#               script as /etc/rc.d/init.d/sendmail (80 30)
+#
+##########################################################################
+
+# These comments are used by chkconfig and supporting programs
+#
+# chkconfig: - 79 31
+# description: mimedefang is a sendmail milter designed to perform virus \
+#              scans on incoming mail messages.
+# processname: mimedefang
+# config: @CONFDIR_EVAL@/mimedefang-filter
+# pidfile: /var/run/mimedefang.pid
+
+### BEGIN INIT INFO
+# Provides:          mimedefang
+# Required-Start:    $local_fs $network $named $remote_fs $syslog $time
+# Required-Stop:     $local_fs $network $named $remote_fs $syslog $time
+# Default-Start:     
+# Default-Stop:      
+# Short-Description: Start and stop mimedefang.
+# Description:       MIMEDefang is a framework for filtering e-mail.  It uses
+#     Sendmail's "Milter" API, some C glue code, and some Perl code to let you
+#     write high-performance mail filters in Perl.
+### END INIT INFO
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+# Source networking configuration.
+. /etc/sysconfig/network
+
+RETVAL=0
+prog="mimedefang"
+
+# Check that networking is up.
+[ ${NETWORKING} = "no" ] && exit 0
+
+# Is the program executable?  We search in /usr/bin and /usr/local/bin
+# so that both RPM and normal installation methods work fine.
+
+if [ -x /usr/bin/$prog ] ; then
+    PROGDIR=/usr/bin
+elif [ -x /usr/local/bin/$prog ] ; then
+    PROGDIR=/usr/local/bin
+else
+    exit 0
+fi
+
+
+# Source configuration
+if [ -f /etc/sysconfig/$prog ] ; then
+    . /etc/sysconfig/$prog
+fi
+
+# Make sure reqired vars are set
+SOCKET=${SOCKET:=@SPOOLDIR@/$prog.sock}
+MX_SOCKET=${MX_SOCKET:=@SPOOLDIR@/$prog-multiplexor.sock}
+
+# These lines keep SpamAssassin happy.  Not needed if you
+# aren't using SpamAssassin.
+HOME=@SPOOLDIR@
+export HOME
+
+# Locale should be set to "C" for generating valid date headers
+LC_ALL=C
+export LC_ALL
+
+start() {
+
+    # Lets not run twice
+    if [ -f /var/lock/subsys/$prog ]; then
+	RETVAL=2
+	return $RETVAL
+    fi
+
+    # Check mimedefang-filter syntax
+    configtest
+    RETVAL=$?
+    if [ $RETVAL != 0 ] ; then
+	return $RETVAL
+    fi
+
+    # Since @SPOOLDIR@ might be tmpfs, ensure that it is properly
+    # initialized.
+    chown defang:defang @SPOOLDIR@
+    restorecon -R @SPOOLDIR@ >/dev/null 2>&1
+    if [ ! -d @SPOOLDIR@/.razor ]; then
+	mkdir @SPOOLDIR@/.razor
+	chown defang:defang @SPOOLDIR@/.razor
+	chmod 0750 @SPOOLDIR@/.razor
+    fi
+    if [ ! -L @SPOOLDIR@/.razor/razor-agent.log ]; then
+	# The Razor2 log is mostly useless, and we can't change its location.
+	# In order to prevent it from filling up the spool, we just link it to
+	# /dev/null.
+	ln -sf /dev/null @SPOOLDIR@/.razor/razor-agent.log
+	chown -h defang:defang @SPOOLDIR@/.razor/razor-agent.log
+    fi
+
+    echo -n "Starting $prog-multiplexor: "
+    [ -e $MX_SOCKET ] && rm -f $MX_SOCKET
+    # Tricky stuff below... "echo -E" won't work, hence the two-step.
+    daemon $PROGDIR/$prog-multiplexor -p /var/run/$prog-multiplexor.pid \
+	   -o @SPOOLDIR@/$prog-multiplexor.lock \
+	   $([ -n "$FILTER" ] && echo "-f $FILTER") \
+	   $([ -n "$SYSLOG_FACILITY" ] && echo "-S $SYSLOG_FACILITY") \
+	   $([ -n "$SUBFILTER" ] && echo "-F $SUBFILTER") \
+	   $([ -n "$MX_MINIMUM" ] && echo "-m $MX_MINIMUM") \
+	   $([ -n "$MX_MAXIMUM" ] && echo "-x $MX_MAXIMUM") \
+	   $([ -n "$MX_RECIPOK_PERDOMAIN_LIMIT" ] && echo "-y $MX_RECIPOK_PERDOMAIN_LIMIT") \
+	   $([ -n "$MX_USER" ] && echo "-U $MX_USER") \
+	   $([ -n "$MX_IDLE" ] && echo "-i $MX_IDLE") \
+	   $([ -n "$MX_BUSY" ] && echo "-b $MX_BUSY") \
+	   $([ -n "$MX_QUEUE_SIZE" ] && echo "-q $MX_QUEUE_SIZE") \
+	   $([ -n "$MX_QUEUE_TIMEOUT" ] && echo "-Q $MX_QUEUE_TIMEOUT") \
+	   $([ -n "$MX_REQUESTS" ] && echo "-r $MX_REQUESTS") \
+	   $([ -n "$MX_MAP_SOCKET" ] && echo "-N $MX_MAP_SOCKET") \
+	   $([ -n "$MX_WORKER_DELAY" ] && echo "-w $MX_WORKER_DELAY") \
+	   $([ -n "$MX_MIN_WORKER_DELAY" ] && echo "-W $MX_MIN_WORKER_DELAY") \
+	   $([ -n "$MX_LOG_WORKER_STATUS_INTERVAL" ] && echo "-L $MX_LOG_WORKER_STATUS_INTERVAL") \
+	   $([ -n "$MX_MAX_RSS" ] && echo "-R $MX_MAX_RSS") \
+	   $([ -n "$MX_MAX_AS" ] && echo "-M $MX_MAX_AS") \
+	   $([ "$MX_EMBED_PERL" = "yes" ] && (echo -n "-"; echo "E")) \
+	   $([ "$MX_LOG" = "yes" ] && echo "-l") \
+	   $([ "$MX_STATS" = "yes" ] && echo "-t /var/log/mimedefang/stats") \
+	   $([ "$MX_STATUS_UPDATES" = "yes" ] && echo "-Z") \
+	   $([ "$MX_STATS" = "yes" -a "$MX_FLUSH_STATS" = "yes" ] && echo "-u") \
+	   $([ -n "$MX_TICK_REQUEST" ] && echo "-X $MX_TICK_REQUEST") \
+	   $([ -n "$MX_TICK_PARALLEL" ] && echo "-P $MX_TICK_PARALLEL") \
+	   $([ "$MX_STATS_SYSLOG" = "yes" ] && echo "-T") \
+	   $([ "$MD_ALLOW_GROUP_ACCESS" = "yes" ] && echo "-G") \
+	   $([ -n "$MX_NOTIFIER" ] && echo "-O $MX_NOTIFIER") \
+	   -s $MX_SOCKET
+    echo
+
+    # Start daemon
+    echo -n "Starting $prog: "
+    [ -e $SOCKET ] && rm -f $SOCKET
+
+    # NOTE: You should limit the stack size on Linux, or
+    # thread-creation will fail on a very busy server.
+    ulimit -s 2048
+
+    daemon $PROGDIR/$prog -P /var/run/$prog.pid \
+	   -o @SPOOLDIR@/$prog.lock \
+	   -m $MX_SOCKET \
+	   $([ -n "$LOOPBACK_RESERVED_CONNECTIONS" ] && echo "-R $LOOPBACK_RESERVED_CONNECTIONS") \
+	   $([ -n "$MX_USER" ] && echo "-U $MX_USER") \
+	   $([ -n "$SYSLOG_FACILITY" ] && echo "-S $SYSLOG_FACILITY") \
+	   $([ "$LOG_FILTER_TIME" = "yes" ] && echo "-T") \
+	   $([ "$MX_RELAY_CHECK" = "yes" ] && echo "-r") \
+	   $([ "$MX_HELO_CHECK" = "yes" ] && echo "-H") \
+	   $([ "$MX_SENDER_CHECK" = "yes" ] && echo "-s") \
+	   $([ "$MX_RECIPIENT_CHECK" = "yes" ] && echo "-t") \
+	   $([ "$KEEP_FAILED_DIRECTORIES" = "yes" ] && echo "-k") \
+	   $([ "$MD_ALLOW_GROUP_ACCESS" = "yes" ] && echo "-G") \
+	   $([ -n "$MD_EXTRA" ] && echo "$MD_EXTRA") \
+	   $([ "$ALLOW_NEW_CONNECTIONS_TO_QUEUE" = "yes" ] && echo "-q") \
+	   -p $SOCKET
+    RETVAL=$?
+    echo
+
+    [ $RETVAL -eq 0 ] && touch /var/lock/subsys/$prog
+
+    return $RETVAL
+}
+
+configtest () {
+    echo -n "Checking filter syntax: "
+    $PROGDIR/mimedefang.pl $([ -n "$SUBFILTER" ] && echo "-f $SUBFILTER") -test > @SPOOLDIR@/configtest.out 2>&1
+    if [ $? != 0 ] ; then
+	echo "FAILED."
+	echo ""
+	cat @SPOOLDIR@/configtest.out
+	return 1
+    fi
+    rm -f @SPOOLDIR@/configtest.out
+    echo "OK"
+    return 0
+}
+
+stop() {
+
+    # If we're not running, there's nothing to do
+    if [ ! -f /var/lock/subsys/$prog ]; then
+	RETVAL=2
+	return $RETVAL
+    fi
+
+    # Stop daemon
+    echo -n "Shutting down $prog: "
+    killproc $prog
+    RETVAL=$?
+    echo
+
+    [ -e $SOCKET ] && rm -f $SOCKET
+    [ -f /var/run/$prog.pid ] && rm -f /var/run/$prog.pid
+
+    # Stop daemon
+    echo -n "Shutting down $prog-multiplexor: "
+    killproc $prog-multiplexor
+    echo
+
+    [ -e $MX_SOCKET ] && rm -f $MX_SOCKET
+
+    if [ "$1" = "wait" ] ; then
+	printf "Waiting for daemons to exit"
+	WAITPID=""
+	test -f /var/run/$prog.pid && WAITPID=`cat /var/run/$prog.pid`
+	test -f /var/run/$prog-multiplexor.pid && WAITPID="$WAITPID `cat /var/run/$prog-multiplexor.pid`"
+	n=0
+	while [ -n "$WAITPID" ] ; do
+	    W2=""
+	    for pid in $WAITPID ; do
+		if kill -0 $pid > /dev/null 2>&1 ; then
+		    W2="$W2 $pid"
+		fi
+	    done
+	    printf "."
+	    n=`expr $n + 1`
+	    test $n -eq 30 && kill -KILL $WAITPID > /dev/null 2>&1
+	    test $n -eq 60 && break
+	    WAITPID=$W2
+	    sleep 1
+	done
+	echo ""
+    fi
+
+    [ -f /var/run/$prog-multiplexor.pid ] && rm -f /var/run/$prog-multiplexor.pid
+
+    [ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/$prog
+    return $RETVAL
+}
+
+# See how we were called.
+case "$1" in
+    start)
+	start
+	RETVAL=$?
+	;;
+    stop)
+	stop $2
+	RETVAL=$?
+	;;
+    restart)
+	stop wait
+	start
+	RETVAL=$?
+	;;
+    condrestart)
+	if [ -f /var/lock/subsys/$prog ]; then
+	    stop wait
+	    start
+	    RETVAL=$?
+	fi
+	;;
+    status)
+	status $prog
+	RETVAL=$?
+	status $prog-multiplexor
+	[ $RETVAL -eq 0 ] && RETVAL=$?
+	if [ $RETVAL = 0 -a -x $PROGDIR/md-mx-ctrl ] ; then
+	    $PROGDIR/md-mx-ctrl -s $MX_SOCKET barstatus
+	fi
+	;;
+
+    configtest)
+	configtest
+	RETVAL=$?
+	;;
+
+    reread|reload)
+	if [ -x $PROGDIR/md-mx-ctrl ] ; then
+	    $PROGDIR/md-mx-ctrl -s $MX_SOCKET reread > /dev/null 2>&1
+	    RETVAL=$?
+	    if [ $RETVAL = 0 ] ; then
+		echo "Told $prog-multiplexor to force reread of filter rules."
+	    else
+		echo "Could not communicate with $prog-multiplexor"
+	    fi
+	else
+	    if [ -r /var/run/$prog-multiplexor.pid ] ; then
+		kill -INT `cat /var/run/$prog-multiplexor.pid`
+		RETVAL=$?
+		if [ $RETVAL = 0 ] ; then
+		    echo "Told $prog-multiplexor to force reread of filter rules."
+		else
+		    echo "Could not signal $prog-multiplexor"
+		fi
+	    else
+		RETVAL=1
+		echo "Could not find process-ID of $prog-multiplexor"
+	    fi
+	fi
+	;;
+
+    *)
+	echo "Usage: $0 {start|stop|restart|condrestart|reread|reload|status|configtest}"
+	exit 1
+esac
+
+exit $RETVAL

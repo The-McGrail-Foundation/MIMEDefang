@@ -1,0 +1,59 @@
+#!/usr/bin/perl -w
+
+# From sympa to sendmail
+
+#Jun  9 17:32:25 hdnetwork sendmail[17858]: h59MWKC17858: from=todaysverse-owner@maillists.heartlight.org, size=3914, class=-30, nrcpts=25, msgid=<200306092213.RAA1554 5@gehrig.heartlight.org>, relay=sympa@localhost
+
+# From sendmail to recipient:
+
+#Jun  9 17:42:31 hdnetwork sendmail[18546]: h59MfGq18546: to=dbracy@worldbank.org,cyalexander@worldbank.org, delay=00:01:15, xdelay=00:00:06, mailer=esmtp, pri=387914, relay=wbln0024.worldbank.org. [138.220.29.28], dsn=2.0.0, stat=Sent (Message received OK)
+#Jun  9 17:42:32 hdnetwork sendmail[18625]: h59Mg6N18625: to=patricia_holmes@ama-assn.org,pamela_burks-beck@ama-assn.org,sheri_bergstrand@ama-assn.org, delay=00:00:26, xdelay=00:00:16, mailer=esmtp, pri=447914, relay=smtp.ama-assn.org. [208.252.129.101], dsn=2.0.0, stat=Sent (h59MWA3m022457 Message accepted for delivery)
+
+# Bounce
+
+#Jun 10 18:46:57 hdnetwork sendmail[21944]: h5A7KMT19430: to="| /home/sympa/bin/bouncequeue todaysverse-kjv@maillists.heartlight.org", ctladdr=todaysverse-kjv-owner@maillists.heartlight.org (8/0), delay=16:26:16, xdelay=00:00:01, mailer=prog, pri=4890100, dsn=2.0.0, stat=Sent
+
+# Deferred
+
+#Jun  9 18:38:45 hdnetwork sendmail[27415]: h59NLsX26174: to=preston@chesserstudios.com, delay=00:16:51, xdelay=00:00:00, mailer=esmtp, pri=567914, relay=chesserstudios.com., dsn=4.0.0, stat=Deferred: Name server: chesserstudios.com.: host name lookup failure
+#Jun  9 17:41:16 hdnetwork sendmail[18105]: h59MWlv17888: to=llowelyn.stainbank@liblink.co.za,joanne.toerien@liblink.co.za,allen.meredith@liblink.co.za,alwyn.burger@liblink.co.za, delay=00:08:29, xdelay=00:02:00, mailer=esmtp, pri=897914, relay=mx2.liberty.co.za. [163.202.197.31], dsn=4.0.0, stat=Deferred: Connection timed out with mx2.liberty.co.za.
+
+$event{'sendmail'}{'sympa_outgoing'} =
+sub {
+        if ($text =~ m/^\S+: from=(.+), size=.+, class=.+, nrcpts=(\d+), msgid=(.+), relay=sympa\@localhost$/) {
+
+                if ($unixtime > ($MaxDBUnixTime)) {
+
+                        $event = "sympa_outgoing";
+                        $sender = $1;
+
+                        $NumEvents = $2;
+                        $FoundNewRow = 1;
+                }
+        } elsif ($text =~ m/^\S+: to=(.+), delay=.*?, mailer=esmtp, .*?, stat=Sent.*$/) {
+		if ($unixtime > ($MaxDBUnixTime)) {
+
+			$event = "sendmail_outgoing";
+			
+			my @recipients = split(/,/, $1);
+			$NumEvents = @recipients;
+			$FoundNewRow = 1;
+		}
+	} elsif ($text =~ m/^\S+: to=.*?bouncequeue (\S+?)\", ctladdr=(\S+) .*?, mailer=prog, .*?, stat=Sent.*?$/) {
+		if ($unixtime > ($MaxDBUnixTime)) {
+
+			$event = "bounce";
+
+			$sender = $1;
+			$FoundNewRow = 1;
+		}
+	} elsif ($text =~ m/^\S+: to=(.*), delay=.*?, stat=Deferred: .*$/) {
+		if ($unixtime > ($MaxDBUnixTime)) {
+			$event = "deferred";
+
+			my @recipients = split(/,/, $1);
+			$NumEvents = @recipients;
+			$FoundNewRow = 1;
+		}
+	}
+};

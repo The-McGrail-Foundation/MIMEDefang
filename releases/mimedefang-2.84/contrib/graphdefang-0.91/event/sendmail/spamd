@@ -1,0 +1,26 @@
+#!/usr/bin/perl -w
+$event{'sendmail'}{'spamd'} = 
+sub {
+	if ($text =~ m/^\S+: from=(.+), size=.+ msgid=(.+), proto=.+ relay=(.*)$/) {
+
+		# our spamd times may be separated from our sendmail times by a processing
+		# delay.  I've set the max potential processing delay to 5 minutes here
+		if ($unixtime > ($MaxDBUnixTime-60*5)) {
+			my $from = $1;
+			my $msgid = $2;
+			my $relay = $3;
+
+			if (defined $spamd{$msgid}) {
+				my $spamdpid = $spamd{$msgid};
+
+				$event = $spamd{$spamdpid}{'event'};
+				$sender = $from;
+				$recipient = $spamd{$spamdpid}{'for'};
+				$value1 = $spamd{$spamdpid}{'score'};
+				$value2 = $relay;
+
+				$FoundNewRow = 1;
+			}
+		}
+	}
+};

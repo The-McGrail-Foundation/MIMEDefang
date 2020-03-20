@@ -1,0 +1,6 @@
+/var/log/mimedefang/stats {
+    missingok
+    postrotate
+	/usr/bin/killall -HUP mimedefang-multiplexor 2> /dev/null || true
+    endscript
+}

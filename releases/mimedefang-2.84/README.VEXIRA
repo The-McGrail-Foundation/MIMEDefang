@@ -1,0 +1,42 @@
+=====================================================
+Running Vexira's Command-line scanner with MIMEDefang
+=====================================================
+
+Central Command (http://www.centralcommand.com/) offers several
+virus-scanning products for UNIX and Linux, under the Vexira name.
+
+These include:
+
+	Vexira Antivirus for Mail server
+	Vexira Antivirus for Samba server
+	Vexira Antivirus for Linux command-line 
+	Vexira Antivirus for Linux real-time scanner
+
+ONLY the command-line scanner is supported by MIMEDefang.
+
+IMPORTANT NOTE: In the spring of 2005, Central Command completely
+re-wrote their anti-virus scanners.  Versions of MIMEDefang prior to
+2.55 do not work with any Vexira released since spring 2005.
+
+This assumes you already have a working installation of vascan.
+If not, please re-read the vascan documentation and ensure that
+your installation is complete, and working, before attempting
+to use vascan with MIMEDefang.
+
+Make sure you put the compiled vascan binary somewhere in your PATH.
+/usr/bin is the default location.  Make sure your vascan.ini is
+in the same directory as the vascan binary, and that the .ini file
+contains a valid pointer to a quarantine directory.
+
+CAVEAT:
+
+Although MIMEDefang's use of vascan will NOT attempt to utilize
+vascan's quarantine features in any way, the quarantine directory
+MUST exist, and MUST be writable by the user id that MIMEDefang
+runs as.  Usually, this is user: defang, and group: defang, in
+which case it may be easiest to simply:
+
+	chgrp defang /var/spool/qrntndir
+	chmod g+w /var/spool/qrntndir
+
+... or wherever your quarantine directory is located.

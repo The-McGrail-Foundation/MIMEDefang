@@ -1,0 +1,50 @@
+[Unit]
+Description=MIMEDefang E-mail Filter (Multiplexor)
+Documentation=man:mimedefang-multiplexor(8)
+After=remote-fs.target
+After=systemd-journald-dev-log.socket
+PartOf=mimedefang.service
+
+[Service]
+Type=simple
+Restart=on-failure
+TimeoutStopSec=30s
+KillMode=mixed
+# Locale should be set to "C" for generating valid date headers
+Environment=LC_ALL=C MX_BUSY=600 MX_LOG=yes MX_MAXIMUM=10 MX_MINIMUM=2 MX_SOCKET=/var/spool/MIMEDefang/mimedefang-multiplexor.sock MX_USER=defang
+EnvironmentFile=-/etc/default/mimedefang
+# This can be removed with MIMEDefang 2.82, but is required for older versions:
+# SuccessExitStatus=1
+ExecStart=/bin/sh -c 'HOME=${SPOOLDIR:=/var/spool/MIMEDefang} \
+    exec /usr/bin/mimedefang-multiplexor -D \
+    `[ "$MX_EMBED_PERL" = "yes" ] && echo "-E"` \
+    `[ -n "$SPOOLDIR" ] && echo "-z $SPOOLDIR"` \
+    `[ -n "$FILTER" ] && echo "-f $FILTER"` \
+    `[ -n "$SYSLOG_FACILITY" ] && echo "-S $SYSLOG_FACILITY"` \
+    `[ -n "$SUBFILTER" ] && echo "-F $SUBFILTER"` \
+    `[ -n "$MX_MINIMUM" ] && echo "-m $MX_MINIMUM"` \
+    `[ -n "$MX_MAXIMUM" ] && echo "-x $MX_MAXIMUM"` \
+    `[ -n "$MX_MAP_SOCKET" ] && echo "-N $MX_MAP_SOCKET"` \
+    `[ -n "$MX_LOG_SLAVE_STATUS_INTERVAL" ] && echo "-L $MX_LOG_SLAVE_STATUS_INTERVAL"` \
+    `[ -n "$MX_USER" ] && echo "-U $MX_USER"` \
+    `[ -n "$MX_IDLE" ] && echo "-i $MX_IDLE"` \
+    `[ -n "$MX_BUSY" ] && echo "-b $MX_BUSY"` \
+    `[ -n "$MX_REQUESTS" ] && echo "-r $MX_REQUESTS"` \
+    `[ -n "$MX_SLAVE_DELAY" ] && echo "-w $MX_SLAVE_DELAY"` \
+    `[ -n "$MX_MIN_SLAVE_DELAY" ] && echo "-W $MX_MIN_SLAVE_DELAY"` \
+    `[ -n "$MX_MAX_RSS" ] && echo "-R $MX_MAX_RSS"` \
+    `[ -n "$MX_MAX_AS" ] && echo "-M $MX_MAX_AS"` \
+    `[ "$MX_LOG" = "yes" ] && echo "-l"` \
+    `[ "$MX_STATS" = "yes" ] && echo "-t /var/log/mimedefang/stats"` \
+    `[ "$MX_STATS" = "yes" -a "$MX_FLUSH_STATS" = "yes" ] && echo "-u"` \
+    `[ "$MX_STATS_SYSLOG" = "yes" ] && echo "-T"` \
+    `[ "$MD_ALLOW_GROUP_ACCESS" = "yes" ] && echo "-G"` \
+    `[ "$MX_STATUS_UPDATES" = "yes" ] && echo "-Z"` \
+    `[ -n "$MX_QUEUE_SIZE" ] && echo "-q $MX_QUEUE_SIZE"` \
+    `[ -n "$MX_QUEUE_TIMEOUT" ] && echo "-Q $MX_QUEUE_TIMEOUT"` \
+    `[ -n "$MX_NOTIFIER" ] && echo "-O $MX_NOTIFIER"` \
+    `[ -n "$MX_RECIPOK_PERDOMAIN_LIMIT" ] && echo "-y $MX_RECIPOK_PERDOMAIN_LIMIT"` \
+    -s $MX_SOCKET'
+ExecStartPre=/bin/rm -f $MX_SOCKET
+ExecStopPost=/bin/rm -f $MX_SOCKET
+ExecReload=/bin/kill -INT $MAINPID

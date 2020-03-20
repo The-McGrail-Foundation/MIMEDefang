@@ -1,0 +1,2420 @@
+.\" $Id$
+.\"
+.TH MIMEDEFANG-FILTER 5 "8 February 2005"
+.UC 4
+.SH NAME
+mimedefang-filter \- Configuration file for MIMEDefang mail filter.
+
+.SH DESCRIPTION
+\fBmimedefang-filter\fR is a Perl fragment that controls how
+\fBmimedefang.pl\fR disposes of various parts of a MIME message.
+In addition, it contains some global variable settings that affect
+the operation of \fBmimedefang.pl\fR.
+
+.SH CALLING SEQUENCE
+Incoming messages are scanned as follows:
+
+.PP
+1) A temporary working directory is created.  It is made the current working
+directory and the e-mail message is split into parts in this directory.
+Each part is represented internally as an instance of MIME::Entity.
+
+.PP
+2) If the file \fB@CONFDIR_EVAL@/mimedefang-filter.pl\fR defines a
+Perl function called \fBfilter_begin\fR, it is called with a single
+argument consisting of a MIME::Entity representing the parsed e-mail
+message.  Any return value is ignored.
+
+.PP
+3) For each \fIleaf\fR part of the mail message, \fBfilter\fR is
+called with four arguments: \fBentity\fR, a MIME::Entity object;
+\fBfname\fR, the suggested filename taken from the MIME
+Content-Disposition header; \fBext\fR, the file extension, and
+\fBtype\fR, the MIME Content-Type value.  For each \fInon-leaf\fR
+part of the mail message, \fBfilter_multipart\fR is called with the
+same four arguments as \fBfilter\fR.  A non-leaf part of a message
+is a part that contains nested parts.  Such a part has no useful
+body, but you should \fIstill perform filename checks\fR to check
+for viruses that use malformed MIME to masquerade as non-leaf
+parts (like message/rfc822).  In general, any action you perform
+in \fBfilter_multipart\fR applies to the part itself \fIand\fR any
+contained parts.
+
+.PP
+Note that both \fBfilter\fR and \fBfilter_multipart\fR are optional.
+If you do not define them, a default function that simply accepts each
+part is used.
+
+.PP
+4) After all parts have been processed, the function \fBfilter_end\fR
+is called if it has been defined.  It is passed a single argument consisting
+of the (possibly modified) MIME::Entity object representing the message
+about to be delivered.  Within \fBfilter_end\fR, you can call
+functions that modify the message headers body.
+
+.PP
+5) After \fBfilter_end\fR returns, the function \fBfilter_wrapup\fR is
+called if it has been defined.  It is passed a single argument
+consisting of the (possibly modified) MIME::Entity object representing
+the message about to be delivered, including any modifications made in
+\fBfilter_end\fR.  Within \fBfilter_wrapup\fR, you can \fInot\fR call
+functions that modify the message body, but you can still add or
+modify message headers.
+
+.SH DISPOSITION
+
+\fBmimedefang.pl\fR examines each part of the MIME message and chooses
+a \fIdisposition\fR for that part.  (A disposition is selected by
+calling one of the following functions from \fBfilter\fR and then
+immediately returning.)  Available dispositions are:
+
+.TP
+.B action_accept
+The part is passed through unchanged.  If no disposition function is
+returned, this is the default.
+
+.TP
+.B action_accept_with_warning
+The part is passed through unchanged, but a warning is added to the mail
+message.
+
+.TP
+.B action_drop
+The part is deleted without any notification to the recipients.
+
+.TP
+.B action_drop_with_warning
+The part is deleted and a warning is added to the mail message.
+
+.TP
+.B action_replace_with_warning
+The part is deleted and instead replaced with a text message.
+
+.TP
+.B action_quarantine
+The part is deleted and a warning is added to the mail message.  In addition,
+a copy of the part is saved on the mail server in the directory
+@QDIR@ and a notification is sent
+to the MIMEDefang administrator.
+
+.TP
+.B action_bounce
+The entire e-mail message is rejected and an error returned to the sender.
+The intended recipients are not notified.  Note that in spite of the
+name, MIMEDefang does \fInot\fR generate and e-mail a failure notification.
+Rather, it causes the SMTP server to return a 5\fIXX\fR SMTP failure code.
+
+.TP
+.B action_discard
+The entire e-mail message is discarded silently.
+Neither the sender nor the intended recipients are notified.
+
+.SH CONTROLLING RELAYING
+
+You can define a function called \fBfilter_relay\fR in your filter.
+This lets you reject SMTP connection attempts early on in the SMTP
+dialog, rather than waiting until the whole message has been sent.
+Note that for this check to take place, you must use the \-r flag with
+\fBmimedefang\fR.
+
+.PP
+\fBfilter_relay\fR is passed five arguments: $hostip is the IP address
+of the relay host (for example, "127.0.0.1"), $hostname is the
+host name if known (for example, "localhost.localdomain").  If the host
+name could not be determined, $hostname is $hostip enclosed in
+square brackets.  (That is, ("$hostname" eq "[$hostip]") will be true.)
+
+.PP
+The remaining three arguments to \fBfilter_relay\fR are
+$port, $myip and $myport which contain the client's TCP
+port, the Sendmail daemon's listening IP address and the
+Sendmail daemon's listening port.
+
+.PP
+\fBfilter_relay\fR must return a two-element list:
+($code, $msg).  $msg specifies the text message to use for the SMTP
+reply, but because of limitations in the Milter API, this message is
+for documentation purposes only---you cannot set the text of the SMTP
+message returned to the SMTP client from \fBfilter_relay\fR.
+
+$code is a literal string, and can have one of the following values:
+
+.TP
+.B 'REJECT'
+if the connection should be rejected.
+
+.TP
+.B 'CONTINUE'
+if the connection should be accepted.
+
+.TP
+.B 'TEMPFAIL'
+if a temporary failure code should be returned.
+
+.TP
+.B 'DISCARD'
+if the message should be accepted and silently discarded.
+
+.TP
+.B 'ACCEPT_AND_NO_MORE_FILTERING'
+if the connection should be accepted \fIand no further filtering done\fR.
+
+.PP
+Earlier versions of MIMEDefang used -1 for TEMPFAIL, 0 for REJECT and
+1 for CONTINUE.  These values still work, but are deprecated.
+
+.PP
+In the case of REJECT or TEMPFAIL, $msg specifies the text part of the
+SMTP reply.  $msg \fImust not\fR contain newlines.
+
+.PP
+For example, if you wish to reject connection attempts from any
+machine in the spammer.com domain, you could use this function:
+
+.nf
+sub filter_relay {
+	my ($ip, $name) = @_;
+	if ($name =~ /spammer\\.com$/) {
+		return ('REJECT', "Sorry; spammer.com is blacklisted");
+	}
+	return ('CONTINUE', "ok");
+}
+.fi
+
+.SH FILTERING BY HELO
+
+You can define a function called \fBfilter_helo\fR in your filter.
+This lets you reject connections after the HELO/EHLO SMTP command.
+Note that for this function to be called, you must use the
+\-H flag with \fBmimedefang\fR.
+
+.PP
+\fBfilter_helo\fR is passed six arguments: $ip and $name are the IP
+address and name of the sending relay, as in \fBfilter_relay\fR.  The
+third argument, $helo, is the argument supplied in the HELO/EHLO command.
+
+.PP
+The remaining three arguments to \fBfilter_relay\fR are
+$port, $myip and $myport which contain the client's TCP
+port, the Sendmail daemon's listening IP address and the
+Sendmail daemon's listening port.
+
+
+.PP
+\fBfilter_helo\fR must return a two-to-five element list: ($code,
+$msg, $smtp_code, $smtp_dsn, $delay).  $code is a return code, with
+the same meaning as the $code return from \fBfilter_relay\fR.  $msg
+specifies the text message to use for the SMTP reply.  If $smtp_code
+and $smtp_dsn are supplied, they become the SMTP numerical reply code
+and the enhanced status delivery code (DSN code).  If they are not
+supplied, sensible defaults are used.  $delay specifies a delay in
+seconds; the C milter code will sleep for $delay seconds before
+returning the reply to Sendmail.  $delay defaults to zero.
+
+(Note that the delay is implemented in the Milter C code; if you specify
+a delay of 30 seconds, that doesn't mean a Perl worker is tied up for
+the duration of the delay.  The delay only costs one Milter thread.)
+
+.SH FILTERING BY SENDER
+
+You can define a function called \fBfilter_sender\fR in your filter.
+This lets you reject messages from certain senders, rather than
+waiting until the whole message has been sent.  Note that for this
+check to take place, you must use the \-s flag with \fBmimedefang\fR.
+
+.PP
+\fBfilter_sender\fR is passed four arguments:  $sender is the envelope
+e-mail address of the sender (for example, "<dfs@roaringpenguin.com>").
+The address may or may not be surrounded by angle brackets.  $ip
+and $name are the IP address and host name of the SMTP relay.  Finally,
+$helo is the argument to the SMTP "HELO" command.
+
+.PP
+Inside \fBfilter_sender\fR, you can access any ESMTP arguments
+(such as "SIZE=12345") in the array @ESMTPArgs.  Each ESMTP argument
+occupies one array element.
+
+.PP
+\fBfilter_sender\fR must return a two-to-five element list, with the
+same meaning as the return value from \fBfilter_helo\fR.
+
+.PP
+For example, if you wish to reject messages from spammer@badguy.com,
+you could use this function:
+
+.nf
+sub filter_sender {
+	my ($sender, $ip, $hostname, $helo) = @_;
+	if ($sender =~ /^<?spammer\\@badguy\\.com>?$/i) {
+		return ('REJECT', 'Sorry; spammer@badguy.com is blacklisted.');
+	}
+	return ('CONTINUE', "ok");
+}
+.fi
+
+.PP
+As another example, some spammers identify their own machine as your
+machine in the SMTP "HELO" command.  This function rejects a machine
+claiming to be in the "roaringpenguin.com" domain unless it really
+is a Roaring Penguin machine:
+
+.nf
+sub filter_sender {
+  my($sender, $ip, $hostname, $helo) = @_;
+  if ($helo =~ /roaringpenguin\.com/i) {
+    if ($ip ne "127.0.0.1" and
+        $ip ne "216.191.236.23" and
+        $ip ne "216.191.236.30") {
+          return('REJECT', "Go away... $ip is not in roaringpenguin.com");
+    }
+  }
+  return ('CONTINUE', "ok");
+}
+.fi
+
+.PP
+As a third example, you may wish to prevent spoofs by requiring SMTP
+authentication when email is sent from some email addresses. This
+function rejects mail from "king@example.com", unless the connecting
+user properly authenticated as "elvisp". Note that this needs access
+to the %SendmailMacros global, that is not available in filter_sender
+until after a call to \fBread_commands_file\fR.
+
+.nf
+sub filter_sender {
+        my($sender, $ip, $hostname, $helo) = @_;
+        read_commands_file();
+        ### notice: This assumes The King uses authentication without realm!
+        if ($sender =~ /^<?king\\@example\\.com>?$/i and
+            $SendmailMacros{auth_authen} ne "elvisp") {
+                return('REJECT', "Faking mail from the king is not allowed.");
+        }
+        return ('CONTINUE', "ok");
+}
+.fi
+
+
+.SH FILTERING BY RECIPIENT
+
+You can define a function called \fBfilter_recipient\fR in your
+filter.  This lets you reject messages to certain recipients, rather
+than waiting until the whole message has been sent.  Note that for
+this check to take place, you must use the \-t flag with
+\fBmimedefang\fR.
+
+.PP
+\fBfilter_recipient\fR is passed nine arguments:  $recipient
+is the envelope address of the recipient and $sender is the envelope
+e-mail address of the sender (for example, "<dfs@roaringpenguin.com>").
+The addresses may or may not be surrounded by angle brackets.  $ip
+and $name are the IP address and host name of the SMTP relay.  $first
+is the envelope address of the \fIfirst\fR recipient for this message,
+and $helo is the argument to the SMTP "HELO" command.  The last three
+arguments, $rcpt_mailer, $rcpt_host and $rcpt_addr are the Sendmail
+mailer, host and address triple for the recipient address.  For example,
+for local recipients, $rcpt_mailer is likely to be "local", while for
+remote recipients, it is likely to be "esmtp".
+
+.PP
+Inside \fBfilter_recipient\fR, you can access any ESMTP arguments
+(such as "NOTIFY=never") in the array @ESMTPArgs.  Each ESMTP argument
+occupies one array element.
+
+.PP
+\fBfilter_recipient\fR must return a two-to-five element list whose
+interpretation is the same as for \fBfilter_sender\fR.
+Note, however, that if \fBfilter_recipient\fR
+returns 'DISCARD', then the entire message for \fIall\fR recipients
+is discarded.  (It doesn't really make sense, but that's how Milter
+works.)
+
+.PP
+For example, if you wish to reject messages from spammer@badguy.com,
+unless they are to postmaster@mydomain.com, you could use this function:
+
+.nf
+sub filter_recipient {
+	my ($recipient, $sender, $ip, $hostname, $first, $helo,
+            $rcpt_mailer, $rcpt_host, $rcpt_addr) = @_;
+	if ($sender =~ /^<?spammer\\@badguy\\.com>?$/i) {
+		if ($recipient =~ /^<?postmaster\\@mydomain\\.com>?$/i) {
+			return ('CONTINUE', "ok");
+		}
+		return ('REJECT', 'Sorry; spammer@badguy.com is blacklisted.');
+	}
+	return ('CONTINUE', "ok");
+}
+.fi
+
+.SH INITIALIZATION AND CLEANUP
+
+Just before a worker begins processing messages, \fBmimedefang.pl\fR calls
+the functions \fBfilter_initialize\fR (if it is defined) with no arguments.
+By the time \fBfilter_initialize\fR is called, all the other initialization
+(such as setting up syslog facility and priority) has been done.
+
+If you are not using an embedded Perl interpreter, then performing an
+action inside \fBfilter_initialize\fR is practically the same as performing
+it directly in the filter file, outside any function definition.  However,
+if you are using an embedded Perl interpreter, then anything you call
+directly from outside a function definition is executed \fIonce only\fR
+in the parent process.  Anything in \fBfilter_initialize\fR is executed
+\fIonce per worker\fR.  If you use any code that opens a descriptor (for
+example, a connection to a database server), you \fImust\fR run that
+code inside \fBfilter_initialize\fR and not directly from the filter,
+because the multiplexor closes all open descriptors when it activates
+a new worker.
+
+When a worker is about to exit, \fBmimedefang.pl\fR calls the function
+\fBfilter_cleanup\fR (if it is defined) with no arguments.  This
+function can do whatever cleanup you like, such as closing file
+descriptors and cleaning up long-lived worker resources.  The return
+value from \fBfilter_cleanup\fR becomes the worker's exit status.  (You
+should therefore ensure that \fBfilter_cleanup\fR returns an integer
+suitable for a process exit status.)
+
+.PP
+If \fBfilter_cleanup\fR takes longer than 10 seconds to run, the worker
+is sent a SIGTERM signal.  If that doesn't kill it (because you're
+catching signals, perhaps), then a further 10 seconds later, the worker
+is sent a SIGKILL signal.
+
+.SH CONTROLLING PARSING
+
+If you define a function called \fBfilter_create_parser\fR taking no
+arguments, then \fBmimedefang.pl\fR will call it to create a
+MIME::Parser object for parsing mail messages.
+
+\fBFilter_create_parser\fR is expected to return a MIME::Parser object
+(or an instance of a class derived from MIME::Parser).
+
+You can use \fBfilter_create_parser\fR to change the behavior
+of the MIME::Parser used by \fBmimedefang.pl\fR.
+
+If you do not define a \fBfilter_create_parser\fR function,
+then a built-in version equivalent to this is used:
+
+.nf
+	sub filter_create_parser () {
+		my $parser = MIME::Parser->new();
+		$parser->extract_nested_messages(1);
+		$parser->extract_uuencode(1);
+		$parser->output_to_core(0);
+		$parser->tmp_to_core(0);
+		return $parser;
+	}
+.fi
+.SH EXTENDING MIMEDEFANG
+
+The man page for \fBmimedefang-protocol\fR(7) lists commands that are
+passed to workers in server mode (see "SERVER COMMANDS".)  You can define
+a function called \fBfilter_unknown_cmd\fR to extend the set of commands
+your filter can handle.
+
+If you define \fBfilter_unknown_cmd\fR, it is passed the unknown command
+as a single argument.  It should return a list of values as follows:  The
+first element of the list must be either "ok" or "error:" (with the colon.)
+The remaining arguments are percent-encoded.  All the resulting pieces
+are joined together with a single space between them, and the resulting
+string passed back as the reply to the multiplexor.
+
+For example, the following function will make your filter reply
+to a "PING" command with "PONG":
+
+.nf
+sub filter_unknown_cmd ($) {
+    my($cmd) = @_;
+    if ($cmd eq "PING") {
+        return("ok", "PONG");
+    }
+    return("error:", "Unknown command");
+}
+.fi
+
+You can test this filter by typing the following as root:
+
+.nf
+md-mx-ctrl PING
+.fi
+
+The response should be:
+
+.nf
+ok PONG
+.fi
+
+If you extend the set of commands using \fBfilter_unknown_cmd\fR,
+you should make all your commands start with an upper-case letter
+to avoid clashes with future built-in commands.
+
+.SH REJECTING UNKNOWN USERS EARLY
+
+A very common mail setup is to have a MIMEDefang machine act as an SMTP
+proxy, accepting and scanning mail and then relaying it to the real
+mail server.  Unfortunately, this means that the MIMEDefang machine cannot
+know if a local address is valid or not, and will forward all mail
+for the appropriate domains.  If a mail comes in for an unknown user, the
+MIMEDefang machine will be forced to generate a bounce message when
+it tries to relay the mail.
+
+.PP
+It's often desirable to have the MIMEDefang host reply with a "User
+unknown" SMTP response directly.  While this can be done by copying
+the list of local users to the MIMEDefang machine, MIMEDefang has a
+built-in function called \fBmd_check_against_smtp_server\fR for
+querying another relay host:
+
+.TP
+.B md_check_against_smtp_server($sender, $recip, $helo, $server, $port) This
+function connects to the SMTP server $server and pretends to send mail
+from $sender to $recip.  The return value is always a two-element
+array.  If the RCPT TO: command succeeds, the return value is
+("CONTINUE", "OK").  If the RCPT fails with a permanent failure, the
+return value is ("REJECT", $msg), where $msg is the message from the
+SMTP server.  Any temporary failures, connection errors, etc. result
+in a return value of ("TEMPFAIL", $msg).
+
+The optional argument $port specifies the TCP port to connect to.  If
+it is not supplied, then the default SMTP port of 25 is used.
+
+.PP
+Suppose the machine \fBfilter.domain.tld\fR is filtering mail destined
+for the real mail server \fBmail.domain.tld\fR.  You could have a
+\fBfilter_recipient\fR function like this:
+
+.nf
+sub filter_recipient
+{
+    my($recip, $sender, $ip, $host, $first, $helo,
+       $rcpt_mailer, $rcpt_host, $rcpt_addr) = @_;
+    return md_check_against_smtp_server($sender, $recip,
+					"filter.domain.tld",
+					"mail.domain.tld");
+}
+.fi
+
+For each RCPT TO: command, MIMEDefang opens an SMTP connection to
+\fBmail.domain.tld\fR and checks if the command would succeed.
+
+.PP
+Please note that you should only use \fBmd_check_against_smtp_server\fR
+if your mail server responds with a failure code for nonexistent users
+at the RCPT TO: level.  Also, this function may impose too much overhead
+if you receive a lot of e-mail, and it will generate lots of useless
+log entries on the real mail server (because of all the RCPT TO: probes.)
+It may also significantly increase the load on the real mail server.
+
+.SH GLOBAL VARIABLES YOU CAN SET
+
+The following Perl global variables should be set in \fBmimedefang-filter\fR:
+
+.TP
+.B $AdminAddress
+The e-mail address of the MIMEDefang administrator.
+
+.TP
+.B $DaemonAddress
+The e-mail address from which MIMEDefang-originated notifications come.
+
+.TP
+.B $AddWarningsInline
+If this variable is set to 0, then all MIMEDefang warnings (such
+as created by action_quarantine or action_drop_with_warning) are collected
+together and added in a separate MIME part called WARNING.TXT.  If the
+variable is set to 1, then the warnings are added directly in the first
+text/plain and text/html parts of the message.  If the message does
+not contain any text/plain or text/html parts, then a WARNING.TXT MIME
+part is added as before.
+
+.TP
+.B $MaxMIMEParts
+A message containing many MIME parts can cause MIME::Tools to consume
+large amounts of memory and bring your system to its knees.  If you
+set $MaxMIMEParts to a positive number, then MIME parsing is terminated
+for messages with more than that many parts, and the message is bounced.
+In this case, \fInone\fR of your filter functions is called.
+
+By default, $MaxMIMEParts is set to -1, meaning there is no limit on
+the number of parts in a message.  Note that in order to use this
+variable, you \fImust\fR install the Roaring Penguin patched version
+of MIME::Tools, version 5.411a-RP-Patched-02 or newer.
+
+.TP
+.B $Stupidity{"NoMultipleInlines"}
+Set this to 1 if your e-mail is too stupid to display multiple
+MIME parts in-line.  In this case, a nasty hack causes the first part
+of the original message to appear as an attachment if warning are
+issued.  Mail clients that are not this stupid are
+Netscape Communicator and Pine.  On the other hand, Microsoft Exchange
+and Microsoft Outlook are indeed this stupid.  Perhaps users of those
+clients should switch.
+
+The following global variables may optionally be set.  If they are not
+set, sensible defaults are used:
+
+.TP
+.B $AddApparentlyToForSpamAssassin
+By default, MIMEDefang tries to pass SpamAssassin a message that looks
+exactly like one it would receive via procmail.  This means adding
+a Received: header, adding a Message-ID header if necessary, and
+adding a Return-Path: header.  If you set $AddApparentlyToForSpamAssassin
+to 1, then MIMEDefang also adds an Apparently-To: header with all
+the envelope recipients before passing the message to SpamAssassin.
+This lets SpamAssassin detect possibly whitelisted recipient addresses.
+
+The default value for $AddApparentlyToForSpamAssassin is 0.
+
+.TP
+.B $SyslogFacility
+This specifies the logging facility used by mimedefang.pl.  By default,
+it is set to "mail", but you can set it to other possibilites.  See the
+openlog(3) man page for details.  You should name facilities as all-lowercase
+without the leading "LOG_".  That is, use "local3", not "LOG_LOCAL3".
+
+.TP
+.B $WarningLocation \fR(default 0)
+If set to 0 (the default), non-inline warnings are placed first.  If
+you want the warning at the end of the e-mail, set $WarningLocation
+to -1.
+
+.TP
+.B $DaemonName \fR(default """MIMEDefang"")
+The full name used when MIMEDefang sends out notifications.
+
+.TP
+.B $AdminName \fR(default """MIMEDefang Administrator"")
+The full name of the MIMEDefang administrator.
+
+.TP
+.B $SALocalTestsOnly \fR(default 1)
+If set to 1, SpamAssassin calls will use only local tests.  This is the
+default and recommended setting.  This disables Received, RBL and Razor
+tests in an all or nothing fashion.  To use Razor this \fBMUST\fR be set
+to 0.  You can add 'skip_rbl_checks 1' to your SpamAssassin config file if
+you need to.
+
+.TP
+.B $NotifySenderSubject \fR(default """MIMEDefang Notification"")
+The subject used when e-mail is sent out by action_notify_sender().  If
+you set this, you should set it each time you call action_notify_sender()
+to ensure consistency.
+.\" fix Emacs highlighting..."
+.TP
+.B $NotifyAdministratorSubject \fR(default """MIMEDefang Notification"")
+The subject used when e-mail is sent out by action_notify_administrator().  If
+you set this, you should set it each time you call action_notify_administrator()
+to ensure consistency.
+
+.TP
+.B $QuarantineSubject \fR(default """MIMEDefang Quarantine Report"")
+The subject used when a quarantine notice is sent to the administrator.  If
+you set this, you should set it each time you call action_quarantine() or
+action_quarantine_entire_message().
+
+.TP
+.B $NotifyNoPreamble \fR(default 0)
+Normally, notifications sent by action_notify_sender() have a preamble warning
+about message modifications.  If you do not want this, set $NotifyNoPreamble
+to 1.
+
+.TP
+.B $CSSHost \fR(default 127.0.0.1:7777:local)
+Host and port for the Symantec CarrierScan Server virus scanner.  This
+takes the form \fIip_addr\fR:\fIport\fR:\fIlocal_or_nonlocal\fR.  The
+\fIip_addr\fR and \fIport\fR are the host and port on which
+CarrierScan Server is listening.  If you want to scan local files,
+append :local to force the use of the AVSCANLOCAL command.  If the
+CarrierScan Server is on another host, append :nonlocal to force the
+file contents to be sent to the scanner over the socket.
+
+.TP
+.B $SophieSock \fR(default @SPOOLDIR@/sophie)
+Socket used for Sophie daemon calls within message_contains_virus_sophie
+and entity_contains_virus_sophie unless a socket is provided by the calling
+routine.
+
+.TP
+.B $ClamdSock \fR(default @SPOOLDIR@/clamd.sock)
+Socket used for clamd daemon calls within message_contains_virus_clamd
+and entity_contains_virus_clamd unless a socket is provided by the calling
+routine.
+
+.TP
+.B $TrophieSock \fR(default @SPOOLDIR@/trophie)
+Socket used for Trophie daemon calls within message_contains_virus_trophie
+and entity_contains_virus_trophie unless a socket is provided by the calling
+routine.
+
+
+.SH FILTER
+
+The heart of \fBmimedefang-filter\fR is the \fBfilter\fR procedure.  See
+the examples that came with MIMEDefang to learn to write a filter.
+The filter is called with the following arguments:
+
+.TP
+.B $entity
+The MIME::Entity object.  (See the MIME::tools Perl module documentation.)
+
+.TP
+.B $fname
+The suggested attachment filename, or "" if none was supplied.
+
+.TP
+.B $ext
+The file extension (all characters from the rightmost period to the end of
+the filename.)
+
+.TP
+.B $type
+The MIME type (for example, "text/plain".)
+
+.PP
+The filename is derived as follows:
+
+.TP
+o
+First, if the Content-Disposition header has a "filename" field, it is used.
+
+.TP
+o
+Otherwise, if the Content-Type header has a "name" field, it is used.
+
+.TP
+o
+Otherwise, the Content-Description header value is used.
+
+.PP
+Note that the truly paranoid will check all three fields for matches.
+The functions \fBre_match\fR and \fBre_match_ext\fR perform regular
+expression matches on all three of the fields named above, and return
+1 if any field matches.  See the sample filters for details.  The
+calling sequence is:
+
+.nf
+	re_match($entity, "regexp")
+	re_match_ext($entity, "regexp")
+.fi
+
+\fBre_match\fR returns true if any of the fields matches the regexp without
+regard to case.  \fBre_match_ext\fR returns true if the extension in any
+field matches.  An extension is defined as the last dot in a name and
+all remaining characters.
+
+.PP
+A third function called \fBre_match_in_zip_directory\fR will look inside
+zip files and return true if any of the file names inside the zip archive
+match the regular expression.  Call it like this:
+
+.nf
+	my $bh = $entity->bodyhandle();
+	my $path = (defined($bh)) ? $bh->path() : undef;
+	if (defined($path) and re_match_in_zip_directory($path, "regexp")) {
+	    # Take action...
+	}
+.fi
+
+You should \fInot\fR call \fBre_match_in_zip_directory\fR unless you
+know that the entity is a zip file attachment.
+
+.SH GLOBAL VARIABLES SET BY MIMEDEFANG.PL
+
+The following global variables are set by \fBmimedefang.pl\fR and are
+available for use in your filter.  All of these variables are always
+available to filter_begin, filter, filter_multipart and filter_end.
+In addition, some of them are available in \fBfilter_relay\fR,
+\fBfilter_sender\fR or \fBfilter_recipient\fR.  If this is the case,
+it will be noted below.
+
+.TP
+.B %Features
+This hash lets you determine at run-time whether certain functionality
+is available.  This hash is available at all times assuming the
+detect_and_load_perl_modules() function has been called.  The defined
+features are:
+
+$Features{"SpamAssassin"} is 1 if SpamAssassin 1.6 or better is installed;
+0 otherwise.
+
+$Features{"HTML::Parser"} is 1 if HTML::Parser is installed; 0 otherwise.
+
+$Features{"Virus:FPROTD"} is currently always 0.  Set it to 1 in your
+filter file if you have F-Risk's FPROTD scanner earlier than version 6.
+
+$Features{"Virus:FPROTD6"} is currently always 0.  Set it to 1 in your
+filter file if you have version 6 of F-Risk's FPROTD scanner.
+
+$Features{"Virus:SymantecCSS"} is currently always 0.  Set it to 1 in
+your filter file if you have the Symantec CarrierScan Server virus scanner.
+
+$Features{"Virus:NAI"} is the full path to NAI uvscan if it is installed;
+0 if it is not.
+
+$Features{"Virus:BDC"} is the full path to Bitdefender bdc if it is installed;
+0 if it is not.
+
+$Features{"Virus:NVCC"} is the full path to Norman Virus Control nvcc
+if it is installed; 0 if it is not.
+
+$Features{"Virus:HBEDV"} is the full path to H+BEDV AntiVir if it is installed;
+0 if it is not.
+
+$Features{"Virus:VEXIRA"} is the full path to Central Command Vexira if it is installed;
+0 if it is not.
+
+$Features{"Virus:SOPHOS"} is the full path to Sophos sweep if it is installed;
+0 if it is not.
+
+$Features{"Virus:SAVSCAN"} is the full path to Sophos savscan if it is installed;
+0 if it is not.
+
+$Features{"Virus:CLAMAV"} is the full path to Clam AV clamscan if it is installed;
+0 if it is not.
+
+$Features{"Virus:AVP"} is the full path to AVP AvpLinux if it is installed;
+0 if it is not.
+
+$Features{"Virus:AVP5"} is the full path to Kaspersky "aveclient" if
+it is installed; 0 if it is not.
+
+$Features{"Virus:CSAV"} is the full path to Command csav if it is installed;
+0 if it is not.
+
+$Features{"Virus:FSAV"} is the full path to F-Secure fsav if it is installed;
+0 if it is not.
+
+$Features{"Virus:FPROT"} is the full path to F-Risk f-prot if it is installed;
+0 if it is not.
+
+$Features{"Virus:FPSCAN"} is the full path to F-Risk fpscan if it is installed;
+0 if it is not.
+
+$Features{"Virus:SOPHIE"} is the full path to Sophie if it is installed;
+0 if it is not.
+
+$Features{"Virus:CLAMD"} is the full path to clamd if it is installed;
+0 if it is not.
+
+$Features{"Virus:TROPHIE"} is the full path to Trophie if it is installed;
+0 if it is not.
+
+$Features{"Virus:NOD32"} is the full path to ESET NOD32 nod32cli if it is installed;
+0 if it is not.
+
+\fBNOTE:\fR Perl-module based features such as SpamAssassin are determined at
+runtime and may change as these are added and removed.  Most Virus features are
+predetermined at the time of configuration and do not adapt to runtime
+availability unless changed by the filter rules.
+
+.TP
+.B $CWD
+This variable holds the working directory for the current message.
+During filter processing, \fBmimedefang.pl\fR chdir's into this
+directory before calling any of the filter_ functions.  Note that this
+variable \fIis\fR set correctly in \fBfilter_sender\fR and
+\fBfilter_recipient\fR, but \fInot\fR in \fBfilter_relay\fR.
+
+.TP
+.B $SuspiciousCharsInHeaders
+If this variable is true, then \fBmimedefang\fR has discovered suspicious
+characters in message headers.  This might be an exploit for bugs
+in MIME-parsing routines in some badly-written mail user agents
+(e.g. Microsoft Outlook.)  You should \fIalways\fR drop such messages.
+
+.TP
+.B $SuspiciousCharsInBody
+If this variable is true, then \fBmimedefang\fR has discovered
+suspicious characters in the message body.  This might be an exploit
+for bugs in MIME-parsing routines in some badly-written mail user
+agents (e.g. Microsoft Outlook.)  You should \fIalways\fR drop such
+messages.
+
+.TP
+.B $RelayHostname
+The host name of the relay.  This is the name of the host that is
+attempting to send e-mail to your host.  May be "undef" if the host
+name could not be determined.  This variable is available in
+\fBfilter_relay\fR, \fBfilter_sender\fR and \fBfilter_recipient\fR in
+addition to the body filtering functions.
+
+.TP
+.B $RelayAddr
+The IP address of the sending relay (as a string consisting of four
+dot-separated decimal numbers.)  One potential use of \fB$RelayAddr\fR
+is to limit mailing to certain lists to people within your
+organization.  This variable is available in \fBfilter_relay\fR,
+\fBfilter_sender\fR and \fBfilter_recipient\fR in addition to the body
+filtering functions.
+
+.B $Helo
+The argument given to the SMTP "HELO" command.  This variable is
+available in \fBfilter_sender\fR and \fBfilter_recipient\fR,
+but \fInot\fR in \fBfilter_relay\fR.
+
+.TP
+.B $Subject
+The contents of the "Subject:" header.
+
+.TP
+.B $Sender
+The sender of the e-mail.  This variable is set in \fBfilter_sender\fR
+and \fBfilter_recipient\fR in addition to the body filtering functions.
+
+.TP
+.B @Recipients
+A list of the recipients.  In \fBfilter_recipient\fR, it is set to the
+single recipient currently under consideration. Or, after calling
+\fBread_commands_file\fR within \fBfilter_recipient\fR, the current
+recipient under consideration is in the final position of the array,
+at \fB$Recipients[-1]\fR, while any previous (and accepted)
+recipients are at the beginning of the array, that is, in
+\fB@Recipients[0 .. $#Recipients-1]\fR.
+
+
+.TP
+.B $MessageID
+The contents of the "Message-ID:" header if one is present.  Otherwise,
+contains the string "NOQUEUE".
+
+.TP
+.B $QueueID
+The Sendmail queue identifier if it could be determined.  Otherwise,
+contains the string "NOQUEUE". This variable \fIis\fR set correctly
+in \fBfilter_sender\fR and \fBfilter_recipient\fR, but it is \fInot\fR
+available in \fBfilter_relay\fR.
+
+.TP
+.B $MsgID
+Set to $QueueID if the queue ID could be determined; otherwise, set
+to $MessageID.  This identifier should be used in logging, because it
+matches the identifier used by Sendmail to log messages.  Note that this
+variable \fIis\fR set correctly in \fBfilter_sender\fR
+and \fBfilter_recipient\fR, but it is \fInot\fR available in
+\fBfilter_relay\fR.
+
+.TP
+.B $VirusScannerMessages
+Each time a virus-scanning function is called, messages (if any) from
+the virus scanner are accumulated in this variable.  You can use it
+in filter_end to formulate a notification (if you wish.)
+
+.TP
+.B $VirusName
+If a virus-scanning function found a virus, this variable will hold the
+virus name (if it could be determined.)
+
+.TP
+.B $SASpamTester
+If defined, this is the configured Mail::SpamAssassin object used for
+mail tests.  It may be initialized with a call to \fBspam_assassin_init\fR
+which also returns it.
+
+.TP
+.B %SendmailMacros
+This hash contains the values of some Sendmail macros.  The hash elements
+exist only for macros defined by Sendmail.  See the Sendmail documentation
+for the meanings of the macros.
+
+By default, \fBmimedefang\fR passes the values of the following
+macros: ${daemon_name}, ${daemon_port}, ${if_name}, ${if_addr}, $j,
+$_, $i, ${tls_version}, ${cipher}, ${cipher_bits}, ${cert_subject},
+${cert_issuer}, ${auth_type}, ${auth_authen}, ${auth_ssf},
+${auth_author}, ${mail_mailer}, ${mail_host} and ${mail_addr}.
+In addition, ${client_port} is set to the client's TCP port.
+
+If any macro is not set or not passed to milter, it will be unavailable.
+To access the value of a macro, use:
+
+.nf
+
+	$SendmailMacros{"macro_name"}
+
+.fi
+
+Do not place curly brackets around the macro name.
+This variable is available in \fBfilter_sender\fR and
+\fBfilter_recipient\fR after a call to \fBread_commands_file\fR.
+
+.TP
+.B @SenderESMTPArgs
+This array contains all the ESMTP arguments supplied in the MAIL FROM:
+command.  For example:
+
+.nf
+sub print_sender_esmtp_args {
+    foreach (@SenderESMTPArgs) {
+        print STDERR "Sender ESMTP arg: $_\n";
+    }
+}
+.fi
+
+.TP
+.B %RecipientESMTPArgs
+This hash contains all the ESMTP arguments supplied in each RCPT TO:
+command.  For example:
+
+.nf
+sub print_recip_esmtp_args {
+    foreach my $recip (@Recipients) {
+        foreach(@{$RecipientESMTPArgs{$recip}}) {
+            print STDERR "Recip ESMTP arg for $recip: $_\n";
+        }
+    }
+}
+.fi
+
+.TP
+.B %RecipientMailers
+This hash contains the Sendmail "mailer-host-address" triple for each
+recipient.  Here's an example of how to use it:
+
+.nf
+sub print_mailer_info {
+    my($recip, $mailer, $host, $addr);
+    foreach $recip (@Recipients) {
+        $mailer = ${RecipientMailers{$recip}}[0];
+        $host = ${RecipientMailers{$recip}}[1];
+        $addr =  ${RecipientMailers{$recip}}[2];
+        print STDERR "$recip: mailer=$mailer, host=$host, addr=$addr\\n";
+    }
+}
+.fi
+
+In \fBfilter_recipient\fR, this variable by default only contains
+information on the recipient currently under investigation. Information
+on all recipients is available after calling \fBread_commands_file\fR.
+
+.SH ACTIONS
+
+When the filter procedure decides how to dispose of a part, it should
+call one or more \fBaction_\fR subroutines.  The action subroutines are:
+
+.TP
+.B action_accept()
+Accept the part.
+
+.TP
+.B action_rebuild() \fR
+Rebuild the mail body, even if \fBmimedefang\fR thinks no changes were made.
+Normally, \fBmimedefang\fR does not alter a message if no changes were
+made.  \fBaction_rebuild\fR may be used if you make changes to
+entities directly (by manipulating the MIME::Head, for example.)
+Unless you call \fBaction_rebuild\fR, \fBmimedefang\fR will be unaware
+of the changes.  Note that all the built-in \fBaction...\fR routines
+that change a message implicitly call \fBaction_rebuild\fR.
+
+.TP
+.B action_add_header($hdr, $val)
+Add a header to the message.  This can be used in \fBfilter_begin\fR
+or \fBfilter_end\fR.  The $hdr component is the header name
+\fIwithout the colon\fR, and the $val is the header value.  For example,
+to add the header:
+
+.nf
+	X-MyHeader: A nice piece of text
+.fi
+
+use:
+
+.nf
+	action_add_header("X-MyHeader", "A nice piece of text");
+.fi
+
+.TP
+.B action_change_header($hdr, $val, $index)
+Changes an existing header in the message. This can be used in
+\fBfilter_begin\fR or \fBfilter_end\fR.  The $hdr parameter is the
+header name \fIwithout the colon\fR, and $val is the header value.
+If the header does not exist, then a header with the given name and
+value is added.
+
+The $index parameter is optional; it defaults to 1.  If you supply it,
+then the $index'th occurrence of the header is changed, if there is
+more than one header with the same name.  (This is common with the
+Received: header, for example.)
+
+.TP
+.B action_insert_header($hdr, $val, $index)
+Add a header to the message int the specified position $index.  A
+position of 0 specifies that the header should be prepended before
+existing headers.  This can be used in \fBfilter_begin\fR or
+\fBfilter_end\fR.  The $hdr component is the header name \fIwithout
+the colon\fR, and the $val is the header value.
+
+.TP
+.B action_delete_header($hdr, $index)
+Deletes an existing header in the message. This can be used in
+\fBfilter_begin\fR or \fBfilter_end\fR.  The $hdr parameter is the
+header name \fIwithout the colon\fR.
+
+The $index parameter is optional; it defaults to 1.  If you supply it,
+then the $index'th occurrence of the header is deleted, if there is
+more than one header with the same name.
+
+.TP
+.B action_delete_all_headers($hdr)
+Deletes all headers with the specified name.  This can be used in
+\fBfilter_begin\fR or \fBfilter_end\fR.  The $hdr parameter is the
+header name \fIwithout the colon\fR.
+
+.TP
+.B action_drop()
+Drop the part.  If called from \fBfilter_multipart\fR, drops all
+contained parts also.
+
+.TP
+.B action_drop_with_warning($msg)
+Drop the part, but add the warning \fI$msg\fR to the e-mail message.
+If called from \fBfilter_multipart\fR, drops all contained parts also.
+
+.TP
+.B action_accept_with_warning($msg)
+Accept the part, but add the warning \fI$msg\fR to the e-mail message.
+
+.TP
+.B action_replace_with_warning($msg)
+Drop the part and replace it with a text part \fI$msg\fR.
+If called from \fBfilter_multipart\fR, drops all contained parts also.
+
+.TP
+.B action_replace_with_url($entity, $doc_root, $base_url, $msg, [$cd_data, $salt])
+Drop the part, but save it in a unique location under $doc_root.
+The part is replaced with the text message $msg.  The string "_URL_"
+in $msg is replaced with $base_url/something, that can be used
+to retrieve the message.
+
+You should not use this function in \fBfilter_multipart\fR.
+
+This action is intended for stripping large parts out of the message
+and replacing them to a link on a Web server.  Here's how you would
+use it in filter():
+
+.nf
+$size = (stat($entity->bodyhandle->path))[7];
+if ($size > 1000000) {
+	return action_replace_with_url($entity,
+		"/home/httpd/html/mail_parts",
+		"http://mailserver.company.com/mail_parts",
+		"The attachment was larger than 1,000,000 bytes.\\n" .
+		"It was removed, but may be accessed at this URL:\\n\\n" .
+		"\\t_URL_\\n");
+}
+.fi
+
+This example moves attachments greater than 1,000,000 bytes into
+/home/httpd/html/mail_parts and replaces them with a link.  The
+directory should be accessible via a Web server at
+http://mailserver.company.com/mail_parts.
+
+The generated name is created by performing a SHA1 hash of the part and
+adding the extension to the ASCII-HEX representation of the hash.  If many
+different e-mails are sent containing an identical large part, only one copy
+of the part is stored, regardless of the number of senders or recipients.
+
+For privacy reasons, you \fBmust\fR turn off Web server indexing in the
+directory in which you place mail parts, or anyone will be able to read
+them.  If indexing is disabled, an attacker would have to guess the SHA1
+hash of a part in order to read it.
+
+Optionally, a fifth argument can supply data to be saved into a hidden
+dot filename based on the generated name.  This data can then be read in
+on the fly by a CGI script or mod_perl module before serving the file to
+a web client, and used to add information to the response, such as
+Content-Disposition data.
+
+A sixth optional argument, $salt, is mixed in to the SHA1 hash.  This
+salt can be any string and should be kept confidential.  The salt is
+designed to prevent people from guessing whether or not a particular
+attachment has been received on your server by altering the SHA1 hash
+calculation.
+
+.TP
+.B action_defang($entity, $name, $fname, $type)
+Accept the part, but change its name to \fI$name\fR, its suggested filename
+to \fI$fname\fR and its MIME type to \fI$type\fR.  If \fI$name\fR or
+\fI$fname\fR are "", then \fBmimedefang.pl\fR generates generic names.
+Do not use this action in \fBfilter_multipart\fR.
+
+If you use \fBaction_defang\fR, you must define a subroutine called
+\fBdefang_warning\fR in your filter.  This routine takes two arguments:
+$oldfname (the original name of an attachment) and $fname (the defanged
+version.)  It should return a message telling the user what happened.  For
+example:
+
+.nf
+sub defang_warning {
+    my($oldfname, $fname) = @_;
+    return "The attachment '$oldfname' was renamed to '$fname'\\n";
+}
+.fi
+
+
+.TP
+.B action_external_filter($entity, $cmd)
+Run an external UNIX command \fB$cmd\fR.  This command must read the part
+from the file \fB./FILTERINPUT\fR and leave the result in \fB./FILTEROUTPUT\fR.
+If the command executes successfully, returns 1, otherwise 0.  You can
+test the return value and call another \fBaction_\fR if the filter failed.
+Do not use this action in \fBfilter_multipart\fR.
+
+.TP
+.B action_quarantine($entity, $msg)
+Drop and quarantine the part, but add the warning \fI$msg\fR to the
+e-mail message.
+
+.TP
+.B action_quarantine_entire_message($msg)
+Quarantines the entire message in a quarantine directory on the mail server,
+but does not otherwise affect disposition of the message.
+If "$msg" is non-empty, it is included in any administrator notification.
+
+.TP
+.B action_sm_quarantine($reason)
+Quarantines a message \fIin the Sendmail mail queue\fR using the new
+QUARANTINE facility of Sendmail 8.13.  Consult the Sendmail documentation
+for details about this facility.  If you use \fBaction_sm_quarantine\fR
+with a version of Sendmail that lacks the QUARANTINE facility,
+\fBmimedefang\fR will log an error message and not quarantine the message.
+
+.TP
+.B action_bounce($reply, $code, $dsn)
+Reject the entire e-mail message with an SMTP failure code, and the
+one-line error message \fI$reply\fR.  If the optional $code and $dsn
+arguments are supplied, they specify the numerical SMTP reply code and
+the extended status code (DSN code).  If the codes you supply do not
+make sense for a bounce, they are replaced with "554" and "5.7.1"
+respectively.
+
+\fBaction_bounce\fR merely makes a note that the message is to
+be bounced; remaining parts are still processed.  If
+\fBaction_bounce\fR is called for more than one part, the mail is
+bounced with the message in the final call to \fBaction_bounce\fR.
+You can profitably call \fBaction_quarantine\fR followed by
+\fBaction_bounce\fR if you want to keep a copy of the offending part.
+Note that the message is not bounced immediately; rather, remaining
+parts are processed and the message is bounced after all parts have
+been processed.
+
+Note that despite its name, \fBaction_bounce\fR does \fInot\fR generate
+a "bounce message".  It merely rejects the message with an SMTP
+failure code.
+
+.B WARNING:
+\fBaction_bounce()\fR may cause the sending relay to generate spurious
+bounce messages if the sender address is faked.  This is a particular
+problem with viruses.  However, we believe that on balance, it's
+better to bounce a virus than to silently discard it.  It's almost
+never a good idea to hide a problem.
+
+.TP
+.B action_tempfail($msg, $code, $dsn)
+Cause an SMTP "temporary failure" code to be returned, so the sending
+mail relay requeues the message and tries again later.  The message
+$msg is included with the temporary failure code.  If the optional
+$code and $dsn arguments are supplied, they specify the numerical SMTP
+reply code and the extended status code (DSN code).  If the codes you
+supply do not make sense for a temporary failure, they are replaced
+with "450" and "4.7.1" respectively.
+
+.TP
+.B action_discard()
+Silently discard the message, notifying nobody.  You can profitably
+call \fBaction_quarantine\fR followed by \fBaction_discard\fR if you
+want to keep a copy of the offending part.  Note that the message is
+not discarded immediately; rather, remaining parts are processed and
+the message is discarded after all parts have been processed.
+
+.TP
+.B action_notify_sender($message)
+This action sends an e-mail back to the original sender with the indicated
+message.  You may call another action after this one.  If
+\fBaction_notify_sender\fR is called more than once, the messages are
+accumulated into a single e-mail message -- at most one notification message
+is sent per incoming message.  The message should be terminated with a newline.
+
+The notification is delivered in deferred mode; you should run a client-queue
+runner if you are using Sendmail 8.12.
+
+\fINOTE\fR: Viruses often fake the sender address.  For that reason,
+if a virus-scanner has detected a virus, \fBaction_notify_sender\fR is
+\fIdisabled\fR and will simply log an error message if you try to use it.
+
+.TP
+.B action_notify_administrator($message)
+This action e-mails the MIMEDefang administrator the supplied message.
+You may call another action after this one;
+\fBaction_notify_administrator\fR does not affect mail processing.  If
+\fBaction_notify_administrator\fR is called more than once, the messages are
+accumulated into a single e-mail message -- at most one notification
+message is sent per incoming message.  The message should be
+terminated with a newline.
+
+The notification is delivered in deferred mode; you should run a client-queue
+runner if you are using Sendmail 8.12.
+
+.TP
+.B append_text_boilerplate($entity, $boilerplate, $all)
+This action should \fIonly\fR be called from \fBfilter_end\fR.  It appends
+the text "\\n$boilerplate\\n" to the first text/plain part (if $all is 0)
+or to \fIall\fR text/plain parts (if $all is 1).
+
+.TP
+.B append_html_boilerplate($entity, $boilerplate, $all)
+This action should \fIonly\fR be called from \fBfilter_end\fR.  It adds
+the text "\\n$boilerplate\\n" to the first text/html part (if $all is 0)
+or to \fIall\fR text/html parts (if $all is 1).  This function tries
+to be smart about inserting the boilerplate; it uses HTML::Parser to
+detect closing tags and inserts the boilerplate before the </body> tag
+if there is one, or before the </html> tag if there is no </body>.  If
+there is no </body> or </html> tag, it appends the boilerplate to the end of
+the part.
+
+Do not use append_html_boilerplate unless you have installed the
+HTML::Parser Perl module.
+
+Here is an example illustrating how to use the boilerplate functions:
+
+.nf
+	sub filter_end {
+		my($entity) = @_;
+		append_text_boilerplate($entity,
+			"Lame text disclaimer", 0);
+		append_html_boilerplate($entity,
+			"<em>Lame</em> HTML disclaimer", 0);
+	}
+.fi
+
+.TP
+.B action_add_part($entity, $type, $encoding, $data, $fname, $disposition [, $offset])
+This action should \fIonly\fR be called from the \fBfilter_end\fR
+routine.  It adds a new part to the message, converting the original
+message to mutipart if necessary.  The function returns the part so
+that additional mime attributes may be set on it.  Here's an example:
+
+.nf
+	sub filter_end {
+		my($entity) = @_;
+
+		action_add_part($entity, "text/plain", "-suggest",
+ 				"This e-mail does not represent" .
+				"the official policy of FuBar, Inc.\\n",
+				"disclaimer.txt", "inline");
+        }
+.fi
+
+The $entity parameter \fImust\fR be the argument passed in to
+\fBfilter_end\fR.  The $offset parameter is optional; if omitted, it
+defaults to -1, which adds the new part at the end.  See the
+MIME::Entity man page and the \fBadd_part\fR member function for the
+meaning of $offset.
+
+Note that \fBaction_add_part\fR tries to be more intelligent than simply
+calling $entity->add_part.  The decision process is as follows:
+
+.TP
+.B o
+If the top-level entity is multipart/mixed, then the part is simply added.
+
+.TP
+.B o
+Otherwise, a new top-level multipart/mixed container is generated, and
+the original top-level entity is made the first part of the multipart/mixed
+container.  The new part is then added to the multipart/mixed container.
+
+.TP
+.B action_add_entity($entity [, $offset])
+This is similar to \fBaction_add_part\fR but takes a pre-built MIME::Entity
+object rather than constructing one based on $type, $encoding,
+$data, $fname and $disposition arguments.
+
+.SH USEFUL ROUTINES
+
+\fBmimedefang.pl\fR includes some useful functions you can call from
+your filter:
+
+.TP
+.B detect_and_load_perl_modules()
+Unless you \fIreally\fR know what you're doing, this function
+\fBmust\fR be called first thing in your filter file.  It causes
+\fBmimedefang.pl\fR to detect and load Perl modules such
+as Mail::SpamAssassin, Net::DNS, etc., and to populate the
+%Features hash.
+
+.TP
+.B send_quarantine_notifications()
+This function should be called from \fBfilter_end\fR.  If any parts were
+quarantined, a quarantine notification is sent to the MIMEDefang
+administrator.  Please note that if you do not call
+\fBsend_quarantine_notifications\fR, then \fIno\fR quarantine notifications
+are sent.
+
+.TP
+.B get_quarantine_dir()
+This function returns the full path name of the quarantine directory.
+If you have not yet quarantined any parts of the message, a quarantine
+directory is created and its pathname returned.
+
+.TP
+.B change_sender($sender)
+This function changes the envelope sender to $sender.  It can only
+be called from \fBfilter_begin\fR or any later function.  Please note
+that this function is \fIonly\fR supported with Sendmail/Milter 8.14.0
+or newer.  It has \fIno effect\fR if you're running older versions.
+
+.TP
+.B add_recipient($recip)
+This function adds $recip to the list of envelope recipients.  A copy
+of the message (after any modifications by MIMEDefang) will be sent to
+$recip in addition to the original recipients.  Note that \fBadd_recipient\fR
+does \fInot\fR modify the @Recipients array; it just makes a note to Sendmail
+to add the recipient.
+
+.TP
+.B delete_recipient($recip)
+This function deletes $recip from the list of recipients.  That person
+will not receive a copy of the mail.  $recip should exactly match an
+entry in the @Recipients array for delete_recipient() to work.  Note
+that \fBdelete_recipient\fR does \fInot\fR modify the @Recipients array;
+it just makes a note to Sendmail to delete the recipient.
+.TP
+.B resend_message($recip1, $recip2, ...)
+or
+.TP
+.B resend_message(@recips)
+This function \fIimmediately\fR resends the \fIoriginal, unmodified\fR
+mail message to each of the named recipients.  The sender's address is
+preserved.  Be very careful when using this function, because it resends
+the \fIoriginal\fR message, which may contain undesired attachments.  Also,
+you should \fInot\fR call this function from filter(), because it resends
+the message \fIeach time\fR it is called.  This may result in multiple
+copies being sent if you are not careful.  Call from filter_begin() or
+filter_end() to be safe.
+
+The function returns true on success, or false if it fails.
+
+Note that the resend_message function delivers the mail in deferred
+mode (using Sendmail's "-odd" flag.)  You \fImust\fR run a client-submission
+queue processor if you use Sendmail 8.12.  We recommend executing this
+command as part of the Sendmail startup sequence:
+
+.nf
+	sendmail -Ac -q5m
+.fi
+
+.TP
+.B remove_redundant_html_parts($entity)
+This function should only be called from \fBfilter_end\fR.
+It removes redundant HTML parts from the message.  It works by deleting
+any part of type text/html from the message if (1) it is a sub-part of
+a multipart/alternative part, and (2) there is another part of type
+text/plain under the multipart/alternative part.
+
+.TP
+.B replace_entire_message($entity)
+This function can only be called from \fBfilter_end\fR.  It replaces
+the entire message with $entity, a MIME::Entity object that you have
+constructed.  You can use any of the MIME::Tools functions to construct
+the entity.
+
+.TP
+.B read_commands_file()
+This function should only be called from \fBfilter_sender\fR and
+\fBfilter_recipient\fR. This will read the \fBCOMMANDS\fR file (as
+described in mimedefang-protocol(7)), and will fill or update the
+following global variables: $Sender, @Recipients, %RecipientMailers,
+$RelayAddr, $RealRelayAddr, $RelayHostname, $RealRelayHostname,
+$QueueID, $Helo, %SendmailMacros.
+
+If you do not call \fBread_commands_file\fR, then the only information
+available in \fBfilter_sender\fR and \fBfilter_recipient\fR is that
+which is passed as an argument to the function.
+
+.TP
+.B stream_by_domain()
+\fIDo not use this function unless you have Sendmail 8.12 and locally-
+submitted e-mail is submitted using SMTP.\fR
+
+This function should \fIonly\fR be called at the very beginning of
+filter_begin(), like this:
+
+.nf
+	sub filter_begin {
+		if (stream_by_domain()) {
+			return;
+		}
+		# Rest of filter_begin
+	}
+.fi
+
+stream_by_domain() looks at all the recipients of the message, and if
+they belong to the same domain (e.g., joe@domain.com, jane@domain.com and
+sue@domain.com), it returns 0 and sets the global variable $Domain to
+the domain (domain.com in this example.)
+
+If users are in different domains, stream_by_domain() \fIresends\fR
+the message (once to each domain) and returns 1 For example, if the
+original recipients are joe@abc.net, jane@xyz.net and sue@abc.net, the
+original message is resent twice: One copy to joe@abc.net and
+sue@abc.net, and another copy to jane@xyz.net.  Also, any subsequent
+scanning is canceled (filter() and filter_end() will \fInot\fR be
+called for the original message) and the message is silently
+discarded.
+
+If you have Sendmail 8.12, then locally-submitted messages are sent via
+SMTP, and MIMEDefang will be called for each resent message.
+It is possible to set up Sendmail 8.12 so locally-submitted messages
+are delivered directly; in this case, stream_by_domain will \fInot\fR
+work.
+
+Using stream_by_domain allows you to customize your filter rules for
+each domain.  If you use the function as described above, you can do
+this in your filter routine:
+
+.nf
+	sub filter {
+		my($entity, $fname, $ext, $type) = @_;
+		if ($Domain eq "abc.com") {
+			# Filter actions for abc.com
+		} elsif ($Domain eq "xyz.com") {
+			# Filter actions for xyz.com
+		} else {
+			# Default filter actions
+		}
+	}
+.fi
+
+You cannot rely on $Domain being set unless you have called
+stream_by_domain().
+
+.TP
+.B stream_by_recipient()
+\fIDo not use this function unless you have Sendmail 8.12 and locally-
+submitted e-mail is submitted using SMTP.\fR
+
+This function should \fIonly\fR be called at the very beginning of
+filter_begin(), like this:
+
+.nf
+	sub filter_begin {
+		if (stream_by_recipient()) {
+			return;
+		}
+		# Rest of filter_begin
+	}
+.fi
+
+If there is more than one recipient, stream_by_recipient() resends the
+message once to each recipient.  That way, you can customize your
+filter rules on a per-recipient basis.  This may increase the load on
+your mail server considerably.
+
+Also, a "recipient" is determined before alias expansion.  So
+"all@mydomain.com" is considered a single recipient, even if Sendmail
+delivers to a list.
+
+If you have Sendmail 8.12, then locally-submitted messages are sent via
+SMTP, and MIMEDefang will be called for each resent message.
+It is possible to set up Sendmail 8.12 so locally-submitted messages
+are delivered directly; in this case, stream_by_recipient() will \fInot\fR
+work.
+
+stream_by_recipient() allows you to customize your filter rules for
+each recipient in a manner similar to stream_by_domain().
+
+.SH LOGGING
+
+.TP
+.B md_graphdefang_log_enable($facility, $enum_recips)
+Enables the md_graphdefang_log function (described next).  The function logs to syslog
+using the specified facility.  If you omit $facility, it defaults to 'mail'.
+If you do not call md_graphdefang_log_enable in your filter, then any calls to md_graphdefang_log
+simply do nothing.
+
+If you supply $enum_recips as 1, then a line of logging is output for
+\fIeach\fR recipient of a mail message.  If it is zero, then only a
+single line is output for each message.  If you omit $enum_recips,
+it defaults to 1.
+
+.TP
+.B md_graphdefang_log($event, $v1, $v2)
+Logs an event with up to two optional additional parameters.  The log
+message has a specific format useful for graphing tools; the
+message looks like this:
+
+.nf
+	MDLOG,msgid,event,v1,v2,sender,recipient,subj
+.fi
+
+"MDLOG" is literal text.  "msgid" is the Sendmail queue identifier.
+"event" is the event name, and "v1" and "v2" are the additional
+parameters.  "sender" is the sender's e-mail address. "recipient"
+is the recipient's e-mail address, and "subj" is the message subject.
+If a message has more than one recipient, md_graphdefang_log may log an event message
+for \fIeach\fR recipient, depending on how you called md_graphdefang_log_enable.
+
+Note that md_graphdefang_log should not be used in filter_relay, filter_sender
+or filter_recipient.  The global variables it relies on are not
+valid in that context.
+
+If you want to log general text strings, \fIdo not\fR use md_graphdefang_log.
+Instead, use md_syslog (described next).
+
+.TP
+.B md_syslog($level, $msg)
+Logs the message $msg to syslog, using level $level.  The level
+is a literal string, and should be one of 'err', 'debug', 'warning',
+\'emerg', 'crit', 'notice' or 'info'.  (See syslog(3) for details.)
+
+Note that md_syslog does \fInot\fR perform %-subsitutions like
+syslog(3) does.  Depending on your Perl installation, md_syslog boils
+down to a call to Unix::Syslog::syslog or Sys::Syslog::syslog.  See the
+Unix::Syslog or Sys::Syslog man pages for more details.
+
+.TP
+.B md_openlog($tag, $facility)
+Sets the tag used in syslog messages to $tag, and sends the logs to the
+$facility facility.  If you do not call md_openlog before you call
+md_syslog, then it is called implicitly with $tag set to \fBmimedefang.pl\fR
+and $facility set to \fBmail\fR.
+
+.SH RBL LOOKUP FUNCTIONS
+
+\fBmimedefang.pl\fR includes the following functions for looking up IP
+addresses in DNS-based real-time blacklists.  Note that the
+"relay_is_blacklisted" functions are deprecated and may be removed in
+a future release.  Instead, you should use the module
+Net::DNSBL::Client from CPAN.
+
+.TP
+.B relay_is_blacklisted($relay, $domain)
+This checks a DNS-based real-time spam blacklist, and returns true if
+the relay host is blacklisted, or false otherwise.  (In fact, the
+return value is whatever the blacklist returns as a resolved
+hostname, such as "127.0.0.4")
+
+Note that \fBrelay_is_blacklisted\fR uses the built-in
+\fBgethostbyname\fR function; this is usually quite inefficient
+and does not permit you to set a timeout on the lookup.  Instead,
+we recommend using one of the other DNS lookup function described in
+this section.  (Note, though, that the other functions require the Perl
+Net::DNS module, whereas \fBrelay_is_blacklisted\fR does not.)
+
+Here's an example of how to use \fBrelay_is_blacklisted\fR:
+
+.nf
+	if (relay_is_blacklisted($RelayAddr, "rbl.spamhaus.org")) {
+		action_add_header("X-Blacklist-Warning",
+			  "Relay $RelayAddr is blacklisted by Spamhaus");
+	}
+.fi
+
+.TP
+.B relay_is_blacklisted_multi($relay, $timeout, $answers_wanted, [$domain1, $domain2, ...], $res)
+This function is similar to \fBrelay_is_blacklisted\fR, except that it takes
+a timeout argument (specified in seconds) and an array of domains to check.
+The function checks all domains in parallel, and is guaranteed to return
+in \fB$timeout\fR seconds.  (Actually, it may take up to one second longer.)
+
+The parameters are:
+
+$relay -- the IP address you want to look up
+
+$timeout -- a timeout in seconds after which the function should return
+
+$answers_wanted -- the maximum number of positive answers you care about.
+For example, if you're looking up an address in 10 different RBLs, but
+are going to bounce it if it is on four or more, you can set $answers_wanted
+to 4, and the function returns as soon as four "hits" are discovered.  If
+you set $answers_wanted to zero, then the function does not return early.
+
+[$domain1, $domain2, ...] -- a reference to an array of strings, where
+each string is an RBL domain.
+
+$res -- a Net::DNS::Resolver object.  This argument is optional; if you
+do not supply it, then \fBrelay_is_blacklisted_multi\fR constructs its
+own resolver.
+
+The return value is a reference to a hash; the keys of the hash are
+the original domains, and the corresponding values are either SERVFAIL,
+NXDOMAIN, or a list of IP addresses in dotted-quad notation.
+
+Here's an example:
+
+.nf
+    $ans = relay_is_blacklisted_multi($RelayAddr, 8, 0,
+        ["sbl.spamhaus.org", "relays.ordb.org"]);
+
+    foreach $domain (keys(%$ans)) {
+        $r = $ans->{$domain};
+        if (ref($r) eq "ARRAY") {
+            # It's an array -- it IS listed in RBL
+            print STDERR "Lookup in $domain yields [ ";
+            foreach $addr (@$r) {
+                print STDERR $addr . " ";
+            }
+            print STDERR "]\\n";
+        } else {
+            # It is NOT listed in RBL
+            print STDERR "Lookup in $domain yields "
+                         . $ans->{$domain} . "\\n";
+        }
+    }
+.fi
+
+You should compare each of $ans->{$domain} to "SERVFAIL" and "NXDOMAIN"
+to see if the relay is \fInot\fR listed.  Any other return value will
+be an array of IP addresses indicating that the relay is listed.
+
+Any lookup that does not succeed within $timeout seconds has the
+corresponding return value set to SERVFAIL.
+
+.TP
+.B relay_is_blacklisted_multi_list($relay, $timeout, $answers_wanted, [$domain1, $domain2, ...], $res)
+This function is similar to \fBrelay_is_blacklisted_multi\fR except that
+the return value is simply an array of RBL domains in which the relay
+was listed.
+
+.TP
+.B relay_is_blacklisted_multi_count($relay, $timeout, $answers_wanted, [$domain1, $domain2, ...], $res)
+This function is similar to \fBrelay_is_blacklisted_multi\fR except that
+the return value is an integer specifying the number of domains on which
+the relay was blacklisted.
+
+.TP
+.B md_get_bogus_mx_hosts($domain)
+
+This function looks up all the MX records for the specified domain (or
+A records if there are no MX records) and returns a list of "bogus" IP
+addresses found amongst the records.  A "bogus" IP address is an IP
+address in a private network (10.0.0.0/8, 172.16.0.0/12,
+192.168.0.0/16), the loopback network (127.0.0.0/8), local-link for
+auto-DHCP (169.254.0.0/16), IPv4 multicast (224.0.0.0/4) or reserved
+(240.0.0.0/4).
+
+.PP
+Here's how you might use the function in filter_sender:
+
+.nf
+sub filter_sender {
+    my ($sender, $ip, $hostname, $helo) = @_;
+    if ($sender =~ /\@([^>]+)/) {
+        my $domain = $1;
+        my @bogushosts = md_get_bogus_mx_hosts($domain);
+        if (scalar(@bogushosts)) {
+            return('REJECT', "Domain $domain contains bogus MX record(s) " .
+                   join(', ', @bogushosts));
+        }
+    }
+    return ('CONTINUE', 'ok');
+}
+.fi
+
+.SH TEST FUNCTIONS
+
+\fBmimedefang.pl\fR includes some "test" functions:
+
+.TP
+.B md_version()
+returns the version of MIMEDefang as a string (for example, "@VERSION@").
+
+.TP
+.B message_rejected()
+Returns true if any of \fBaction_tempfail\fR, \fBaction_bounce\fR or
+\fBaction_discard\fR have been called for this message; returns false
+otherwise.
+
+.PP
+If you have the Mail::SpamAssassin Perl module installed (see
+http://www.spamassassin.org) you may call any of the spam_assassin_*
+functions.  They should only be called from \fBfilter_begin\fR or
+\fBfilter_end\fR because they operate on the entire message at once.
+Most functions use an optionally provided config file.  If no config
+file is provided, mimedefang.pl will look for one of four default
+SpamAssassin preference files.  The first of the following found will
+be used:
+
+.TP
+.B o
+@CONFDIR_EVAL@/sa-mimedefang.cf
+.TP
+.B o
+@CONFDIR_EVAL@/spamassassin/sa-mimedefang.cf
+.TP
+.B o
+@CONFDIR_EVAL@/spamassassin/local.cf
+.TP
+.B o
+@CONFDIR_EVAL@/spamassassin.cf
+
+.PP
+\fBImportant Note\fR:  MIMEDefang does \fInot\fR permit SpamAssassin
+to modify messages.  If you want to tag spam messages with special headers
+or alter the subject line, you must use MIMEDefang functions to do it.
+Setting SpamAssassin configuration options to alter messages will not work.
+
+.TP
+.B spam_assassin_is_spam([ $config_file ])
+Determine if the current message is SPAM/UCE as determined by SpamAssassin.
+Compares the score of the message against the threshold score (see below)
+and returns true if it is.  Uses \fBspam_assassin_check\fR below.
+
+.TP
+.B spam_assassin_check([ $config_file ])
+This function returns a four-element list of the form ($hits, $required, 
+$tests, $report).  $hits is the "score" given to the message by SpamAssassin
+(higher score means more likely SPAM). $required is the number of hits 
+required before SpamAssassin concludes that the message is SPAM.  $tests
+is a comma-separated list of SpamAssassin test names, and $report is text
+detailing which tests triggered and their point score.  This gives you 
+insight into why SpamAssassin concluded that the message is SPAM.  Uses 
+\fBspam_assassin_status\fR below.
+  
+.TP
+.B spam_assassin_status([ $config_file ])
+This function returns a Mail::SpamAssasin::PerMsgStatus object.  Read the 
+SpamAssassin documentation for details about this object.  You are 
+responsible for calling the \fBfinish\fR method when you are done with it.
+Uses \fBspam_assassin_init\fR and \fBspam_assassin_mail\fR below.
+
+.TP
+.B spam_assassin_init([ $config_file ])
+This function returns the new global Mail::SpamAssassin object with the 
+specified or default config (outlined above).  If the global object is
+already defined, returns it -- does not change config files!  The object
+can be used to perform other SpamAssassin related functions.
+
+.TP
+.B spam_assassin_mail()
+This function returns a Mail::SpamAssassin::NoMailAudit object with the 
+current email message contained in it.  It may be used to perform other 
+SpamAssassin related functions.
+
+.TP
+.B md_copy_orig_msg_to_work_dir()
+Normally, virus-scanners are passed only the unpacked, decoded parts
+of a MIME message.  If you want to pass the original, undecoded message
+in as well, call \fBmd_copy_orig_msg_to_work_dir\fR \fIprior to\fR
+calling \fBmessage_contains_virus\fR.
+
+.TP
+.B md_copy_orig_msg_to_work_dir_as_mbox_file()
+Normally, virus-scanners are passed only the unpacked, decoded parts
+of a MIME message.  If you want to pass the original, undecoded
+message in as a UNIX-style "mbox" file, call
+\fBmd_copy_orig_msg_to_work_dir_as_mbox_file\fR \fIprior to\fR calling
+\fBmessage_contains_virus\fR.  The only difference between this function
+and \fBmd_copy_orig_msg_to_work_dir\fR is that this function prepends
+a "From_" line to make the message look like a UNIX-style mbox file.
+This is required for some virus scanners (such as Clam AntiVirus) to
+recognize the file as an e-mail message.
+
+.TP
+.B message_contains_virus()
+This function runs \fIevery\fR installed virus-scanner and returns
+the scanner results.  The function should be called in list context;
+the return value is a three-element list ($code, $category, $action).
+
+$code is the actual return code from the virus scanner.
+
+$category is a string categorizing the return code:
+
+"ok" - no viruses detected.
+
+"not-installed" - indicated virus scanner is not installed.
+
+"cannot-execute" - for some reason, the scanner could not be executed.
+
+"virus" - a virus was found.
+
+"suspicious" - a "suspicious" file was found.
+
+"interrupted" - scanning was interrupted.
+
+"swerr" - an internal scanner software error occurred.
+
+$action is a string containing the recommended action:
+
+"ok" - allow the message through unmolested.
+
+"quarantine" - a virus was detected; quarantine it.
+
+"tempfail" - something went wrong; tempfail the message.
+
+
+.TP
+.B message_contains_virus_trend()
+.TP
+.B message_contains_virus_nai()
+.TP
+.B message_contains_virus_bdc()
+.TP
+.B message_contains_virus_nvcc()
+.TP
+.B message_contains_virus_csav()
+.TP
+.B message_contains_virus_fsav()
+.TP
+.B message_contains_virus_hbedv()
+.TP
+.B message_contains_virus_vexira()
+.TP
+.B message_contains_virus_sophos()
+.TP
+.B message_contains_virus_clamav()
+.TP
+.B message_contains_virus_avp()
+.TP
+.B message_contains_virus_avp5()
+.TP
+.B message_contains_virus_fprot()
+.TP
+.B message_contains_virus_fpscan()
+.TP
+.B message_contains_virus_fprotd()
+.TP
+.B message_contains_virus_fprotd_v6()
+.TP
+.B message_contains_virus_nod32()
+
+These functions should be called in \fBlist context\fR.  They use the
+indicated anti-virus software to scan the message for viruses.  These
+functions are intended for use in filter_begin() to make an initial
+scan of the e-mail message.
+
+The supported virus scanners are:
+.TP
+.B nai
+NAI "uvscan" - http://www.nai.com/
+.TP
+.b bdc
+Bitdefender "bdc" - http://www.bitdefender.com/
+.TP
+.B csav
+Command Anti-Virus - http://www.commandsoftware.com/
+.TP
+.B fsav
+F-Secure Anti-Virus - http://www.f-secure.com/
+.TP
+.B hbedv
+H+BEDV "AntiVir" - http://www.hbedv.com/
+.TP
+.B vexira
+Vexira "Vexira" - http://www.centralcommand.com/
+.TP
+.B sophos
+Sophos AntiVirus - http://www.sophos.com/
+.TP
+.B avp
+Kaspersky AVP and aveclient (AVP5) - http://www.avp.ru/
+.TP
+.B clamav
+Clam AntiVirus - http://www.clamav.net/
+.TP
+.B f-prot
+F-RISK F-PROT - http://www.f-prot.com/
+.TP
+.B nod32cli
+ESET NOD32 - http://www.eset.com/
+
+.TP
+.B message_contains_virus_carrier_scan([$host])
+Connects to the specified host:port:local_or_nonlocal (default
+\fB$CSSHost\fR), where the Symantec CarrierScan Server daemon is
+expected to be listening.  Return values are the same as the other
+message_contains_virus functions.
+
+.TP
+.B message_contains_virus_sophie([$sophie_sock])
+Connects to the specified socket (default \fB$SophieSock\fR), where
+the Sophie daemon is expected to be listening.  Return values are the
+same as the other message_contains_virus functions.
+
+.TP
+.B message_contains_virus_clamd([$clamd_sock])
+Connects to the specified socket (default \fB$ClamdSock\fR), where
+the clamd daemon is expected to be listening.  Return values are the
+same as the other message_contains_virus functions.
+
+.TP
+.B message_contains_virus_trophie([$trophie_sock])
+Connects to the specified socket (default \fB$TrophieSock\fR), where
+the Trophie daemon is expected to be listening.  Return values are the
+same as the other message_contains_virus functions.
+
+.TP
+.B entity_contains_virus($entity)
+
+This function runs the specified MIME::Entity through
+\fIevery\fR installed virus-scanner and returns
+the scanner results.  The return values are the same as
+for \fBmessage_contains_virus()\fR.
+
+.TP
+.B entity_contains_virus_trend($entity)
+.TP
+.B entity_contains_virus_nai($entity)
+.TP
+.B entity_contains_virus_bdc($entity)
+.TP
+.B entity_contains_virus_nvcc($entity)
+.TP
+.B entity_contains_virus_csav($entity)
+.TP
+.B entity_contains_virus_fsav($entity)
+.TP
+.B entity_contains_virus_hbedv($entity)
+.TP
+.B entity_contains_virus_sophos($entity)
+.TP
+.B entity_contains_virus_clamav($entity)
+.TP
+.B entity_contains_virus_avp($entity)
+.TP
+.B entity_contains_virus_avp5($entity)
+.TP
+.B entity_contains_virus_fprot($entity)
+.TP
+.B entity_contains_virus_fpscan($entity)
+.TP
+.B entity_contains_virus_fprotd($entity)
+.TP
+.B entity_contains_virus_fprotd_v6($entity)
+.TP
+.B entity_contains_virus_nod32($entity)
+These functions, meant to be called from filter(), are similar to the
+message_contains_virus functions except they scan only the current part.
+They should be called from list context, and their return values are as
+described for the message_contains_virus functions.
+
+.TP
+.B entity_contains_virus_carrier_scan($entity[, $host])
+Connects to the specified host:port:local_or_nonlocal (default
+\fB$CSSHost\fR), where the Symantec CarrierScan Server daemon is
+expected to be listening.  Return values are the same as the other
+entity_contains_virus functions.
+
+.TP
+.B entity_contains_virus_sophie($entity[, $sophie_sock])
+Connects to the specified socket (default \fB$SophieSock\fR), where
+the Sophie daemon is expected to be listening.  Return values
+are the same as the other entity_contains_virus functions.
+
+.TP
+.B entity_contains_virus_trophie($entity[, $trophie_sock])
+Connects to the specified socket (default \fB$TrophieSock\fR), where
+the Trophie daemon is expected to be listening.  Return values
+are the same as the other entity_contains_virus functions.
+
+.TP
+.B entity_contains_virus_clamd($entity[, $clamd_sock])
+Connects to the specified socket (default \fB$ClamdSock\fR), where
+the clamd daemon is expected to be listening.  Return values
+are the same as the other entity_contains_virus functions.
+
+.SH SMTP FLOW
+
+This section illustrates the flow of messages through MIMEDefang.
+
+.TP
+.B 1. INITIAL CONNECTION
+If you invoked \fBmimedefang\fR with the \fB\-r\fR option and have
+defined a filter_relay routine, it is called.
+
+.TP
+.B 2. SMTP HELO COMMAND
+The HELO string is stored internally, but no filter functions are called.
+
+.TP
+.B 3. SMTP MAIL FROM: COMMAND
+If you invoked \fBmimedefang\fR with the \fB\-s\fR option and have
+defined a filter_sender routine, it is called.
+
+.TP
+.B 4. SMTP RCPT TO: COMMAND
+If you invoked \fBmimedefang\fR with the \fB\-t\fR option and have
+defined a filter_recipient routine, it is called.
+
+.TP
+.B 5. END OF SMTP DATA
+filter_begin is called.  For each MIME part, filter is called.  Then
+filter_end is called.
+
+.SH PRESERVING RELAY INFORMATION
+
+.PP
+Most organizations have more than one machine handling internet
+e-mail.  If the primary machine is down, mail is routed to a secondary
+(or tertiary, etc.) MX server, which stores the mail until the primary
+MX host comes back up.  Mail is then relayed to the primary MX host.
+
+.PP
+Relaying from a secondary to a primary MX host has the unfortunate
+side effect of losing the original relay's IP address information.
+MIMEDefang allows you to preserve this information.  One way around
+the problem is to run MIMEDefang on all the secondary MX hosts
+and use the same filter.  However, you may not have control over the
+secondary MX hosts.  If you can persuade the owners of the secondary MX
+hosts to run MIMEDefang with a simple filter that only preserves relay
+information and does no other scanning, your primary MX host can
+obtain relay information and make decisions using $RelayAddr and
+$RelayHostname.
+
+.PP
+When you configure MIMEDefang, supply the "--with-ipheader" argument
+to the ./configure script.  When you install MIMEDefang, a file
+called \fB@CONFDIR_EVAL@/mimedefang-ip-key\fR will be created which
+contains a randomly-generated header name.  Copy this file to all
+of your mail relays.  It is important that all of your MX hosts
+have the \fBsame\fR key.  The key should be kept confidential, but it's
+not disastrous if it leaks out.
+
+.PP
+On your secondary MX hosts, add this line to filter_end:
+
+.nf
+	add_ip_validation_header();
+.fi
+
+.PP
+\fINote\fR:  You should \fIonly\fR add the validation header to mail
+destined for one of your other MX hosts!  Otherwise, the validation
+header will leak out.
+
+.PP
+When the secondary MX hosts relay to the primary MX host, $RelayAddr
+and $RelayHostname will be set based on the IP validation header.  If
+MIMEDefang notices this header, it sets the global variable $WasResent
+to 1.  Since you don't want to trust the header unless it was set by
+one of your secondary MX hosts, you should put this code in
+filter_begin:
+
+.nf
+	if ($WasResent) {
+		if ($RealRelayAddr ne "ip.of.secondary.mx" and
+		    $RealRelayAddr ne "ip.of.tertiary.mx") {
+			$RelayAddr = $RealRelayAddr;
+			$RelayHostname = $RealRelayHostname;
+		}
+	}
+.fi
+
+This resets the relay address and hostname to the actual relay address and
+hostname, unless the message is coming from one of your other MX hosts.
+
+.PP
+On the primary MX host, you should add this in filter_begin:
+
+.nf
+	delete_ip_validation_header();
+.fi
+
+.PP
+This prevents the validation header from leaking out to recipients.
+
+.PP
+\fINote\fR: The IP validation header works only in message-oriented
+functions.  It (obviously) has no effect on \fBfilter_relay\fR,
+\fBfilter_sender\fR and \fBfilter_recipient\fR, because no header
+information is available yet.  You must take this into account when
+writing your filter; you must defer relay-based decisions to
+the message filter for mail arriving from your other MX hosts.
+
+.SH GLOBAL VARIABLE LIFETIME
+
+The following list describes the lifetime of global variables (thanks to Tony
+Nugent for providing this documentation.)
+
+If you set a global variable:
+
+.TP
+.B Outside a subroutine in your filter file
+It is available to all functions, all the time.
+
+.TP
+.B In filter_relay, filter_sender or filter_recipient
+Not guaranteed to be available to any other function, not even
+from one filter_recipient call to the next, when receiving a
+multi-recipient email message.
+
+.TP
+.B In filter_begin
+Available to filter_begin, filter and filter_end
+
+.TP
+.B In filter
+Available to filter and filter_end
+
+.TP
+.B In filter_end
+Available within filter_end
+
+.PP
+The "built-in" globals like $Subject, $Sender, etc. are always available
+to filter_begin, filter and filter_end. Some are available to filter_relay,
+filter_sender or filter_recipient, but you should check the documentation
+of the variable above for details.
+
+.SH MAINTAINING STATE
+
+.PP
+There are four basic groups of filtering functions:
+
+.TP
+.B 1
+filter_relay
+
+.TP
+.B 2
+filter_sender
+
+.TP
+.B 3
+filter_recipient
+
+.TP
+.B 4
+filter_begin, filter, filter_multipart, filter_end
+
+.PP
+In general, for a given mail message, these groups of functions may
+be called in completely different Perl processes.  Thus, there is
+\fIno way\fR to maintain state inside Perl between groups of functions.
+That is, you cannot set a variable in \fBfilter_relay\fR and expect it
+to be available in \fBfilter_sender\fR, because the \fBfilter_sender\fR
+invocation might take place in a completely different process.
+
+.PP
+For a given mail message, it \fIis\fR always the case that
+\fBfilter_begin\fR, \fBfilter\fR, \fBfilter_multipart\fR and
+\fBfilter_end\fR are called in the same Perl process.  Therefore,
+you can use global variables to carry state among those functions.  You
+should be very careful to initialize such variables in \fBfilter_begin\fR
+to ensure no data leaks from one message to another.
+
+.PP
+Also for a given mail message, the $CWD global variable holds
+the message spool directory, and the current working directory is set to
+$CWD.  Therefore, you can store state in files inside $CWD.  If
+\fBfilter_sender\fR stores data in a file inside $CWD, then
+\fBfilter_recipient\fR can retrieve that data.
+
+.PP
+Since \fBfilter_relay\fR is called directly after a mail connection is
+established, there is no message context yet, no per-message
+mimedefang spool directory, and the $CWD global is not set. Therefore,
+it is not possible to share information from \fBfilter_relay\fR to one
+of the other filter functions. The only thing that \fBfilter_relay\fR
+has in common with the other functions are the values in the globals
+$RelayAddr, and $RelayHostname. These could be used to
+access per-remote-host information in some database.
+
+.PP
+Inside $CWD, we reserve filenames beginning with upper-case letters for
+internal MIMEDefang use.  If you want to create files to store state,
+name them beginning with a lower-case letter to avoid clashes with
+future releases of MIMEDefang.
+
+.SH SOCKET MAPS
+
+If you have Sendmail 8.13 or later, and have compiled it with the
+SOCKETMAP option, then you can use a special map type that communicates
+over a socket with another program (rather than looking up a key
+in a Berkeley database, for example.)
+
+.PP
+\fBmimedefang-multiplexor\fR implements the Sendmail SOCKETMAP protocol
+if you supply the \fB\-N\fR option.  In that case, you can define a function
+called \fBfilter_map\fR to implement map lookups.  \fBfilter_map\fR
+takes two arguments:  $mapname is the name of the Sendmail map (as given
+in the K sendmail configuration directive), and $key is the key to be looked
+up.
+
+.PP
+\fBfilter_map\fR must return a two-element list: ($code, $val)
+$code can be one of:
+
+.TP
+.B "OK"
+The lookup was successful.  In this case, $val must be the result of the
+lookup
+
+.TP
+.B "NOTFOUND"
+The lookup was unsuccessful -- the key was not found.  In this case, $val
+should be the empty string.
+
+.TP
+.B "TEMP"
+There was a temporary failure of some kind.  $val can be an explanatory
+error message.
+
+.TP
+.B "TIMEOUT"
+There was a timeout of some kind.  $val can be an explanatory
+error message.
+
+.TP
+.B "PERM"
+There was a permanent failure.  This is \fInot\fR the same as an
+unsuccessful lookup; it should be used only to indicate a serious
+misconfiguration.  As before, $val can be an explanatory error message.
+
+.PP
+Consider this small example.  Here is a minimal Sendmail configuration
+file:
+
+.nf
+	V10/Berkeley
+	Kmysock socket unix:/var/spool/MIMEDefang/map.sock
+	kothersock socket unix:/var/spool/MIMEDefang/map.sock
+.fi
+
+.PP
+If \fBmimedefang-multiplexor\fR is invoked with the arguments
+\fB\-N unix:/var/spool/MIMEDefang/map.sock\fR, and the filter
+defines \fBfilter_map\fR as follows:
+
+.nf
+	sub filter_map ($$) {
+	    my($mapname, $key) = @_;
+	    my $ans;
+	    if($mapname ne "mysock") {
+	        return("PERM", "Unknown map $mapname");
+	    }
+	    $ans = reverse($key);
+	    return ("OK", $ans);
+	}
+.fi
+
+Then in Sendmail's testing mode, we see the following:
+
+.nf
+	> /map mysock testing123
+	map_lookup: mysock (testing123) returns 321gnitset (0)
+	> /map othersock foo
+	map_lookup: othersock (foo) no match (69)
+.fi
+
+.PP
+(The return code of 69 means EX_UNAVAILABLE or Service Unavailable)
+
+.PP
+A real-world example could do map lookups in an LDAP directory or SQL
+database, or perform other kinds of processing.  You can even implement
+standard Sendmail maps like virtusertable, mailertable, access_db, etc.
+using SOCKETMAP.
+
+.SH TICK REQUESTS
+
+.PP
+
+If you supply the \fB\-X\fR option to \fBmimedefang-multiplexor\fR,
+then every so often, a "tick" request is sent to a free worker.  If
+your filter defines a function called \fBfilter_tick\fR, then this
+function is called with a single argument: the tick type.  If you
+run multiple parallel ticks, then each tick has a type ranging from 0
+to \fIn\fR-1, where \fIn\fR is the number of parallel ticks.  If you're
+only running one tick request, then the argument to \fBfilter_tick\fR
+is always 0.
+
+You can use this facility to run periodic tasks from within
+MIMEDefang.  Note, however, that you have no control over which worker
+is picked to run \fBfilter_tick\fR.  Also, at most one
+\fBfilter_tick\fR call with a particular "type" argument will be
+active at any time, and if there are no free workers when a tick would
+occur, the tick is skipped.
+
+.SH SUPPORTED VIRUS SCANNERS
+
+The following virus scanners are supported by MIMEDefang:
+
+.TP
+.B o
+Symantec CarrierScan Server
+(http://www.symantec.com/region/can/eng/product/scs/)
+
+.TP
+.B o
+Trend Micro vscan (http://www.antivirus.com/)
+
+.TP
+.B o
+Sophos Sweep (http://www.sophos.com/products/antivirus/savunix.html)
+
+.TP
+.B o
+H+BEDV AntiVir (http://www.hbedv.com/)
+
+.TP
+.B o
+Central Command Vexira (http://www.centralcommand.com/)
+
+.TP
+.B o
+NAI uvscan (http://www.nai.com)
+
+.TP
+.B o
+Bitdefender bdc (http://www.bitdefender.com)
+
+.TP
+.B o
+Norman Virus Control (NVCC) (http://www.norman.no/)
+
+.TP
+.B o
+Command csav (http://www.commandsoftware.com)
+
+.TP
+.B o
+F-Secure fsav (http://www.f-secure.com)
+
+.TP
+.B o
+The clamscan command-line scanner and the clamd daemon from
+Clam AntiVirus (http://www.clamav.net/)
+
+.TP
+.B o
+Kaspersky Anti-Virus (AVP) (http://www.kaspersky.com/)
+
+.TP
+.B o
+F-Risk F-Prot (http://www.f-prot.com/)
+
+.TP
+.B o
+F-Risk F-Prot v6 (http://www.f-prot.com/)
+
+
+.TP
+.B o
+F-Risk FPROTD (daemonized version of F-Prot)
+
+.TP
+.B o
+Symantec CarrierScan Server (http://www.symantec.ca/region/can/eng/product/scs/buymenu.html)
+
+.TP
+.B o
+Sophie (http://www.vanja.com/tools/sophie/), which uses the libsavi
+library from Sophos, is supported in daemon-scanning mode.
+
+.TP
+.B o
+Trophie (http://www.vanja.com/tools/trophie/), which uses the libvsapi
+library from Trend Micro, is supported in daemon-scanning mode.
+
+.TP
+.B o
+ESET NOD32 (http://www.eset.com/)
+
+.SH AUTHORS
+\fBmimedefang\fR was written by Dianne Skoll <dfs@roaringpenguin.com>.
+The \fBmimedefang\fR home page is \fIhttp://www.mimedefang.org/\fR.
+
+.SH SEE ALSO
+mimedefang(8), mimedefang.pl(8)
+
+
+

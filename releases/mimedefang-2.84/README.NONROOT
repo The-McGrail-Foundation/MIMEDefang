@@ -1,0 +1,23 @@
+Running MIMEDefang as non-root
+------------------------------
+
+It is required to run MIMEDefang and the multiplexor as non-root.  You
+should create a dedicated user for MIMEDefang.  In the examples, I'll
+call this user "defang".
+
+To run as defang:
+
+1) Supply the "-U defang" option to mimedefang.
+
+2) Supply the "-U defang" option to mimedefang-multiplexor.
+
+3) Make the spool and quarantine directories owned by defang, with mode 700.
+
+4) If you are using statistics logging in the default /var/log/mimedefang
+directory, make that directory owned by defang with mode 755 or 700, depending
+on your tastes.
+
+5) You *MUST* create the socket(s) and pid file(s) in the spool directory.
+As of MIMEDefang 2.13, this is the default.  You may have to edit your
+sendmail.cf or sendmail.mc file to use /var/spool/MIMEDefang instead of
+/var/run as the directory containing the milter socket.

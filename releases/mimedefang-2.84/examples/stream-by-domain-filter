@@ -1,0 +1,99 @@
+# -*- Perl -*-
+#***********************************************************************
+#
+# stream-by-domain-filter
+#
+# This example shows you how to "stream" a message by domain.  It
+# lets you apply different filtering rules for different domains.
+#
+# Copyright (C) 2001 Roaring Penguin Software Inc.
+#
+# This program may be distributed under the terms of the GNU General
+# Public License, Version 2, or (at your option) any later version.
+#
+# $Id$
+#***********************************************************************
+
+$Administrator = 'postmaster@localhost';
+$DaemonAddress = 'mailer-daemon@localhost';
+$Stupidity{"NoMultipleInlines"} = 0;
+
+#***********************************************************************
+# %PROCEDURE: filter_begin
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Called just before e-mail parts are processed.  This checks the recipients.
+#  If they all belong to the SAME domain (@foo.com), then it sets the global
+#  variable $Domain to the domain, and sets $Discard to 0.  If
+#  they belong to DIFFERENT domains (@foo.com, @bar.com), it sets $Discard
+#  to 1 and resends the message, once for each domain
+#
+#  WARNING WARNING WARNING: YOU MUST USE SENDMAIL 8.12 for this to work.
+#  Sendmail 8.12 uses SMTP to handle locally-submitted messages.  If you
+#  use Sendmail 8.11 or earlier, then the re-sent messages ARE NOT SCANNED
+#  by MIMEDefang!!!!!  You had better run tests to ensure that the resent
+#  messages are scanned by MIMEDefang on your system before using this
+#  streaming mechanism.
+#***********************************************************************
+sub filter_begin {
+    if (stream_by_domain()) {
+	# More than one domain -- do nothing!
+	return;
+    }
+
+    # Rest of filter-begin stuff goes here.  We are guaranteed that all
+    # recipients belong to the same domain.
+}
+
+#***********************************************************************
+# %PROCEDURE: filter
+# %ARGUMENTS:
+#  entity -- a Mime::Entity object (see MIME-tools documentation for details)
+#  fname -- the suggested filename, taken from the MIME Content-Disposition:
+#           header.  If no filename was suggested, then fname is ""
+#  ext -- the file extension (everything from the last period in the name
+#         to the end of the name, including the period.)
+#  type -- the MIME type, taken from the Content-Type: header.
+#
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  This function is called once for each part of a MIME message.
+#***********************************************************************
+sub filter {
+    my($entity, $fname, $ext, $type) = @_;
+
+    if ($Domain eq "abc.com") {
+	# Filter actions for abc.com
+    } elsif ($Domain eq "xyz.com") {
+	# Filter actions for xyz.com
+    } else {
+	# Default filter actions
+    }
+}
+
+
+#***********************************************************************
+# %PROCEDURE: defang_warning
+# %ARGUMENTS:
+#  oldfname -- the old file name of an attachment
+#  fname -- the new "defanged" name
+# %RETURNS:
+#  A warning message
+# %DESCRIPTION:
+#  This function customizes the warning message when an attachment
+#  is defanged.
+#***********************************************************************
+sub defang_warning {
+    my($oldfname, $fname) = @_;
+    return
+	"An attachment named '$oldfname' was converted to '$fname'.\n" .
+	"To recover the file, right-click on the attachment and Save As\n" .
+	"'$oldfname'\n";
+}
+
+# DO NOT delete the next line, or Perl will complain.
+1;

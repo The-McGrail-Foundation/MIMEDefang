@@ -1,0 +1,30 @@
+#!/usr/bin/perl -w
+
+# Sample Rows from mimedefang's md_log()
+
+#Feb  5 07:16:05 intel1 mimedefang.pl[5688]: v15CFuMS029484: MDLOG,v15CFuMS029484,mail_in,,,<llbean.50094@envfrm.rsys5.com>,<ivania@cosolco.com>,=?UTF-8?B?Rmxhbm5lbCBNYWRlIHRvIExhc3TigKZhbmQgTGFzdA==?=
+#Feb  5 07:16:20 intel1 mimedefang.pl[25949]: v15CGKIa029792: MDLOG,v15CGKIa029792,mail_in,,,<root@intel1.peregrinehw.com>,<root@intel1.peregrinehw.com>,Cron <root@intel1> run-parts /etc/cron.daily
+#Feb  5 07:16:20 intel1 mimedefang.pl[25949]: v15CGKIa029792: MDLOG,v15CGKIa029792,mail_out,,,<root@intel1.peregrinehw.com>,<root@intel1.peregrinehw.com>,Cron <root@intel1> run-parts /etc/cron.daily
+#Feb  5 07:16:25 intel1 mimedefang.pl[5688]: v15CGChQ029546: MDLOG,v15CGChQ029546,spam,11.4,193.169.245.121,<match.com@learn2lick.info>,<mhenley@mcaapmd.org>,See Photos of Mature Singles Near You Now FREE at Match.com
+#Feb  5 07:16:33 intel1 mimedefang.pl[5688]: v15CGSYX029801: MDLOG,v15CGSYX029801,non-spam,-5.0,66.48.80.119,<conditional@news.avalara.com>,<bschrader@bigenterprises.com>,Tuesday: Cash Management Webinar%2C Sales Tax Edition
+
+$event{'mimedefang.pl'}{'general'} = 
+sub {
+	if ($text =~ m/^[A-Za-z0-9]{14}:\s*MDLOG,\S+?,(\S+?),(\S*?),(\S*?),(.*?),(.*?),(.*)$/ ) {
+
+		# get values from regular expression
+
+		# Only summarize data if it is newer than our current MaxDBUnixTime
+		if ($unixtime > $MaxDBUnixTime) {
+
+			$event = $1;
+			$value1 = $2;
+			$value2 = $3;
+			$sender = $4;
+			$recipient = $5;
+			$subject = $6;
+
+			$FoundNewRow = 1;
+		}
+	}	
+};

@@ -1,0 +1,52 @@
+#!/usr/bin/perl -w
+
+# Sample Rows from sympa's log: 
+
+#subscribe attempted per list:
+#Jun 11 06:16:59 hdnetwork sympa[18462]: SUB todayspoll from renerules@bigpond.com, auth requested (0 seconds)
+
+#subscribe per list:
+#Jun 11 06:17:51 hdnetwork sympa[18462]: SUB todaysverse from renerules@bigpond.com accepted (1 seconds, 48560 subscribers)
+
+#subscribe failed per list:
+#Jun 10 16:01:47 hdnetwork sympa[1412]: SUB dailywisdom-niv from sean@zbanchomemortgage.com refused, auth failed
+
+
+$event{'sympa'}{'subscribe'} = 
+sub {
+	if ($text =~ m/^SUB (\S+) from \S+, auth requested .*$/ ) {
+
+		# get values from regular expression
+
+		# Only summarize data if it is newer than our current MaxDBUnixTime
+		if ($unixtime > $MaxDBUnixTime) {
+
+			$event = "subscribe-attempt";
+			$subject = "$1_$event";
+			$value1 = $1;
+
+			$FoundNewRow = 1;
+		}
+	} elsif ($text =~ m/^SUB (\S+) from \S+ accepted .*? (\d+) subscribers\).*?$/ ) {
+		
+		if ($unixtime > $MaxDBUnixTime) {
+
+			$event = "subscribe-success";
+			$subject = "$1_$event";
+			$value1 = $1;
+			$value2 = $2;
+
+			$FoundNewRow = 1;
+		}
+	} elsif ($text =~ m/^SUB (\S+) from \S+ refused, auth failed.*?$/ ) {
+
+		if ($unixtime > $MaxDBUnixTime) {
+
+			$event = "subscribe-authfail";
+			$subject = "$1_$event";
+			$value1 = $1;
+
+			$FoundNewRow = 1;
+		}
+	}
+};

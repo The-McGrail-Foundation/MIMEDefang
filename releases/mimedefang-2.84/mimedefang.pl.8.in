@@ -1,0 +1,78 @@
+.\" $Id$
+.\""
+.TH MIMEDEFANG.PL 8 "8 February 2005"
+.UC 4
+
+.SH NAME
+mimedefang.pl \- Perl script to scan MIME messages.
+
+.SH SYNOPSIS
+.B mimedefang.pl [-f \fIfilter\fR] \fIdir\fR
+
+.SH DESCRIPTION
+\fBmimedefang.pl\fR is a Perl script designed to work with
+\fBmimedefang\fR(8).  It takes a single argument which is a directory
+which should contain files laid out as described in \fBmimedefang\fR(8).
+
+.SH OPTIONS
+.TP
+.B \-f \fIfilter\fR
+Specifies the name of the file containing the filter.  If this option is
+omitted, the default filter \fB@CONFDIR_EVAL@/mimedefang-filter\fR is used.
+
+.SH OPERATION
+
+\fBmimedefang.pl\fR evaluates the file \fB@CONFDIR_EVAL@/mimedefang-filter\fR
+as a Perl fragment.  This file should define the \fBfilter\fR procedure.
+For each part of a MIME message, \fBmimedefang.pl\fR calls \fBfilter\fR and
+disposes of the part as instructed by the filter.  The various modes
+of disposition are described in \fBmimedefang-filter\fR(5).
+
+.SH TESTING FILTERS
+
+You are \fIstrongly\fR recommended to test your filter before installing
+it in \fB@CONFDIR_EVAL@/mimedefang-filter\fR.  To test the filter, save it
+in a file (e.g. \fBtest-filter\fR) and run this command:
+
+.nf
+	mimedefang.pl -f test-filter -test
+.fi
+
+This tests the filter for syntactic correctness.  If it passes, you can
+install it as a production filter.  (Note that the test tests only for
+correct Perl syntax; it doesn't make sure your filter does something
+sensible.)
+
+.SH MISCELLANEOUS OPTIONS
+
+There are a few other ways to invoke mimedefang.pl:
+
+.nf
+	mimedefang.pl -features
+.fi
+
+prints a list of detected optional Perl modules.  The output looks something
+like this:
+
+.nf
+	SpamAssassin: yes
+.fi
+
+.PP
+.nf
+	mimedefang.pl -validate
+.fi
+
+calls the function filter_validate, if it is defined in your filter.
+filter_validate should return an integer; this becomes the exit code.
+If filter_validate does not exist, an error message is printed and
+\fBmimedefang.pl\fR exits with an exit code of 1.
+
+.SH AUTHOR
+\fBmimedefang.pl\fR was written by Dianne Skoll <dfs@roaringpenguin.com>.
+The \fBmimedefang\fR home page is \fIhttp://www.mimedefang.org/\fR.
+
+.SH SEE ALSO
+mimedefang(8), mimedefang-filter(5), mimedefang-protocol(7)
+
+

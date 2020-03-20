@@ -1,0 +1,416 @@
+#!/bin/sh
+#
+# FreeBSD/NetBSD start/stop script for MIMEDefang.
+#
+# PROVIDE: mimedefang
+# REQUIRE: LOGIN
+# BEFORE: mail
+# KEYWORD: shutdown
+
+RETVAL=0
+prog='mimedefang'
+SPOOLDIR='@SPOOLDIR@'
+PID="/var/run/$prog.pid"
+MXPID="/var/run/$prog-multiplexor.pid"
+LOCK="$SPOOLDIR/$prog.lock"
+MXLOCK="$SPOOLDIR/$prog-multiplexor.lock"
+
+# These lines keep SpamAssassin happy.  Not needed if you
+# aren't using SpamAssassin.
+HOME="$SPOOLDIR"
+export HOME
+# Is the program executable?  We search in /usr/bin and /usr/local/bin.
+
+if [ -x @prefix@/bin/$prog ] ; then
+    PROGDIR=@prefix@/bin
+elif [ -x /usr/bin/$prog ] ; then
+    PROGDIR=/usr/bin
+elif [ -x /usr/local/bin/$prog ] ; then
+    PROGDIR=/usr/local/bin
+else
+    exit 0
+fi
+
+# Locale should be set to "C" for generating valid date headers
+LC_ALL=C
+export LC_ALL
+
+# The settings which follow are defaults.  You can override them by
+# placing assignments in @CONFDIR_EVAL@/mimedefang.conf
+
+# The socket used by mimedefang to communicate with sendmail
+# SOCKET=$SPOOLDIR/mimedefang.sock
+
+# Run the multiplexor and filters as this user, not root.  RECOMMENDED
+MX_USER=@DEFANGUSER@
+
+# Syslog facility
+# SYSLOG_FACILITY=mail
+
+# If you want to keep spool directories around if the filter fails,
+# set the next one to yes
+# KEEP_FAILED_DIRECTORIES=no
+
+# "yes" turns on the multiplexor relay checking function
+# MX_RELAY_CHECK=no
+
+# "yes" turns on the multiplexor HELO checking function
+# MX_HELO_CHECK=no
+
+# "yes" turns on the multiplexor sender checking function
+# MX_SENDER_CHECK=no
+
+# "yes" turns on the multiplexor recipient checking function
+# MX_RECIPIENT_CHECK=no
+
+# Set to yes if you want the multiplexor to log events to syslog
+MX_LOG=yes
+
+# Set to yes if you want the milter and multiplexor sockets to
+# be group-writable and files created by mimedefang group-readable.
+MD_ALLOW_GROUP_ACCESS=no
+
+# Set to yes if you want to use an embedded Perl interpreter
+# MX_EMBED_PERL=yes
+
+# Set to full path of socket for Sendmail's SOCKETMAP map, if you
+# want to use it with MIMEDefang
+# MX_MAP_SOCKET=$SPOOLDIR/map.sock
+
+# The multiplexor does not start all workers at the same time.  Instead,
+# it starts one worker every MX_WORKER_DELAY seconds when the system is idle.
+# (If the system is busy, the multiplexor starts workers as incoming mail
+# requires attention.)
+# MX_WORKER_DELAY=3
+
+# The next setting is an absolute limit on worker activation.  The multiplexor
+# will NEVER activate a worker within MX_MIN_WORKER_DELAY seconds of another.
+# The default of zero means that the multiplexor will activate workers as
+# quickly as necessary to keep up with incoming mail.
+# MX_MIN_WORKER_DELAY=0
+
+# Set to yes if you want the multiplexor to log stats in
+# /var/log/mimedefang/stats  The /var/log/mimedefang directory must
+# exist and be writable by the user you're running MIMEDefang as.
+# MX_STATS=no
+
+# Number of workers reserved for connections from loopback.  Use -1
+# for default behaviour, 0 to allow loopback connections to queue,
+# or >0 to reserve workers for loopback connections
+LOOPBACK_RESERVED_CONNECTIONS=-1
+
+# If you want new connections to be allowed to queue, set the
+# next variable to yes.  Normally, only existing connections are
+# allowed to queue requests for work.
+ALLOW_NEW_CONNECTIONS_TO_QUEUE=no
+
+# Set to yes if you want the stats file flushed after each entry
+# MX_FLUSH_STATS=no
+
+# Set to yes if you want the multiplexor to log stats to syslog
+# MX_STATS_SYSLOG=no
+
+# The socket used by the multiplexor
+# MX_SOCKET=$SPOOLDIR/mimedefang-multiplexor.sock
+
+# Maximum # of requests a process handles
+# MX_REQUESTS=200
+
+# Minimum number of processes to keep.  The default of 0 is probably
+# too low; we suggest 2 instead.
+MX_MINIMUM=2
+
+# Maximum number of processes to run (mail received while this many
+# processes are running is rejected with a temporary failure, so be
+# wary of how many emails you receive at a time).  This applies only
+# if you DO use the multiplexor.  The default value of 2 is probably
+# too low; we suggest 10 instead
+MX_MAXIMUM=10
+
+# Uncomment to log worker status; it will be logged every
+# MX_LOG_WORKER_STATUS_INTERVAL seconds
+# MX_LOG_WORKER_STATUS_INTERVAL=30
+
+# Uncomment next line to have busy workers send status updates to the
+# multiplexor.  NOTE: Consumes one extra file descriptor per worker, plus
+# a bit of CPU time.
+# MX_STATUS_UPDATES=yes
+
+# Limit worker processes' resident-set size to this many kilobytes.  Default
+# is unlimited.
+# MX_MAX_RSS=10000
+
+# Limit total size of worker processes' memory space to this many kilobytes.
+# Default is unlimited.
+# MX_MAX_AS=30000
+
+# If you want to use the "notification" facility, set the appropriate port.
+# See the mimedefang-notify man page for details.
+# MX_NOTIFIER=inet:4567
+
+# Number of seconds a process should be idle before checking for
+# minimum number and killed
+# MX_IDLE=300
+
+# Number of seconds a process is allowed to scan an email before it is
+# considered dead.  The default is 30 seconds; we suggest 600.
+MX_BUSY=600
+
+# Maximum number of concurrent recipok requests on a per-domain basis.
+# 0 means no limit
+MX_RECIPOK_PERDOMAIN_LIMIT=0
+
+# Extra sendmail macros to pass.  Actually, you can add any extra
+# mimedefang options here...
+# MD_EXTRA="-a auth_author"
+
+# Multiplexor queue size -- default is 0 (no queueing)
+# MX_QUEUE_SIZE=10
+
+# Multiplexor queue timeout -- default is 30 seconds
+# MX_QUEUE_TIMEOUT=30
+
+# Set to yes if you don't want MIMEDefang to see invalid recipients.
+# Only works with Sendmail 8.14.0 and later.
+# MD_SKIP_BAD_RCPTS=no
+
+# SUBFILTER specifies which filter rules file to use
+# SUBFILTER=@CONFDIR_EVAL@/mimedefang-filter
+
+
+# Source configuration
+if [ -f @CONFDIR_EVAL@/$prog.conf ] ; then
+    . @CONFDIR_EVAL@/$prog.conf
+fi
+
+# BSD specific setup
+if [ -f /etc/rc.subr ]
+then
+    . /etc/rc.subr
+
+    name=$prog
+    rcvar=`set_rcvar`
+    # default to not enabled, enable in rc.conf
+    eval $rcvar=\${$rcvar:-NO}
+
+    load_rc_config $name
+
+    pidfile=$MXPID
+    procname=$PROGDIR/$prog-multiplexor
+    start_cmd="start_it"
+    stop_cmd="stop_it"
+    sig_reload="INT"
+    reread_cmd="reread_it"
+    # provide both "reload", the FreeBSD default, with a direct signal to
+    # the multiplexor, and "reread", the MIMEDefang default, using md-mx-ctrl
+    extra_commands="reload reread"
+fi
+
+# Make sure required vars are set
+SOCKET=${SOCKET:=$SPOOLDIR/$prog.sock}
+MX_SOCKET=${MX_SOCKET:=$SPOOLDIR/$prog-multiplexor.sock}
+
+start_it() {
+    if test -r $PID ; then
+	if kill -0 `cat $PID` > /dev/null 2>&1 ; then
+	    echo "mimedefang (`cat $PID`) seems to be running."
+	    return 1
+	fi
+    fi
+    if test -r $MXPID ; then
+	if kill -0 `cat $MXPID` > /dev/null 2>&1 ; then
+	    echo "mimedefang-multiplexor (`cat $MXPID`) seems to be running."
+	    return 1
+	fi
+    fi
+
+    printf "%-60s" "Starting $prog-multiplexor: "
+    rm -f $MX_SOCKET > /dev/null 2>&1
+    if [ "$MX_EMBED_PERL" = "yes" ] ; then
+	EMBEDFLAG=-E
+    else
+	EMBEDFLAG=""
+    fi
+    $PROGDIR/$prog-multiplexor -p $MXPID -o $MXLOCK \
+	$EMBEDFLAG \
+	`[ -n "$SPOOLDIR" ] && echo "-z $SPOOLDIR"` \
+	`[ -n "$FILTER" ] && echo "-f $FILTER"` \
+	`[ -n "$SYSLOG_FACILITY" ] && echo "-S $SYSLOG_FACILITY"` \
+	`[ -n "$SUBFILTER" ] && echo "-F $SUBFILTER"` \
+	`[ -n "$MX_MINIMUM" ] && echo "-m $MX_MINIMUM"` \
+	`[ -n "$MX_MAXIMUM" ] && echo "-x $MX_MAXIMUM"` \
+	`[ -n "$MX_MAP_SOCKET" ] && echo "-N $MX_MAP_SOCKET"` \
+	`[ -n "$MX_LOG_WORKER_STATUS_INTERVAL" ] && echo "-L $MX_LOG_WORKER_STATUS_INTERVAL"` \
+	`[ -n "$MX_USER" ] && echo "-U $MX_USER"` \
+	`[ -n "$MX_IDLE" ] && echo "-i $MX_IDLE"` \
+	`[ -n "$MX_BUSY" ] && echo "-b $MX_BUSY"` \
+	`[ -n "$MX_REQUESTS" ] && echo "-r $MX_REQUESTS"` \
+	`[ -n "$MX_WORKER_DELAY" ] && echo "-w $MX_WORKER_DELAY"` \
+	`[ -n "$MX_MIN_WORKER_DELAY" ] && echo "-W $MX_MIN_WORKER_DELAY"` \
+	`[ -n "$MX_MAX_RSS" ] && echo "-R $MX_MAX_RSS"` \
+	`[ -n "$MX_MAX_AS" ] && echo "-M $MX_MAX_AS"` \
+	`[ "$MX_LOG" = "yes" ] && echo "-l"` \
+	`[ "$MX_STATS" = "yes" ] && echo "-t /var/log/mimedefang/stats"` \
+	`[ "$MX_STATS" = "yes" -a "$MX_FLUSH_STATS" = "yes" ] && echo "-u"` \
+	`[ "$MX_STATS_SYSLOG" = "yes" ] && echo "-T"` \
+	`[ "$MD_ALLOW_GROUP_ACCESS" = "yes" ] && echo "-G"` \
+	`[ "$MX_STATUS_UPDATES" = "yes" ] && echo "-Z"` \
+	`[ -n "$MX_QUEUE_SIZE" ] && echo "-q $MX_QUEUE_SIZE"` \
+	`[ -n "$MX_QUEUE_TIMEOUT" ] && echo "-Q $MX_QUEUE_TIMEOUT"` \
+	`[ -n "$MX_NOTIFIER" ] && echo "-O $MX_NOTIFIER"` \
+	`[ -n "$MX_RECIPOK_PERDOMAIN_LIMIT" ] && echo "-y $MX_RECIPOK_PERDOMAIN_LIMIT"` \
+	-s $MX_SOCKET
+    RETVAL=$?
+    if [ $RETVAL = 0 ] ; then
+	echo "[  OK  ]"
+    else
+	echo "[FAILED]"
+	return 1
+    fi
+
+    # Start mimedefang
+    printf "%-60s" "Starting $prog: "
+    rm -f $SOCKET > /dev/null 2>&1
+    $PROGDIR/$prog -P $PID -o $LOCK -R $LOOPBACK_RESERVED_CONNECTIONS \
+	-m $MX_SOCKET \
+	`[ -n "$SPOOLDIR" ] && echo "-z $SPOOLDIR"` \
+	`[ -n "$MX_USER" ] && echo "-U $MX_USER"` \
+	`[ -n "$SYSLOG_FACILITY" ] && echo "-S $SYSLOG_FACILITY"` \
+	`[ "$MX_RELAY_CHECK" = "yes" ] && echo "-r"` \
+	`[ "$MX_HELO_CHECK" = "yes" ] && echo "-H"` \
+	`[ "$MX_SENDER_CHECK" = "yes" ] && echo "-s"` \
+	`[ "$MX_RECIPIENT_CHECK" = "yes" ] && echo "-t"` \
+	`[ "$KEEP_FAILED_DIRECTORIES" = "yes" ] && echo "-k"` \
+	`[ "$MD_EXTRA" != "" ] && echo $MD_EXTRA` \
+	`[ "$MD_SKIP_BAD_RCPTS" = "yes" ] && echo "-N"` \
+	`[ "$MD_ALLOW_GROUP_ACCESS" = "yes" ] && echo "-G"` \
+	`[ "$ALLOW_NEW_CONNECTIONS_TO_QUEUE" = "yes" ] && echo "-q"` \
+	-p $SOCKET
+    RETVAL=$?
+    if [ $RETVAL = 0 ] ; then
+	echo "[  OK  ]"
+    else
+	echo "[FAILED]"
+	kill `cat $MXPID`
+	return 1
+    fi
+    return 0
+}
+
+stop_it() {
+    # Stop daemon
+    printf "%-60s" "Shutting down $prog: "
+    if test -f "$PID" ; then
+	kill `cat $PID`
+	RETVAL=$?
+    else
+	RETVAL=1
+    fi
+    if [ $RETVAL = 0 ] ; then
+	echo "[  OK  ]"
+    else
+	echo "[FAILED]"
+    fi
+
+    # Stop daemon
+    printf "%-60s" "Shutting down $prog-multiplexor: "
+    if test -f "$MXPID" ; then
+	kill `cat $MXPID`
+	RETVAL=$?
+    else
+	RETVAL=1
+    fi
+    if [ $RETVAL = 0 ] ; then
+	echo "[  OK  ]"
+    else
+	echo "[FAILED]"
+    fi
+
+    rm -f $MX_SOCKET > /dev/null 2>&1
+    rm -f $SOCKET > /dev/null 2>&1
+
+    if [ "$1" = "wait" ] ; then
+	printf "Waiting for daemons to exit."
+	WAITPID=""
+	test -f $PID && WAITPID=`cat $PID`
+	test -f $MXPID && WAITPID="$WAITPID `cat $MXPID`"
+	n=0
+	while [ -n "$WAITPID" ] ; do
+	    W2=""
+	    for pid in $WAITPID ; do
+		if kill -0 $pid > /dev/null 2>&1 ; then
+		    W2="$W2 $pid"
+		fi
+	    done
+	    printf "."
+	    n=`expr $n + 1`
+	    test $n -eq 30 && kill -KILL $WAITPID > /dev/null 2>&1
+	    test $n -eq 60 && break
+	    WAITPID=$W2
+	    sleep 1
+	done
+	echo ""
+    fi
+
+    rm -f $MXPID > /dev/null 2>&1
+    rm -f $PID > /dev/null 2>&1
+}
+
+reread_it() {
+	if [ -x $PROGDIR/md-mx-ctrl ] ; then
+	    $PROGDIR/md-mx-ctrl -s $MX_SOCKET reread > /dev/null 2>&1
+	    RETVAL=$?
+	    if [ $RETVAL = 0 ] ; then
+		echo "Told $prog-multiplexor to force reread of filter rules."
+	    else
+		echo "Could not communicate with $prog-multiplexor"
+	    fi
+	else
+	    if [ -r $MXPID ] ; then
+		kill -INT `cat $MXPID`
+		RETVAL=$?
+		if [ $RETVAL = 0 ] ; then
+		    echo "Told $prog-multiplexor to force reread of filter rules."
+		else
+		    echo "Could not signal $prog-multiplexor"
+		fi
+	    else
+		RETVAL=1
+		echo "Could not find process-ID of $prog-multiplexor"
+	    fi
+	fi
+}
+
+if type run_rc_command > /dev/null 2>&1
+then
+    # NetBSD/FreeBSD compatible startup script
+    run_rc_command "$1"
+    exit $RETVAL
+fi
+
+# See how we were called.
+case "$1" in
+  start)
+  start_it
+    ;;
+
+  stop)
+  stop_it $2
+    ;;
+
+  restart)
+    stop_it wait
+    start_it
+    RETVAL=$?
+    ;;
+
+  reread|reload)
+    reread_it
+    ;;
+
+  *)
+    echo "Usage: $0 {start|stop|restart|reread|reload}"
+    exit 1
+esac
+
+exit $RETVAL

@@ -1,0 +1,34 @@
+MIMEDefang includes support for the SpamAssassin SPAM detector.  To
+use SpamAssassin with MIMEDefang:
+
+1) Download the latest SpamAssassin tools from http://spamassassin.apache.org/
+2) Install the SpamAssassin tools.
+3) Configure, make and install MIMEDefang.
+4) Use the one of the functions spam_assassin_is_spam or
+   spam_assassin_check in filter_end().  See the sample filter in
+   the examples/ directory.
+
+The sample filter adds a header if SpamAssassin thinks the message is
+SPAM.  You can then use MIMEDefang to control message disposition on a
+global basis, or procmail to control it on a per-user basis.
+SpamAssassin is pretty slow, so it's better to run SpamAssassin from
+MIMEDefang, and let per-user tools like procmail control message
+disposition based on the presence of the X-Spam-Score header.
+
+IMPORTANT IMPORTANT IMPORTANT IMPORTANT IMPORTANT IMPORTANT IMPORTANT IMPORTANT
+-------------------------------------------------------------------------------
+
+READ THIS SECTION NOW BEFORE POSTING QUESTIONS ON THE MIMEDEFANG MAILING
+LIST:
+
+MIMEDefang does *NOT* allow SpamAssassin to modify e-mail messages.
+If you set up SpamAssassin to add headers or tag subjects, it
+will not work.  Instead, you must have MIMEDefang do the modifications.
+For example:
+
+    if (spam_assassin_is_spam()) {
+	# Change Subject: header
+	action_change_header("Subject", "** SPAM ** $Subject");
+    }
+
+See the sample filter for more details.

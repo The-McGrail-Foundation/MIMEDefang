@@ -1,0 +1,190 @@
+#!@PERL@
+use strict;
+use warnings;
+use Getopt::Long;
+use Pod::Usage;
+use MIME::Parser;
+use MIME::Words qw( decode_mimewords );
+use File::Temp qw( tempdir );
+
+=head1 NAME
+
+mimedefang-util -- Utility script for message structure debugging
+
+=head1 SYNOPSIS
+
+    # Print a "pretty" version of an input message
+    mimedefang-util --prettyprint < input.msg
+
+    # Print the message structure
+    mimedefang-util --structure < input.msg
+
+    # Parse and re-MIME the message
+    mimedefang-util --dump < input.msg
+
+=head1 DESCRIPTION
+
+This script provides some debug tools formerly provided as part of mimedefang.pl
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<--prettyprint>
+
+Parses a mail message from standard input and reformats it in a "pretty" format
+on standard output.  All text/* parts are printed directly, and non-text parts
+are described without printing their content.
+
+=item B<--structure>
+
+Parses a mail message from standard input, and outputs a description of the
+MIME tree to standard output.
+
+=item B<--dump>
+
+Parses a mail message from standard input, and dumps the parsed message back
+out again to standard output.
+
+=item B<--data-dump>
+
+Parses a mail message from standard input, and dumps the parsed message back
+out again to standard output using Data::Dumper
+
+=item B<--help>
+
+This help
+
+=item B<--man>
+
+Full manpage
+
+=back
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (C) 2010 Roaring Penguin Software Inc.
+
+This program may be distributed under the terms of the GNU General
+Public License, Version 2, or (at your option) any later version.
+
+=cut
+
+my ($prettyprint, $structure, $dump) = undef;
+my %actions;
+my $result = GetOptions(
+	'prettyprint' => sub { $actions{prettyprint} = 1; },
+	'structure'   => sub { $actions{structure} = 1; },
+	'dump'        => sub { $actions{dump} = 1; },
+	'data-dump'   => sub { $actions{datadump} = 1; },
+	'help'        => sub { pod2usage(-exitval => 0, -verbose => 1) },
+	'man'         => sub { pod2usage(-exitval => 0, -verbose => 2) },
+);
+
+if( keys(%actions) > 1 ) {
+	pod2usage( -message => 'Only one of --prettyprint, --structure, --data-dump or --dump may be specified' );
+}
+if( keys(%actions) < 1 ) {
+	pod2usage( -message => 'One of --prettyprint, --structure, --data-dump or --dump must be specified' );
+}
+
+my $tmpdir = tempdir( CLEANUP => 1 );
+
+my $parser = MIME::Parser->new();
+my $filer  = MIME::Parser::FileInto->new( $tmpdir );
+$filer->ignore_filename(1);
+$parser->filer( $filer);
+$parser->extract_nested_messages(1);
+$parser->extract_uuencode(1);
+$parser->output_to_core(0);
+$parser->tmp_to_core(0);
+
+my $entity = $parser->parse(\*STDIN);
+if (!$entity) {
+	die qq{Could not parse MIME: $!\n};
+}
+
+if( $actions{'datadump'}) {
+	use Data::Dumper;
+	print Dumper($entity);
+} elsif( $actions{'dump'} ) {
+	$entity->print(\*STDOUT);
+} elsif( $actions{'structure'} ) {
+	print_entity_structure( $entity, 0 );
+} elsif( $actions{'prettyprint'} ) {
+	print $entity->stringify_header,
+		"\n",
+		pretty_print_mail( $entity, 8192 );
+}
+
+exit(0);
+
+sub print_entity_structure
+{
+	my ($in, $level) = @_;
+	my ($type) = $in->mime_type;
+	my @parts = $in->parts;
+	$type =~ tr/A-Z/a-z/;
+	my ($disposition) = $in->head->mime_attr("Content-Disposition");
+	my ($body)        = $in->bodyhandle;
+
+	my $fname = $in->head->recommended_filename();
+	if($fname) {
+		$fname = decode_mimewords($fname);
+	} else {
+		$fname = '';
+	}
+
+	my ($extension) = "";
+	$extension = $1 if($fname =~ /(\.[^.]*)$/);
+	$disposition = "inline" unless defined($disposition);
+
+	print "    " x $level;
+	if(!defined($body)) {
+		print "non-leaf: type=$type; fname=$fname; disp=$disposition\n";
+		map { print_entity_structure($_, $level + 1) } @parts;
+	} else {
+		print "leaf: type=$type; fname=$fname; disp=$disposition\n";
+	}
+}
+
+sub pretty_print_mail
+{
+	my ($e, $size, $chunk, $depth) = @_;
+
+	$chunk = "" unless defined($chunk);
+	$depth = 0  unless defined($depth);
+
+	my (@parts) = $e->parts;
+	my ($type)  = $e->mime_type;
+	my $fname   = $entity->head->recommended_filename();
+	if($fname) {
+		$fname = decode_mimewords($fname);
+	} else {
+		$fname = '';
+	}
+	$fname = "; filename=$fname" if($fname ne "");
+	my ($spaces) = "  " x $depth;
+	$chunk .= "\n$spaces" . "[Part: ${type}${fname}]\n\n";
+	if($#parts >= 0) {
+		my ($part);
+		foreach $part (@parts) {
+			$chunk = pretty_print_mail($part, $size, $chunk, $depth + 1);
+			last if(length($chunk) >= $size);
+		}
+	} else {
+		return $chunk unless ($type =~ m+^text/+);
+		my ($body) = $e->bodyhandle;
+		return $chunk unless (defined($body));
+		my ($path) = $body->path;
+		return $chunk unless (defined($path));
+		return $chunk unless (open(IN, "<$path"));
+		while (<IN>) {
+			$chunk .= $_;
+			last if(length($chunk) >= $size);
+		}
+		close(IN);
+	}
+	return $chunk;
+}
+

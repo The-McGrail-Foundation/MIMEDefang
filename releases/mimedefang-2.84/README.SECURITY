@@ -1,0 +1,31 @@
+SECURITY
+--------
+
+Here are some tips for improving the security of your MIMEDefang installation.
+
+1) Do NOT run mimedefang or mimedefang-multiplexor as root.  (In fact,
+modern versions of MIMEDefang explicitly prohibit this.)  If you start
+them as root, use the "-U" flag to get them to drop their privileges.
+I recommend creating a dedicated "defang" user just for MIMEDefang.
+See README.NONROOT
+
+2) Use the multiplexor, and use the "-M" option to limit the memory space
+of workers.  A limit of 50000 (50MB) should be OK on most CPU architectures.
+If you don't limit the worker address space, specially-crafted MIME
+messages can make workers consume lots of memory and grind your box to
+a thrashing halt.
+
+3) Be wary of virus scanners which look into compressed archives.
+Compressing large blocks of zeros can result in small archives which
+lead to denial-of-service when uncompressed.  Depending on your scanner,
+the "-M" option may mitigate this.
+
+4) Do not use "action_notify_sender" unless you are absolutely, 100%
+sure that the sender address has not been spoofed.  Oh, by the way, it
+is impossible to be sure the sender address has not been spoofed.
+
+5) You may use action_bounce, but use it with care.  You may wish to
+test the sender address first.  (For example, don't bounce a message
+if the relay it was received from is not an MX host for the purported
+sender's domain.)
+

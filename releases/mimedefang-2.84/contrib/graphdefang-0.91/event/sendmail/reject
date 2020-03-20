@@ -1,0 +1,21 @@
+#!/usr/bin/perl -w
+
+#gAABdPd17840: ruleset=check_rcpt, arg1=<0206241317.54101.bj@bl.org>, relay=200-207-163-140.dsl.telesp.net.br [200.207.163.140], reject=550 5.0.0 <0206241317.54101.bj@bl.org>... We dont accept mail from br
+#gAF0bmd11725: ruleset=check_rcpt, arg1=<mparson@bl.org>, relay=[209.163.156.31], reject=451 4.1.8 Domain of sender address pqwa625@100pesos.com does not resolve
+#h1H0wArt006658: ruleset=check_mail, arg1=<bluefunkshorts2002@yahoo.co.uk>, relay=ip68-106-211-59.om.om.cox.net [68.106.211.59], reject=550 5.0.0 <bluefunkshorts2002@yahoo.co.uk>... Error
+
+
+$event{'sendmail'}{'reject'} = 
+sub {
+	if ($text =~ m/^.*ruleset=check_(?:rcpt|relay|mail), arg1=(\S+),.*relay=.*?(\d+\.\d+\.\d+\.\d+).* reject=(\d+) (\d\.\d.\d) .*$/) {
+
+		if ($unixtime > $MaxDBUnixTime) {
+			$event = "reject";
+			$sender = $1; # sender email addr
+			$value1 = "$3 $4"; #reject code
+			$value2 = $2; # relay addr
+
+			$FoundNewRow = 1;
+		}
+	}
+};

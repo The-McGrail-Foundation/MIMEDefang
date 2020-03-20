@@ -1,0 +1,201 @@
+2017-02-06 	Kevin A. McGrail <kmcgrail@apache.org>
+	* Release 0.91
+	* Added Makefile.PL to assist in handling dependencies as well
+	  as MANIFEST
+	* Added imapd event to mirror ipop3d event
+	* Added dovecot event for imap (ipop is a TODO)
+
+2011-12-12 	Dianne Skoll <dfs@roaringpenguin.com>
+
+        * Fix Graphdefang to handle new md_syslog output style.
+
+2003-10-09	John Kirkland <jpk@bl.org>
+
+	* Fixed bug with missing TZ value in graphdefang.cgi.
+	* Fixed bug with badly formed regexp for user_unknown parsing.
+	* Fixed bug in the "trim" function that wasn't trimming as much
+	  as it should have been!  This reduced the size of my SummaryDB
+	  by 10x!!!  This defect and fix was reported by 
+	  PRECIGOUT Raphael <raphael.precigout@axa-re.com>.
+
+2003-06-22	John Kirkland <jpk@bl.org>
+
+	* Release 0.9-beta2
+	* Added support for setting timezones in the mimedefang-config
+	  file.  This is useful if you have 2 different hosts logging
+	  to a given syslog file, and the hosts are in 2 different time
+	  zones.
+
+2003-06-19	John Kirkland <jpk@bl.org>
+
+	* Changed $DATAFILE[0] to $DATAFILES[0] in mimedefang-config-
+	  mimedefang-example.
+
+2003-06-18	John Kirkland <jpk@bl.org>
+
+	* Release 0.9-beta1
+	* added host-based max time tracking
+	* added ability to load logs from more than one datafile
+	* fixed bug with deferred mail sendmail/sympa event. It was
+	  not looking at the maxDB time when loading, so the event
+	  count was higher than it should have been.
+	* fixed bug in month handling when we have 31 days in the
+	  current month and the first month on our monthly graph
+	  has fewer than 31 days.
+
+2003-06-11	John Kirkland <jpk@bl.org>
+
+	* added sympa log handling
+
+2003-05-03	John Kirkland <jpk@bl.org>
+
+	* Release 0.8
+
+2003-04-24	John Kirkland <jpk@bl.org>
+	
+	* fixed month handling defect when dst changes
+	* adjusted spamd log format to match new format in Spamassassin
+	  2.52.
+
+2003-03-04	John Kirkland <jpk@bl.org>
+
+	* added back in STDERR text for non-top25 deletes in db_trim
+	* slightly modified event/sendmail/reject to account for more
+	  types of rejects (from Stefano McGhee).
+
+2003-02-16	John Kirkland <jpk@bl.org>
+
+	* graphdefang.cgi was not respecting the number of hours
+	  value.  now it is!
+
+2003-02-16	John Kirkland <jpk@bl.org>
+
+	* Release 0.7
+
+	* Added sender and relay address (value2) values
+	  to the user_unknown event.
+
+	* Added sender address to reject event.
+
+2003-02-02	John Kirkland <jpk@bl.org>
+
+	* Added support for ipchains event.  Code contributed
+	  by Dave Willis <dwilliss@microimages.com>.
+
+	* Added filename as a configurable element to 
+	  graphdefang-config.
+
+	* Added graphdefang.cgi, which allows you to draw
+	  graphdefang graphs with a web browser interface.
+
+	* Added --nomax flag so graphdefang can ignore the
+	  max time data and load graphs anyway (courtesy
+          of Brent J. Nordquist <b-nordquist@bethel.edu>).
+
+	* index.php now works with register_globals off
+          (courtesy of Brent J. Nordquist <b-nordquist@bethel.edu>
+          and others who have submitted this patch before.)
+
+	* index.php is now xhtml compliant. (courtesy of
+          Brent J. Nordquist <b-nordquist@bethel.edu>).
+
+	* Backup SummaryDB.db file before writing to it.
+
+2003-01-06	John Kirkland <jpk@bl.org>
+
+	* Added support for the 'event' subdirectory.  Now all
+	  event parsing is done from perl stubs under the 'event'
+	  subdirectory in the graphdefang root dir.
+
+	* Changed --trim option to trim out 1.25X instead of 2X.
+
+2003-01-02	John Kirkland <jpk@bl.org>
+
+	* Release 0.6
+
+	* Removed support for Parse::Syslog.pm -- I didn't like its
+	  date handling around the new year.
+
+	* Added support for File::ReadBackwards.  This should improve
+	  log reading times for large log files.
+
+	* Added regexp support for Solaris syslog lines.
+	
+	* Fixed a bug in the graph creation code where it was off
+	  at the beginning of some months.
+
+2002-11-19	John Kirkland <jpk@bl.org>
+
+	* Added a new default mimedefang graph for relayaddr graphing.
+
+	* Changed syslog parsing to use the Parse::Syslog pm.
+
+	* Added support for dropped packet logging from gShield.
+
+	* Added support for sendmail user unknown & reject stats
+
+	* Optimized speed a bit by not trying to match against
+	  lines we've already seen.
+
+2002-11-18	John Kirkland <jpk@bl.org>
+
+	* Release 0.5
+
+2002-11-14	John Kirkland <jpk@bl.org>
+
+	* Fixed bug whereby no data points on a graph would cause
+	  an error message.
+
+2002-10-09	John Kirkland <jpk@bl.org>
+
+	* Added support for spamd logs
+
+	* Release 0.4
+
+2002-10-04	John Kirkland <jpk@bl.org>
+
+	* Release 0.3
+
+2002-10-03	John Kirkland <jpk@bl.org>
+
+	* Lotsa changes... let me see if I can remember them!
+
+	* Now works against the logs produced by md_log within mimedefang.
+
+	* Added data caching so that we don't have to recalculate summaries
+	  for previously seen log messages.
+
+	* Added a database trim ability to trim out older detailed data
+	  from summary database.
+
+	* Added command line options to graphdefang.pl for help, quiet,
+	  nodb, trim, and file.
+
+	* Added config file for configuring graphs
+
+	* Added 'all' option for data_types
+
+	* Added regex filtering (say, to only show recipients from a
+          given domain when showing a stacked bar by recipient)
+
+	* Added more default colors
+
+2002-10-02	John Kirkland <jpk@bl.org>
+
+	* Release 0.2
+
+2002-10-01	John Kirkland <jpk@bl.org>
+
+	* Fixed a bug in the syslog parsing code for single digit days of
+	  the month.
+
+	* Fixed a bug in the Totals on the spam and virus summary chart
+	  where it was totalling counts that were outside of the time span
+	  of the given chart.
+
+	* Fixed a bug in the Legend Code, where old legends were not cleared
+	  out when creating new ones.
+
+2002-09-23	John Kirkland <jpk@bl.org>
+
+	* Release 0.1

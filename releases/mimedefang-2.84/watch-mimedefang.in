@@ -1,0 +1,845 @@
+#!/bin/sh
+# -*-Mode: TCL;-*-
+
+# Next line restarts using wish \
+exec wish "$0" -- "$@" ; clear; echo "*****"; echo "Cannot find 'wish' -- you need Tcl/Tk installed to run this program"; exit 1
+
+# Update interval in milliseconds
+set UpdateInterval 500
+
+# Message list
+set MsgList {}
+
+set Title ""
+# Graph margins
+set Margin(left) 60
+set Margin(right) 15
+set Margin(top) 15
+set Margin(bottom) 15
+
+# Which plots to show
+set Show(0) 1
+set Show(1) 1
+set Show(5) 1
+set Show(10) 1
+
+# Last time we did MSGS
+set MSGS -1
+
+# File descriptor for md-mx-ctrl
+set CtrlFD 0
+
+# Default md-mx-ctrl command
+set MD_MX_CTRL "md-mx-ctrl"
+
+set AfterResult 0
+
+### Built-in graphing library
+global GraphData
+
+set GraphData(_attributes) {
+    width height xmin ymin xmax ymax origin_x origin_y xticks yticks
+}
+
+set GraphData(_data_attributes) {
+    color width
+}
+
+## translated from C-code in Blt, who got it from:
+##      Taken from Paul Heckbert's "Nice Numbers for Graph Labels" in
+##      Graphics Gems (pp 61-63).  Finds a "nice" number approximately
+##      equal to x.
+proc nicenum {x floor} {
+
+    if {$x == 0} {
+	return 0
+    }
+
+    set negative 0
+
+    if {$x < 0} {
+        set x [expr -$x]
+        set negative 1
+    }
+
+    set exponX [expr floor(log10($x))]
+    set fractX [expr $x/pow(10,$exponX)]; # between 1 and 10
+    if {$floor} {
+        if {$fractX < 2.0} {
+            set nf 1.0
+        } elseif {$fractX < 5.0} {
+            set nf 2.0
+        } elseif {$fractX < 10.0} {
+            set nf 5.0
+        } else {
+	   set nf 10.0
+        }
+    } elseif {$fractX <= 1.0} {
+        set nf 1.0
+    } elseif {$fractX <= 2.0} {
+        set nf 2.0
+    } elseif {$fractX <= 5.0} {
+        set nf 5.0
+    } else {
+        set nf 10.0
+    }
+    if { $negative } {
+        return [expr -$nf * pow(10,$exponX)]
+    } else {
+	set value [expr $nf * pow(10,$exponX)]
+	return $value
+    }
+}
+
+proc graph_create { name } {
+    graph_configure $name width 300
+    graph_configure $name height 120
+    graph_configure $name sxmin auto
+    graph_configure $name symin auto
+    graph_configure $name sxmax auto
+    graph_configure $name symax auto
+    graph_configure $name origin_x 0
+    graph_configure $name origin_y 0
+    graph_configure $name xticks 10
+    graph_configure $name yticks 10
+    graph_configure $name gridcolor "#C0C0C0"
+    graph_configure $name gridwidth 1
+}
+
+proc graph_configure { name attribute value } {
+    global GraphData
+    set GraphData(g$name,$attribute) $value
+}
+
+proc graph_cget { name {attribute ""} } {
+    global GraphData
+    if {"$attribute" == ""} {
+	graph_cget_all $name
+    } else {
+	if { [info exists GraphData(g$name,$attribute)] } {
+	    return $GraphData(g$name,$attribute)
+	} else {
+	    return ""
+	}
+    }
+}
+
+proc graph_cget_all { name } {
+    global GraphData
+    set keys [array names GraphData "g$name*"]
+    set ans {}
+    foreach thing $keys {
+	set stuff [split $thing ,]
+	if { [lindex $stuff 1] == "data" } {
+	    continue
+	}
+	lappend ans [lindex $stuff 1]
+	lappend ans $GraphData($thing)
+    }
+    return $ans
+}
+
+proc graph_add_data { name tag points } {
+    graph_configure_data $name $tag points $points
+}
+
+proc graph_get_points { name tag } {
+    graph_cget_data $name $tag points
+}
+
+proc graph_next_auto_x { name tag } {
+    set x [graph_cget_data $name $tag auto_x]
+    if {"$x" == ""} {
+	set x 0
+    } else {
+	incr x
+    }
+    graph_configure_data $name $tag auto_x $x
+    return $x
+}
+
+proc graph_add_point { name tag x y } {
+    global GraphData
+    if { "$x" == "auto" } {
+	set x [graph_next_auto_x $name $tag]
+    }
+
+    lappend GraphData(g$name,data,$tag,points) $x $y
+    if {[graph_cget $name sxmax] == "timeseries"} {
+	graph_keep_lastn $name $tag [graph_cget $name width]
+    }
+}
+
+proc graph_keep_lastn { name tag n } {
+    global GraphData
+    set l [llength $GraphData(g$name,data,$tag,points)]
+    if {$l > $n * 2} {
+	set toChop [expr $l - $n * 2]
+	set GraphData(g$name,data,$tag,points) [lrange $GraphData(g$name,data,$tag,points) $toChop end]
+    }
+}
+
+proc graph_configure_data { name tag attribute value } {
+    graph_configure $name "data,$tag,$attribute" $value
+}
+
+proc graph_cget_data { name tag attribute } {
+    graph_cget $name "data,$tag,$attribute"
+}
+
+proc graph_get_data_tags { name } {
+    global GraphData
+    set keys [array names GraphData "g$name,data,*,points"]
+    set ans {}
+    foreach thing $keys {
+	set stuff [split $thing ,]
+	set tag [lindex $stuff 2]
+	if { ! [info exists done($tag)] } {
+	    set done($tag) 1
+	    lappend ans $tag
+	}
+    }
+    return $ans
+}
+
+proc _graph_set_scale { name } {
+    set tags [graph_get_data_tags $name]
+    set sxmin [graph_cget $name sxmin]
+    set sxmax [graph_cget $name sxmax]
+    set symin [graph_cget $name symin]
+    set symax [graph_cget $name symax]
+
+    set xmin 1e60
+    set ymin 1e60
+    set xmax -1e60
+    set ymax -1e60
+
+    foreach tag $tags {
+	set points [graph_cget_data $name $tag points]
+	foreach {x y} $points {
+	    if { $x < $xmin } { set xmin $x }
+	    if { $y < $ymin } { set ymin $y }
+	    if { $x > $xmax } { set xmax $x }
+	    if { $y > $ymax } { set ymax $y }
+	}
+    }
+    set nxmin [nicenum $xmin 1]
+    set nxmax [nicenum $xmax 0]
+    set nymin [nicenum $ymin 1]
+    set nymax [nicenum $ymax 0]
+    set width [graph_cget $name width]
+
+    if { $xmin == $xmax } {
+	set nxmin [expr $xmin - 0.1]
+	set nxmax [expr $xmin + 0.1]
+    }
+    if { $ymin == $ymax } {
+	set nymin [expr $ymin - 0.1]
+	set nymax [expr $ymin + 0.1]
+    }
+
+    if { "$sxmin" == "auto" } {
+	graph_configure $name xmin $nxmin
+    } elseif { "$sxmin" == "timeseries" } {
+	graph_configure $name xmin $xmin
+    } else {
+	graph_configure $name xmin $sxmin
+    }
+    if { "$symin" == "auto" } {
+	graph_configure $name ymin $nymin
+    } else {
+	graph_configure $name ymin $symin
+    }
+    if { "$sxmax" == "auto" } {
+	graph_configure $name xmax $nxmax
+    } elseif { "$sxmin" == "timeseries" } {
+	graph_configure $name xmax [expr $xmin + $width]
+    } else {
+	graph_configure $name xmax $sxmax
+    }
+    if { "$symax" == "auto" } {
+	graph_configure $name ymax $nymax
+    } else {
+	graph_configure $name ymax $symax
+    }
+}
+
+proc graph_draw { name canvas } {
+    _graph_set_scale $name
+    set xmin [graph_cget $name xmin]
+    set ymin [graph_cget $name ymin]
+    set xmax [graph_cget $name xmax]
+    set ymax [graph_cget $name ymax]
+
+
+    set delta_x [expr 1.0 * ($xmax - $xmin)]
+    set delta_y [expr 1.0 * ($ymax - $ymin)]
+
+    if { $delta_x == 0 } { set delta_x 1}
+    if { $delta_y == 0 } { set delta_y 1}
+
+    set ox [graph_cget $name origin_x]
+    set oy [graph_cget $name origin_y]
+    set width [graph_cget $name width]
+    set height [graph_cget $name height]
+    set cheight [winfo height .c]
+    set cwidth [winfo width .c]
+
+    set tags [lsort [graph_get_data_tags $name]]
+    $canvas delete withtag graph_$name
+    _graph_draw_grids $name $canvas $xmin $ymin $xmax $ymax $delta_x $delta_y
+    foreach tag $tags {
+	set ans {}
+	set offset [graph_cget_data $name $tag yoffset]
+	if {"$offset" == ""} {
+	    set offset 0
+	}
+	set points [graph_cget_data $name $tag points]
+	set color [graph_cget_data $name $tag color]
+	if { "$color" == "" } { set color "black" }
+
+	set lwidth [graph_cget_data $name $tag width]
+	if { "$lwidth" == "" } { set lwidth 1 }
+
+	foreach {x y} $points {
+	    set dx [expr ($x - $xmin) / $delta_x]
+	    set dy [expr ($y - $ymin) / $delta_y]
+	    set x [expr $dx * $width + $ox]
+	    set y [expr $oy - ($dy * $height) - $offset]
+
+	    lappend ans $x $y
+	}
+	if {[llength $ans] >= 4} {
+	    $canvas create line $ans -fill $color -width $lwidth -tag graph_$name
+	}
+    }
+
+    # Draw the title in the upper left-hand corner
+    set title [graph_cget $name title]
+    if {"$title" != ""} {
+	set x [expr $ox + $width]
+	set y [expr $oy - $height]
+	set t [$canvas create text $x $y -anchor ne -text $title -tag graph_$name -font fixed]
+	set bbox [$canvas bbox $t]
+	$canvas create rectangle $bbox -fill white -outline white
+	$canvas raise $t
+    }
+}
+
+proc _graph_draw_grids { name canvas xmin ymin xmax ymax delta_x delta_y } {
+    set ox [graph_cget $name origin_x]
+    set oy [graph_cget $name origin_y]
+    set width [graph_cget $name width]
+    set height [graph_cget $name height]
+    set cheight [winfo height .c]
+    set cwidth [winfo width .c]
+
+    set xticks [graph_cget $name xticks]
+    set yticks [graph_cget $name yticks]
+    set gridcolor [graph_cget $name gridcolor]
+    set gridwidth [graph_cget $name gridwidth]
+
+    if {$xticks > 0 && $xmax > $xmin} {
+	set diff [expr ($xmax - $xmin) / $xticks]
+	set diff [nicenum $diff 1]
+	if { $diff > 0 } {
+	    set last_item 0
+	    for {set x $xmin} {$x <= $xmax} {set x [expr $x + $diff]} {
+		# Draw gridline
+		set x1 [expr (($x - $xmin) / $delta_x) * $width + $ox]
+		set y1 $oy
+		set y2 [expr $oy - $height]
+		$canvas create line $x1 $y1 $x1 $y2 -fill $gridcolor -width $gridwidth -tag graph_$name -stipple gray25
+		set this_item [$canvas create text $x1 [expr $y1 + 2] -text [format %.5g $x] -anchor n -tag graph_$name -font fixed]
+		foreach {bx1 by1 bx2 by2} [$canvas bbox $this_item] { break }
+		set overlaps [$canvas find overlapping $bx1 $by1 $bx2 $by2]
+		if {[lsearch -exact $overlaps $last_item] >= 0} {
+		    $canvas delete $this_item
+		} else {
+		    set last_item $this_item
+		}
+	    }
+	}
+    }
+
+    if {$yticks > 0 && $ymax > $ymin} {
+	set diff [expr ($ymax - $ymin) / $yticks]
+	set diff [nicenum $diff 1]
+	if { $diff > 0 } {
+	    set last_item 0
+	    for {set y $ymin} {$y <= $ymax} {set y [expr $y + $diff]} {
+		# Draw gridline
+		set x1 $ox
+		set x2 [expr $ox + $width]
+		set y1 [expr $oy - (($y - $ymin) / $delta_y * $height)]
+		$canvas create line $x1 $y1 $x2 $y1 -fill $gridcolor -width $gridwidth -tag graph_$name -stipple gray25
+		set this_item [$canvas create text [expr $x1 - 2] $y1 -text [format %.5g $y] -anchor e -tag graph_$name -font fixed]
+		foreach {bx1 by1 bx2 by2} [$canvas bbox $this_item] { break }
+		set overlaps [$canvas find overlapping $bx1 $by1 $bx2 $by2]
+		if {[lsearch -exact $overlaps $last_item] >= 0} {
+		    $canvas delete $this_item
+		} else {
+		    set last_item $this_item
+		}
+	    }
+	}
+    }
+}
+
+proc y {h max val border} {
+    set inner [expr $h - 2 * $border]
+    if {$max > 0} {
+	set step [expr (1.0 * $inner) / (1.0 * $max)]
+    } else {
+	set step 1
+    }
+    set y [expr $h - ($border + $val * $step)]
+    return $y
+}
+
+#***********************************************************************
+# %PROCEDURE: get_status
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  A status string from the multiplexor
+# %DESCRIPTION:
+#  Gets mimedefang-multiplexor status
+#***********************************************************************
+proc get_status {} {
+    mx_command "rawload"
+}
+
+proc mx_command { cmd } {
+    global CtrlFD
+    open_command_channel
+    puts $CtrlFD $cmd
+    flush $CtrlFD
+    gets $CtrlFD line
+    if {[string match "ERROR *" $line]} {
+	error $line
+    }
+
+    return $line
+}
+
+proc open_command_channel {} {
+    global CtrlFD
+    global MD_MX_CTRL
+    if {"$CtrlFD" != "0"} {
+	return
+    }
+
+    set CtrlFD [open "|$MD_MX_CTRL -i" "r+"]
+
+    # Fix for Windoze boxes...
+    fconfigure $CtrlFD -translation binary
+}
+
+proc close_command_channel {} {
+    global CtrlFD
+    catch { close $CtrlFD }
+    set CtrlFD 0
+}
+
+#***********************************************************************
+# %PROCEDURE: create_gui
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Creates the GUI
+#***********************************************************************
+proc create_gui {} {
+    global Margin
+    global MD_MX_CTRL
+    global Title
+
+    if {"$Title" != ""} {
+	wm title . "Watch MIMEDefang - $Title"
+	wm iconname . "Watch MIMEDefang - $Title"
+    } else {
+	wm title . "Watch MIMEDefang"
+	wm iconname . "Watch MIMEDefang"
+    }
+
+    canvas .c -relief sunken -width 400 -height 120 -takefocus 0 -borderwidth 2 -background white
+    canvas .load -relief sunken -width 400 -height 120 -takefocus 0 -borderwidth 2 -background white
+    canvas .latency -relief sunken -width 400 -height 120 -takefocus 0 -borderwidth 2 -background white
+    canvas .mps -relief sunken -width 400 -height 120 -takefocus 0 -borderwidth 2 -background white
+    canvas .activations -relief sunken -width 400 -height 120 -takefocus 0 -borderwidth 2 -background white
+    canvas .reaps -relief sunken -width 400 -height 120 -takefocus 0 -borderwidth 2 -background white
+    frame .f
+    scale .s -from 100 -to 10000 -resolution 100 -orient horizontal \
+	-label "Update Interval (ms)" -variable UpdateInterval
+
+    grid .c -row 0 -column 0 -sticky nsew
+    grid .load -row 0 -column 1 -sticky nsew
+    grid .latency -row 1 -column 0 -sticky nsew
+    grid .mps -row 1 -column 1 -sticky nsew
+    grid .activations -row 2 -column 0 -sticky nsew
+    grid .reaps -row 2 -column 1 -sticky nsew
+
+    grid .f -row 3 -column 0 -columnspan 2 -sticky nsew
+    grid columnconfigure . 0 -weight 1
+    grid columnconfigure . 1 -weight 1
+    grid rowconfigure . 0 -weight 1
+    grid rowconfigure . 1 -weight 1
+    grid rowconfigure . 2 -weight 1
+
+    label .f.l1 -text "Max: " -fg black
+    label .f.l2 -text "Busy: " -fg "#A00000"
+    label .f.l3 -text "Idle: " -fg "#00A000"
+    label .f.l4 -text "Queued: " -fg "#A0A000"
+
+    label .f.max -fg black -width 4 -anchor w
+    label .f.busy -fg "#A00000" -width 4 -anchor w
+    label .f.idle -fg "#00A000" -width 4 -anchor w
+    label .f.queued -fg "#A0A000" -width 4 -anchor w
+
+    button .f.reread -text "Reread Filters" -command reread
+    button .f.quit -text "Quit" -command exit
+    label .f.result -text "" -relief sunken -anchor w
+
+    frame .f.g
+    entry .f.g.cmd -width 40 -insertofftime 0
+    .f.g.cmd delete 0 end
+    .f.g.cmd insert end $MD_MX_CTRL
+    bind .f.g.cmd <Return> set_ctrl_command
+    label .f.g.cmdup -text "Control Command: "
+    pack .f.g.cmdup -side left -expand 0 -fill none
+    pack .f.g.cmd -side left -expand 1 -fill x
+
+    frame .f.legend
+    label .f.legend.uptime -text ""
+    checkbutton .f.legend.t0 -fg "#A00000" -text "10s   " -variable Show(0) -command update_show
+    checkbutton .f.legend.t10 -fg "#A0A000" -text "10m" -variable Show(10) -command update_show
+    checkbutton .f.legend.t5 -fg "#00A000" -text "5m   " -variable Show(5) -command update_show
+    checkbutton .f.legend.t1 -fg "#0000A0" -text "1m   " -variable Show(1) -command update_show
+    pack .f.legend.uptime .f.legend.t0 .f.legend.t1 .f.legend.t5 .f.legend.t10 -side left -expand 0 -anchor center
+
+    grid .f.l1 -row 0 -column 0 -sticky w
+    grid .f.max -row 0 -column 1 -sticky w
+    grid .f.legend -row 0 -column 2
+    grid .f.reread -row 0 -column 3 -sticky e
+
+    grid .f.l2 -row 1 -column 0 -sticky e
+    grid .f.busy -row 1 -column 1 -sticky w
+    grid .f.quit -row 1 -column 3 -sticky e
+
+    grid .f.l4 -row 2 -column 0 -sticky e
+    grid .f.queued -row 2 -column 1 -sticky w
+    grid .f.g -row 2 -column 2 -sticky ew
+
+    grid .f.l3 -row 3 -column 0 -sticky e
+    grid .f.idle -row 3 -column 1 -sticky w
+    grid .f.result -row 3 -column 2 -columnspan 2 -sticky ew
+
+    grid columnconfigure .f 0 -weight 0
+    grid columnconfigure .f 1 -weight 0
+    grid columnconfigure .f 2 -weight 1
+    grid columnconfigure .f 3 -weight 0
+
+    grid .s -row 4 -column 0 -columnspan 2 -sticky ew
+    bind .c <Configure> [list canvas_resized .c BusyGraph]
+    bind .load <Configure> [list canvas_resized .load LoadGraph]
+    bind .latency <Configure> [list canvas_resized .latency LatencyGraph]
+    bind .mps <Configure> [list canvas_resized .mps MPSGraph]
+    bind .activations <Configure> [list canvas_resized .activations ActGraph]
+    bind .reaps <Configure> [list canvas_resized .reaps ReapGraph]
+    foreach i {BusyGraph LoadGraph LatencyGraph MPSGraph ActGraph ReapGraph} {
+	graph_create $i
+
+	graph_configure $i width [expr 400 - $Margin(left) - $Margin(right)]
+	graph_configure $i height [expr 120 - $Margin(top) - $Margin(bottom)]
+	graph_configure $i sxmin timeseries
+	graph_configure $i sxmax timeseries
+	graph_configure $i origin_y [expr 120 - $Margin(bottom)]
+	graph_configure $i origin_x $Margin(left)
+	graph_configure $i xticks 0
+	graph_configure $i yticks 5
+    }
+
+    graph_configure_data BusyGraph Busy color "#A00000"
+    graph_configure_data BusyGraph Busy width 1
+    graph_configure BusyGraph title "Busy Workers"
+    graph_configure LatencyGraph title "Latency (ms)"
+    graph_configure LoadGraph title "Workers/scan"
+    graph_configure MPSGraph title "Messages/s"
+    graph_configure ActGraph title "Activations/s"
+    graph_configure ReapGraph title "Reaps/s"
+
+    foreach i {LoadGraph LatencyGraph MPSGraph ActGraph ReapGraph} {
+	graph_configure_data $i D0 color "#A00000"
+	graph_configure_data $i D1 color "#0000A0"
+	graph_configure_data $i D5 color "#00A000"
+	graph_configure_data $i D10 color "#A0A000"
+
+	graph_configure_data $i D0 width 1
+	graph_configure_data $i D1 width 1
+	graph_configure_data $i D5 width 1
+	graph_configure_data $i D10 width 1
+
+	graph_configure_data $i D0 yoffset -1
+	graph_configure_data $i D1 yoffset 0
+	graph_configure_data $i D5 yoffset 1
+	graph_configure_data $i D10 yoffset 2
+    }
+}
+
+proc reread {} {
+    if {[catch {set ans [mx_command reread]} err]} {
+	do_result $err "#A00000" 3000
+    } else {
+	do_result $ans black 3000
+    }
+}
+
+proc set_ctrl_command {} {
+    global MD_MX_CTRL
+    global AfterResult
+    set MD_MX_CTRL [.f.g.cmd get]
+    close_command_channel
+    clear_result
+    catch {after cancel $AfterResult}
+    update_show
+    graph_add_data BusyGraph Busy {}
+}
+
+proc do_result { text color delay } {
+    global AfterResult
+    .f.result configure -fg $color -text $text
+    catch {after cancel $AfterResult}
+    set AfterResult [after $delay clear_result]
+}
+
+proc clear_result {} {
+    global AfterResult
+    set AfterResult 0
+    .f.result configure -text "" -fg black
+}
+
+proc update_show {} {
+    foreach g {LatencyGraph MPSGraph LoadGraph ActGraph ReapGraph} {
+	foreach d {D0 D1 D5 D10} {
+	    graph_add_data $g $d {}
+	    graph_configure_data $g $d auto_x 0
+	}
+    }
+}
+
+proc canvas_resized {c g} {
+    global Margin
+    set w [winfo width $c]
+    set h [winfo height $c]
+    graph_configure $g width [expr $w - $Margin(left) - $Margin(right)]
+    graph_configure $g height [expr $h - $Margin(top) - $Margin(bottom)]
+    graph_configure $g origin_y [expr $h - $Margin(bottom)]
+    graph_draw $g $c
+}
+
+proc clear_after_error { msg } {
+    global UpdateInterval
+    do_result $msg "#A00000" 3000
+    close_command_channel
+    graph_add_data BusyGraph Busy {}
+    foreach i {LoadGraph LatencyGraph MPSGraph ActGraph ReapGraph} {
+	foreach d {D0 D1 D5 D10} {
+	    graph_add_data $i $d {}
+	}
+    }
+    graph_draw LoadGraph .load
+    graph_draw LatencyGraph .latency
+    graph_draw MPSGraph .mps
+    graph_draw BusyGraph .c
+    graph_draw ActGraph .activations
+    graph_draw ReapGraph .reaps
+
+    .f.max configure -text "???"
+    .f.busy configure -text "???"
+    .f.idle configure -text "???"
+    .f.queued configure -text "???"
+    .f.legend.uptime configure -text "Uptime ???  "
+    return
+}
+
+proc uptime { secs } {
+    set weeks [expr $secs / 604800]
+    set secs [expr $secs - ($weeks * 604800)]
+    set days [expr $secs / 86400]
+    set secs [expr $secs - ($days * 86400)]
+    set hours [expr $secs / 3600]
+    set secs [expr $secs - ($hours * 3600)]
+    set mins [expr $secs / 60]
+    set secs [expr $secs - ($mins * 60)]
+    set ans ""
+    if {$weeks != 0} { append ans "${weeks}w " }
+    if {$days != 0}  { append ans "${days}d " }
+    if {$hours != 0} { append ans [format "%02dh " $hours]}
+    if {$mins != 0}  { append ans [format "%02dm " $mins]}
+    append ans [format "%02ds" $secs]
+    return $ans
+}
+
+proc take_reading {} {
+    global UpdateInterval
+    if {[catch {take_reading_aux} ans]} {
+	clear_after_error $ans
+	after $UpdateInterval take_reading
+	return
+    }
+    after $UpdateInterval take_reading
+}
+
+#***********************************************************************
+# %PROCEDURE: take_reading_aux
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Takes a reading and updates GUI
+#***********************************************************************
+proc take_reading_aux {} {
+    global Show
+
+    set line [get_status]
+
+    foreach {msgs_0 msgs_1 msgs_5 msgs_10 avg_0 avg_1 avg_5 avg_10 ams_0 ams_1 ams_5 ams_10 a0 a1 a5 a10 r0 r1 r5 r10 nbusy nidle nstopped nkilled msgs activations qsize numq secs} $line {break}
+
+    set secs [uptime $secs]
+    if {![info exists msgs_0] || ![info exists secs]} {
+	error "Error: Unable to interpret result: $line"
+	return
+    }
+
+    set mps_0 [expr $msgs_0 / 10.0]
+    set mps_1 [expr $msgs_1 / 60.0]
+    set mps_5 [expr $msgs_5 / 300.0]
+    set mps_10 [expr $msgs_10 / 600.0]
+
+    set a0 [expr $a0 / 10.0]
+    set a1 [expr $a1 / 60.0]
+    set a5 [expr $a5 / 300.0]
+    set a10 [expr $a10 / 600.0]
+
+    set r0 [expr $r0 / 10.0]
+    set r1 [expr $r1 / 60.0]
+    set r5 [expr $r5 / 300.0]
+    set r10 [expr $r10 / 600.0]
+
+    graph_add_point BusyGraph Busy auto $nbusy
+    graph_keep_lastn BusyGraph Busy [graph_cget BusyGraph width]
+    graph_configure BusyGraph symin 0
+    set total [expr $nbusy + $nidle + $nstopped + $nkilled]
+    graph_configure BusyGraph symax $total
+    graph_configure BusyGraph yticks $total
+    graph_draw BusyGraph .c
+
+    if {$Show(0)} {
+	graph_add_point LoadGraph D0 auto $avg_0
+	graph_add_point LatencyGraph D0 auto $ams_0
+	graph_add_point MPSGraph D0 auto $mps_0
+	graph_add_point ActGraph D0 auto $a0
+	graph_add_point ReapGraph D0 auto $r0
+    }
+    if {$Show(1)} {
+	graph_add_point LoadGraph D1 auto $avg_1
+	graph_add_point LatencyGraph D1 auto $ams_1
+	graph_add_point MPSGraph D1 auto $mps_1
+	graph_add_point ActGraph D1 auto $a1
+	graph_add_point ReapGraph D1 auto $r1
+    }
+    if {$Show(5)} {
+	graph_add_point LoadGraph D5 auto $avg_5
+	graph_add_point LatencyGraph D5 auto $ams_5
+	graph_add_point MPSGraph D5 auto $mps_5
+	graph_add_point ActGraph D5 auto $a5
+	graph_add_point ReapGraph D5 auto $r5
+    }
+    if {$Show(10)} {
+	graph_add_point LoadGraph D10 auto $avg_10
+	graph_add_point LatencyGraph D10 auto $ams_10
+	graph_add_point MPSGraph D10 auto $mps_10
+	graph_add_point ActGraph D10 auto $a10
+	graph_add_point ReapGraph D10 auto $r10
+    }
+
+    graph_draw LoadGraph .load
+    graph_draw LatencyGraph .latency
+    graph_draw MPSGraph .mps
+    graph_draw ActGraph .activations
+    graph_draw ReapGraph .reaps
+
+    .f.max configure -text "$total"
+    .f.legend.uptime configure -text "Uptime $secs  "
+    .f.busy configure -text $nbusy
+    .f.idle configure -text $nidle
+    .f.queued configure -text $numq
+}
+
+proc usage {} {
+    global argv0
+    puts stderr "Usage: $argv0 options"
+    puts stderr "\nOptions are:"
+    puts stderr "   -command cmd      Use 'cmd' as Control Command"
+    puts stderr "   -interval msec    Update every msec milliseconds"
+    puts stderr "   -10s 0_or_1       Show or hide 10s graph plot"
+    puts stderr "   -1m 0_or_1        Show or hide 1m graph plot"
+    puts stderr "   -5m 0_or_1        Show or hide 5ms graph plot"
+    puts stderr "   -10m 0_or_1       Show or hide 10m graph plot"
+    puts stderr "   -title string     Add string to window title"
+    puts stderr "   -help             Show this usage info"
+    exit 0
+}
+
+proc parse_cmdline_args {} {
+    global argv
+    global MD_MX_CTRL
+    global UpdateInterval
+    global Show
+    global Title
+    foreach {opt val} $argv {
+	switch -exact -- $opt {
+	    -command {
+		set MD_MX_CTRL $val
+	    }
+	    -interval {
+		set UpdateInterval $val
+	    }
+	    -10s {
+		set Show(0) $val
+	    }
+	    -1m {
+		set Show(1) $val
+	    }
+	    -5m {
+		set Show(5) $val
+	    }
+	    -10m {
+		set Show(10) $val
+	    }
+	    -title {
+		set Title $val
+	    }
+	    -help {
+		usage
+		exit 0
+	    }
+
+	    default {
+		puts stderr "Unrecognized option $opt"
+		usage
+		exit 1
+	    }
+	}
+    }
+
+}
+
+parse_cmdline_args
+create_gui
+
+# Kick things off
+take_reading

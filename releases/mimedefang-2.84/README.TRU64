@@ -1,0 +1,9 @@
+The HP-Compaq Tru64 C compiler requires the "-pthread" argument,
+but there's no safe way to auto-detect this.  On Tru64, you should
+run configure with the --enable-pthread-flag option:
+
+	./configure --enable-pthread-flag
+
+--
+Dianne Skoll
+

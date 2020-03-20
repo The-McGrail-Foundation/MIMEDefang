@@ -1,0 +1,47 @@
+[Unit]
+Description=MIMEDefang E-mail Filter
+Documentation=man:mimedefang(8)
+Before=multi-user.target
+Before=postfix.service
+Before=sendmail.service
+After=remote-fs.target
+After=systemd-journald-dev-log.socket
+BindsTo=mimedefang-multiplexor.service
+After=mimedefang-multiplexor.service
+PropagatesReloadTo=mimedefang-multiplexor.service
+
+[Service]
+Type=simple
+Restart=on-failure
+TimeoutStopSec=30s
+# LC_ALL=C may not be necessary for mimedefang, but it is for
+# mimedefang-multiplexor, so upstream prefers it here also to be consistent.
+Environment=LC_ALL=C MX_SOCKET=/var/spool/MIMEDefang/mimedefang-multiplexor.sock MX_USER=defang SOCKET=/var/spool/MIMEDefang/mimedefang.sock
+EnvironmentFile=-/etc/default/mimedefang
+ExecStartPre=/bin/rm -f $SOCKET
+ExecStart=/bin/sh -c 'exec /usr/bin/mimedefang -D \
+    `[ -n "$LOOPBACK_RESERVED_CONNECTIONS" ] && echo "-R $LOOPBACK_RESERVED_CONNECTIONS"` \
+    -m $MX_SOCKET \
+    `[ -n "$SPOOLDIR" ] && echo "-z $SPOOLDIR"` \
+    `[ -n "$MX_USER" ] && echo "-U $MX_USER"` \
+    `[ -n "$SYSLOG_FACILITY" ] && echo "-S $SYSLOG_FACILITY"` \
+    `[ "$MX_RELAY_CHECK" = "yes" ] && echo "-r"` \
+    `[ "$MX_HELO_CHECK" = "yes" ] && echo "-H"` \
+    `[ "$MX_SENDER_CHECK" = "yes" ] && echo "-s"` \
+    `[ "$MX_RECIPIENT_CHECK" = "yes" ] && echo "-t"` \
+    `[ "$KEEP_FAILED_DIRECTORIES" = "yes" ] && echo "-k"` \
+    `[ "$MD_EXTRA" != "" ] && echo $MD_EXTRA` \
+    `[ "$MD_SKIP_BAD_RCPTS" = "yes" ] && echo "-N"` \
+    "`[ -n "$X_SCANNED_BY" ] && \
+      ( [ "$X_SCANNED_BY" = "-" ] && \
+        echo "-X" || echo "-x$X_SCANNED_BY" )`" \
+    `[ "$MD_ALLOW_GROUP_ACCESS" = "yes" ] && echo "-G"` \
+    `[ "$ALLOW_NEW_CONNECTIONS_TO_QUEUE" = "yes" ] && echo "-q"` \
+    -p $SOCKET'
+ExecStopPost=/bin/rm -f $SOCKET
+# Make this service eligible for a reload, so we can propagate it to
+# mimedefang-multiplexor.service.
+ExecReload=/bin/true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,28 @@
+#!/usr/bin/perl -w
+
+# Jan  1 04:04:00 tnt kernel: Packet log: input DENY eth0 PROTO=17 216.217.194.131:858 24.123.123.122:53 L=66 S=0x00 I=65219 F=0x0000 T=107 (#405)
+# Code Contributed by Dave Willis <dwilliss@microimages.com>
+
+$event{'kernel'}{'ipchains'} =
+sub {
+	if ($text =~ m/^Packet log: .* DENY (\S+) PROTO=(\S+) ([0-9.]+):(\d+) ([0-9.]+):(\d+)/) {
+		if ($unixtime > $MaxDBUnixTime) {
+			# I don't know if interface or proto would be useful to
+			# graph.  I don't think source port is
+			my $interface = $1;      # eth0, eth1...
+			my $proto = $2;
+			my $src = $3;      # Source IP address
+			my $spt = $4;      # Source Port
+			my $dst = $5;      # Dest IP address
+			my $dpt = $6;      # Dest Port
+	
+			$event =  'ipchains';
+			$sender = $src;
+			$recipient = $dst;
+			$value1 = $dpt;
+			$value2 = $proto;
+	
+			$FoundNewRow = 1;
+		}
+	}
+};

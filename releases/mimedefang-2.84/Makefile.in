@@ -1,0 +1,253 @@
+# DO NOT EDIT MAKEFILE; EDIT MAKEFILE.IN INSTEAD
+# Makefile.in for mimedefang
+
+# Needed for autoconf to behave properly...
+datarootdir=@datarootdir@
+srcdir=@srcdir@
+top_srcdir=@top_srcdir@
+VPATH=@srcdir@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+sysconfdir=@sysconfdir@
+CONFSUBDIR=@CONFSUBDIR@
+CONFDIR=${sysconfdir}${CONFSUBDIR}
+DEFANGUSER=@DEFANGUSER@
+MANDIR=@mandir@
+
+MINCLUDE=@MINCLUDE@
+HAVE_SPAM_ASSASSIN=@HAVE_SPAM_ASSASSIN@
+DEFS=-D_POSIX_PTHREAD_SEMANTICS \
+	@EMBPERLDEFS@ \
+	@USEPOLL@ \
+	@ENABLE_DEBUGGING@ @CLEANUP_DEFS@ -DPERL_PATH=\"@PERL@\" \
+	-DMIMEDEFANG_PL=\"$(prefix)/bin/mimedefang.pl\" \
+	-DRM=\"@RM@\" \
+	-DVERSION=\"@VERSION@\" \
+	-DSPOOLDIR=\"@SPOOLDIR@\" \
+	-DQDIR=\"@QDIR@\" \
+	-DCONFDIR=\"${CONFDIR}\"
+
+CC=@CC@
+PERL=@PERL@
+INSTALL=@INSTALL@
+
+CFLAGS=@CFLAGS@
+EMBPERLCFLAGS=@EMBPERLCFLAGS@
+PTHREAD_FLAG=@PTHREAD_FLAG@
+EMBPERLOBJS=@EMBPERLOBJS@
+EMBPERLLDFLAGS=@EMBPERLLDFLAGS@
+EMBPERLLIBS=@EMBPERLLIBS@
+LIBS_WITHOUT_PTHREAD=@LIBS_WITHOUT_PTHREAD@
+LIBS=@LIBS@
+LDFLAGS=@LDFLAGS@
+IP_HEADER=@IP_HEADER@
+SPOOLDIR=@SPOOLDIR@
+QDIR=@QDIR@
+VERSION=@VERSION@
+
+INSTALL_STRIP_FLAG=-s
+
+## NO MORE ./configure substitutions beyond this point!
+
+all: mimedefang mimedefang-multiplexor md-mx-ctrl pod2man
+
+mimedefang-multiplexor: mimedefang-multiplexor.o event.o event_tcp.o drop_privs_nothread.o notifier.o syslog-fac.o utils.o $(EMBPERLOBJS)
+	$(CC) $(CFLAGS) -o mimedefang-multiplexor mimedefang-multiplexor.o event.o event_tcp.o drop_privs_nothread.o syslog-fac.o notifier.o utils.o $(EMBPERLOBJS) $(LIBS_WITHOUT_PTHREAD) $(EMBPERLLDFLAGS) $(EMBPERLLIBS)
+
+embperl.o: embperl.c
+	$(CC) $(CFLAGS) $(EMBPERLCFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o embperl.o $(srcdir)/embperl.c
+
+xs_init.o: xs_init.c
+	$(CC) $(CFLAGS) $(EMBPERLCFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o xs_init.o $(srcdir)/xs_init.c
+
+xs_init.c: embperl.c
+	$(PERL) -MExtUtils::Embed -e xsinit -- -o $(srcdir)/xs_init.c
+
+test-embed-perl.o: test-embed-perl.c
+	$(CC) $(CFLAGS) $(EMBPERLCFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o test-embed-perl.o $(srcdir)/test-embed-perl.c
+
+te: test-embed-perl.o
+	$(CC) $(CFLAGS) -o te test-embed-perl.o $(LIBS_WITHOUT_PTHREAD) $(EMBPERLLDFLAGS) $(EMBPERLLIBS)
+rm_r.o: rm_r.c
+	$(CC) $(CFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o rm_r.o $(srcdir)/rm_r.c
+
+syslog-fac.o: syslog-fac.c
+	$(CC) $(CFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o syslog-fac.o $(srcdir)/syslog-fac.c
+
+md-mx-ctrl: md-mx-ctrl.o
+	$(CC) $(CFLAGS) -o md-mx-ctrl md-mx-ctrl.o $(LIBS_WITHOUT_PTHREAD)
+
+md-mx-ctrl.o: md-mx-ctrl.c
+	$(CC) $(CFLAGS) $(DEFS) $(MINCLUDE) -c -o md-mx-ctrl.o $(srcdir)/md-mx-ctrl.c
+
+event_tcp.o: event_tcp.c
+	$(CC) $(CFLAGS) $(DEFS) $(MINCLUDE) -c -o event_tcp.o $(srcdir)/event_tcp.c
+
+notifier.o: notifier.c
+	$(CC) $(CFLAGS) $(DEFS) $(MINCLUDE) -c -o notifier.o $(srcdir)/notifier.c
+
+drop_privs_nothread.o: drop_privs.c
+	$(CC) $(CFLAGS) $(DEFS) $(MINCLUDE) -c -o drop_privs_nothread.o $(srcdir)/drop_privs.c
+
+drop_privs_threaded.o: drop_privs.c
+	$(CC) $(CFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o drop_privs_threaded.o $(srcdir)/drop_privs.c
+
+event.o: event.c
+	$(CC) $(CFLAGS) $(DEFS) $(MINCLUDE) -c -o event.o $(srcdir)/event.c
+
+mimedefang-multiplexor.o: mimedefang-multiplexor.c
+	$(CC) $(CFLAGS) $(DEFS) $(MINCLUDE) -c -o mimedefang-multiplexor.o $(srcdir)/mimedefang-multiplexor.c
+
+mimedefang: mimedefang.o drop_privs_threaded.o utils.o rm_r.o syslog-fac.o dynbuf.o milter_cap.o gen_id.o
+	$(CC) $(CFLAGS) $(PTHREAD_FLAG) -o mimedefang mimedefang.o drop_privs_threaded.o utils.o rm_r.o syslog-fac.o dynbuf.o milter_cap.o gen_id.o $(LDFLAGS) -lmilter $(LIBS)
+
+mimedefang.o: mimedefang.c mimedefang.h
+	$(CC) $(CFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o mimedefang.o $(srcdir)/mimedefang.c
+
+utils.o: utils.c mimedefang.h
+	$(CC) $(CFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o utils.o $(srcdir)/utils.c
+
+milter_cap.o: milter_cap.c mimedefang.h
+	$(CC) $(CFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o milter_cap.o $(srcdir)/milter_cap.c
+
+dynbuf.o: dynbuf.c dynbuf.h
+	$(CC) $(CFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o dynbuf.o $(srcdir)/dynbuf.c
+
+gen_id.o: gen_id.c mimedefang.h
+	$(CC) $(CFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o gen_id.o $(srcdir)/gen_id.c
+
+clean:: FORCE
+	rm -f *~ *.o mimedefang mimedefang-multiplexor md-mx-ctrl xs_init.c
+
+pod2man:: script/mimedefang-util.1
+
+script/mimedefang-util.1: script/mimedefang-util
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=1 --perm_rw=644 \
+		--center="MIMEDefang Documentation" \
+		--release=$(VERSION) \
+		script/mimedefang-util script/mimedefang-util.1
+
+distclean:: clean
+	rm -f config.log config.status Makefile config.cache config.h mimedefang.pl \
+	examples/init-script \
+	script/mimedefang-util \
+	mimedefang-filter.5 mimedefang-multiplexor.8 mimedefang-protocol.7 \
+	mimedefang-notify.7 \
+	mimedefang.8 mimedefang.pl.8 md-mx-ctrl.8 watch-mimedefang \
+	redhat/mimedefang-init redhat/mimedefang-spec redhat/mimedefang-sysconfig \
+	script/mimedefang-util.1
+
+install-redhat: install
+	$(INSTALL) -m 755 -d $(DESTDIR)${sysconfdir}/rc.d/init.d
+	$(INSTALL) -m 755 -d $(DESTDIR)${sysconfdir}/sysconfig
+	$(INSTALL) -m 755 -d $(DESTDIR)${sysconfdir}/logrotate.d
+	$(INSTALL) -m 0644 examples/redhat-logrotate-file $(DESTDIR)${sysconfdir}/logrotate.d/mimedefang
+
+	# We install SpamAssassin config file unconditionally for Red Hat...
+	$(INSTALL) -m 755 -d $(DESTDIR)${CONFDIR}
+	if test -f $(DESTDIR)${CONFDIR}/sa-mimedefang.cf ; then \
+		$(INSTALL) -m 644 SpamAssassin/spamassassin.cf $(DESTDIR)${CONFDIR}/sa-mimedefang.cf.example || exit 1; \
+	else \
+		$(INSTALL) -m 644 SpamAssassin/spamassassin.cf $(DESTDIR)${CONFDIR}/sa-mimedefang.cf || exit 1; \
+	fi
+
+	$(INSTALL) -m 755 redhat/mimedefang-init $(DESTDIR)${sysconfdir}/rc.d/init.d/mimedefang
+	$(INSTALL) -m 644 redhat/mimedefang-sysconfig $(DESTDIR)${sysconfdir}/sysconfig/mimedefang
+	$(INSTALL) -m 644 examples/suggested-minimum-filter-for-windows-clients $(DESTDIR)${CONFDIR}/mimedefang-filter
+
+install: all
+	$(INSTALL) -m 755 -d $(DESTDIR)${CONFDIR}
+	-if test "$(IP_HEADER)" = "yes" -a ! -f "$(DESTDIR)${CONFDIR}/mimedefang-ip-key" ; then \
+		$(PERL) ./gen-ip-validator.pl > $(DESTDIR)${CONFDIR}/mimedefang-ip-key ;\
+		-chmod 600 $(DESTDIR)${CONFDIR}/mimedefang-ip-key > /dev/null 2>&1 ; \
+	fi
+
+	if test "$(DEFANGUSER)" != "" ; then \
+		if id "$(DEFANGUSER)" > /dev/null 2>&1 ; then \
+			chown "$(DEFANGUSER)" $(DESTDIR)${CONFDIR}/mimedefang-ip-key > /dev/null 2>&1 || true; \
+			test ! -d $(DESTDIR)$(SPOOLDIR) && $(INSTALL) -m 750 -o $(DEFANGUSER) -d $(DESTDIR)$(SPOOLDIR) > /dev/null 2>&1 || true; \
+			test ! -d $(DESTDIR)$(QDIR) && $(INSTALL) -m 750 -o $(DEFANGUSER) -d $(DESTDIR)$(QDIR) > /dev/null 2>&1 || true; \
+                fi \
+	else \
+		echo ""; \
+		echo "Please create the spool directory, '$(SPOOLDIR)',"; \
+		echo "if it does not exist.  Give it mode 700 or 750, and make"; \
+		echo "it owned by the user and group you intend to run MIMEDefang as."; \
+		if test "$(QDIR)" != "$(SPOOLDIR)" ; then \
+			echo "Please do the same with the quarantine directory, '$(QDIR)'."; \
+		fi; \
+	fi
+
+	$(INSTALL) -m 755 -d $(DESTDIR)$(prefix)/bin
+	$(INSTALL) -m 755 -d $(DESTDIR)$(MANDIR)/man1
+	$(INSTALL) -m 755 -d $(DESTDIR)$(MANDIR)/man5
+	$(INSTALL) -m 755 -d $(DESTDIR)$(MANDIR)/man7
+	$(INSTALL) -m 755 -d $(DESTDIR)$(MANDIR)/man8
+	-test ! -d $(DESTDIR)$(SPOOLDIR) && mkdir -p $(DESTDIR)$(SPOOLDIR) && chmod 750 $(DESTDIR)$(SPOOLDIR) || true
+	-test ! -d $(DESTDIR)$(QDIR) && mkdir -p $(DESTDIR)$(QDIR) && chmod 750 $(DESTDIR)$(QDIR) || true
+
+	if test -f $(DESTDIR)${CONFDIR}/mimedefang-filter ; then \
+		$(INSTALL) -m 644 examples/suggested-minimum-filter-for-windows-clients $(DESTDIR)${CONFDIR}/mimedefang-filter.example || exit 1; \
+	else \
+		$(INSTALL) -m 644 examples/suggested-minimum-filter-for-windows-clients $(DESTDIR)${CONFDIR}/mimedefang-filter || exit 1; \
+	fi
+
+	$(INSTALL) -m 755 $(INSTALL_STRIP_FLAG) mimedefang-multiplexor   $(DESTDIR)$(prefix)/bin/mimedefang-multiplexor
+	$(INSTALL) -m 755 $(INSTALL_STRIP_FLAG) md-mx-ctrl               $(DESTDIR)$(prefix)/bin/md-mx-ctrl
+	$(INSTALL) -m 755 $(INSTALL_STRIP_FLAG) mimedefang               $(DESTDIR)$(prefix)/bin/mimedefang
+
+	$(INSTALL) -m 755 watch-mimedefang         $(DESTDIR)$(prefix)/bin/watch-mimedefang
+	$(INSTALL) -m 755 watch-multiple-mimedefangs.tcl $(DESTDIR)$(prefix)/bin/watch-multiple-mimedefangs.tcl
+	$(INSTALL) -m 755 mimedefang.pl            $(DESTDIR)$(prefix)/bin/mimedefang.pl
+	$(INSTALL) -m 755 script/mimedefang-util   $(DESTDIR)$(prefix)/bin/mimedefang-util
+	$(INSTALL) -m 644 script/mimedefang-util.1 $(DESTDIR)$(MANDIR)/man1/mimedefang-util.1
+	$(INSTALL) -m 644 mimedefang.8             $(DESTDIR)$(MANDIR)/man8/mimedefang.8
+	$(INSTALL) -m 644 watch-mimedefang.8       $(DESTDIR)$(MANDIR)/man8/watch-mimedefang.8
+	$(INSTALL) -m 644 watch-multiple-mimedefangs.8 $(DESTDIR)$(MANDIR)/man8/watch-multiple-mimedefangs.8
+	$(INSTALL) -m 644 mimedefang.pl.8          $(DESTDIR)$(MANDIR)/man8/mimedefang.pl.8
+	$(INSTALL) -m 644 mimedefang-multiplexor.8 $(DESTDIR)$(MANDIR)/man8/mimedefang-multiplexor.8
+	$(INSTALL) -m 644 md-mx-ctrl.8             $(DESTDIR)$(MANDIR)/man8/md-mx-ctrl.8
+	$(INSTALL) -m 644 mimedefang-filter.5      $(DESTDIR)$(MANDIR)/man5/mimedefang-filter.5
+	$(INSTALL) -m 644 mimedefang-protocol.7    $(DESTDIR)$(MANDIR)/man7/mimedefang-protocol.7
+	$(INSTALL) -m 644 mimedefang-notify.7      $(DESTDIR)$(MANDIR)/man7/mimedefang-notify.7
+	if test "$(HAVE_SPAM_ASSASSIN)" = "yes" ; then \
+		if test -f $(DESTDIR)${CONFDIR}/sa-mimedefang.cf ; then \
+			$(INSTALL) -m 644 SpamAssassin/spamassassin.cf $(DESTDIR)${CONFDIR}/sa-mimedefang.cf.example || exit 1; \
+		else \
+			$(INSTALL) -m 644 SpamAssassin/spamassassin.cf $(DESTDIR)${CONFDIR}/sa-mimedefang.cf || exit 1; \
+		fi \
+	fi
+
+distro: FORCE
+	mkdir mimedefang-$(VERSION)
+	tar -c -T MANIFEST -f - | (cd mimedefang-$(VERSION); tar xf -)
+	$(PERL) -p -e 's/#VERSION#/$(VERSION)/;s/#RELEASE#/1/;s/#BETA#//g' < redhat/mimedefang-spec.in > mimedefang-$(VERSION)/redhat/mimedefang.spec
+	tar cvf mimedefang-$(VERSION).tar mimedefang-$(VERSION)
+	gzip -v -f -9 mimedefang-$(VERSION).tar
+	rm -rf mimedefang-$(VERSION)
+	gpg --detach-sign mimedefang-$(VERSION).tar.gz
+
+distro-beta: beta-check
+	mkdir mimedefang-$(VERSION)-BETA-$(BETA)
+	tar -c -T MANIFEST -f - | (cd mimedefang-$(VERSION)-BETA-$(BETA); tar xf -)
+	$(PERL) -p -e 's/#VERSION#/$(VERSION)/;s/#RELEASE#/0.b$(BETA)/;s/#BETA#/-BETA-$(BETA)/g' < redhat/mimedefang-spec.in > mimedefang-$(VERSION)-BETA-$(BETA)/redhat/mimedefang.spec
+	tar cvf mimedefang-$(VERSION)-BETA-$(BETA).tar mimedefang-$(VERSION)-BETA-$(BETA)
+	gzip -v -f -9 mimedefang-$(VERSION)-BETA-$(BETA).tar
+	rm -rf mimedefang-$(VERSION)-BETA-$(BETA)
+	gpg --detach-sign mimedefang-$(VERSION)-BETA-$(BETA).tar.gz
+
+beta-check:
+	@if test "$(BETA)" = "" ; then \
+		echo "Usage: make distro-beta BETA=<x>"; \
+		exit 1; \
+	fi
+
+test:
+	prove -It/lib --recurse t/unit
+
+manifest:
+	$(PERL) "-MExtUtils::Manifest=mkmanifest" -e mkmanifest
+
+FORCE:
+
+.PHONY: FORCE test manifest

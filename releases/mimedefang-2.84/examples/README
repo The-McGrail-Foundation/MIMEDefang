@@ -1,0 +1,23 @@
+Files in this directory:
+
+suggested-minimum-filter-for-windows-clients
+	If you are protecting MS Windows clients, this is the minimum
+	suggested filter.  You might want to use a stronger filter.
+
+stream-by-domain-filter
+	An example showing how to use the stream_by_domain function.
+
+redhat-logrotate-file
+	If you log statistics to /var/log/mimedefang/stats, you want to rotate
+	the log file.  You can copy redhat-logrotate-file to
+	/etc/logrotate.d/mimedefang on Red Hat Linux systems.
+
+init-script
+	A generic /etc/init.d script which should work on most versions
+	of UNIX.  Typically, you'd rename it to mimedefang-ctrl and call
+	it from your startup scripts:
+
+	mimedefang-ctrl start  -- Start mimedefang
+	mimedefang-ctrl stop   -- Stop mimedefang
+	mimedefang-ctrl reread -- Re-read filter rules (if using multiplexor)
+

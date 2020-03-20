@@ -1,0 +1,20 @@
+#!/usr/bin/perl -w
+
+#Oct 11 12:32:19 intel1 imapd[22733]: Login user=shannon host=ip68-100-89-190.dc.dc.cox.net [68.100.89.190]
+
+$event{'imapd'}{'general'} = 
+sub {
+	if ($text =~ m/^Login user=(\S+) host=(\S+)/) {
+
+		if ($unixtime > $MaxDBUnixTime) {
+			my $user = $1;
+			my $host = $2;
+
+			$event = 'imapd';
+			$value1 = $user;
+			$value2 = $host;
+
+			$FoundNewRow = 1;
+		}
+	}
+};

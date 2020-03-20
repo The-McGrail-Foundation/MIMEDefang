@@ -1,0 +1,18 @@
+The files in this directory are installed in /etc/mail/mimedefang/ on 
+mail servers within the Linux Online and Linux Headquarters domains.  
+They are used to filter viruses and SPAM/UCE mail from being recevied
+by our staff & users.
+
+In order to use the filter in the above directory, either the 
+/etc/sysconfig/mimedefang file needs to be edited to:
+
+   SUBFILTER=/etc/mail/mimedefang/filter
+
+or a symlink needs to be made from /etc/mail/mimedefang-filter to 
+/etc/mail/mimedefang/filter.  
+
+The contents of each file are described within the header of the file.
+Please read those files to determine what they contain.
+
+Any questions or comments about the files in this directory should be
+sent to Michael McLagan <Michael.McLagan@linux.org>.

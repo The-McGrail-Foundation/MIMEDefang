@@ -1,0 +1,591 @@
+#! /usr/bin/perl
+
+##########################################################################
+# Copyright (c)2002 - Linux Online, Inc.  All rights reserved.
+# This program may be distributed under the terms of the GNU General
+# Public License, Version 2, or (at your option) any later version.
+#
+# Project     : Email processing
+# Component   : /etc/mail/mimedefang/filter
+# Author      : Michael McLagan <Michael.McLagan@linux.org>
+# Creation    : 05-May-2002 10:18
+# Description : Implement email filtering for various hosted domains
+#               including Linux Online & Linux Headquarters
+#   
+# Current Revision:
+#
+# $Source$
+# $Revision$
+# $Author$
+# $Date$
+#
+# Revision History:
+#
+#    16-May-2002 15:44pm - Michael McLagan <Michael.McLagan@linux.org
+#       Updated executable extention list per David.  Removed suspicious
+#       character checks ( \r may be illegal by RFC822 but they're
+#       harmless for our email programs )
+#
+#    13-May-2002 11:36am - Michael McLagan <Michael.McLagan@linux.org
+#       corrected duplicate 'reg' in executable per David's changes in
+#       release 2.11.
+#
+#    10-May-2002 13:16pm - Michael McLagan <Michael.McLagan@linux.org
+#       Added support for RAV antivirus scanning of messages to be 
+#       included with 2.12-BETA-1.  
+#
+#    09-May-2002 12:21pm - Michael McLagan <Michael.McLagan@linux.org>
+#       Satisfied that required*2 is a safe criteria for tossing
+#       SPAM messages, reworked filter_begin to silently discard 
+#       messages that get that score from SpamAssassin
+#
+#    09-May-2002 11:13am - Michael McLagan <Michael.McLagan@linux.org>
+#       Fixed missing . in hostname match for trusted hosts.  Made spam
+#       deliver regex case insensitive.
+#
+#    08-May-2002 19:28pm - Michael McLagan <Michael.McLagan@linux.org>
+#       Updated to include .eml handling from suggested-minimum-... in 
+#       2.10-BETA-3.
+#
+#    08-May-2002 12:57pm - Michael McLagan <Michael.McLagan@linux.org>
+#       Added BEGIN routine and @FilterSpamTrusted, @FilterSpamDeliver
+#
+#    08-May-2002 10:45am - Michael McLagan <Michael.McLagan@linux.org>
+#       No point filling up postmaster's mailbox with virus notifications.
+#       Moved to /etc/mail/mimedefang/filter to gather related files into
+#       one directory.
+#
+#    07-May-2002 11:07am - Michael McLagan <Michael.McLagan@linux.org>
+#       Fixed FilterSpamComplaint so it actually does what it was designed
+#       to do (it was inverted).  Updated to use 2.10-BETA-2 variables.
+#
+#    06-May-2002 12:28pm - Michael McLagan <Michael.McLagan@linux.org>
+#       Changed "action_add_header" to "action_add_header" for
+#       spam messages so if the message is filtered twice it will
+#       only show 1 set of headers (change adds missing headers)
+#
+#    06-May-2002 10:13am - Michael McLagan <Michael.McLagan@linux.org>
+#       Emails to abuse@ and postmaster@ should not be discarded when
+#       they are classified as spam by SpamAssassin.  They could very
+#       well be complaint emails from people receiving such a message
+#       and trying to inform us about it.
+# 
+# $Log$
+# Revision 1.3  2002/05/17 12:40:53  dfs
+# Updated linuxorg filter.
+#
+# Revision 1.2  2002/05/10 11:30:20  dfs
+# Updated linuxorg filter.
+#
+# Revision 1.1  2002/05/09 20:18:24  dfs
+# Added from Michael McLagan.
+#
+##########################################################################
+
+# Modules
+use IO::File;
+use POSIX qw(strftime);
+
+use vars qw($FilterFQDN @FilterHostNames @FilterSpamTrusted @FilterSpamDeliver
+            $FilterSpam $FilterSpamReport $FilterExplained);
+
+# MIMEDefang global variables
+$AdminName                      = "Postmaster";
+$AdminAddress                   = 'postmaster';
+$DaemonName                     = "Mailer Daemon";
+$DaemonAddress                  = 'MAILER-DAEMON';
+$NotifyNoPreamble               = 1;
+$SALocalTestsOnly               = 0;
+$Stupidity{"flatten"}           = 0;
+$Stupidity{"NoMultipleInlines"} = 0;
+
+# Check attachments for undesirable extentions.  We have no need of 
+# executable code -- binary or text. 
+sub executable ($$$)
+{
+   my($entity)    = shift;
+   my($type)      = shift;
+   my($multipart) = shift;
+
+   return 1 if re_match($entity, '\.(ade|adp|bas|bat|chm|cmd|com|cpl|crt|' . 
+                                 'dll|exe|hlp|hta|inf|ini|ins|isp|js|jse|' . 
+                                 'lib|lnk|mdb|mde|msc|msi|msp|mst|ocx|pcd|' . 
+                                 'pif|reg|scr|sct|shb|shs|sys|url|vb|vbe|' . 
+                                 'vbs|vxd|wsc|wsf|wsh)');
+
+   return 1 if !$multipart && re_match($entity, '\.eml');
+   return 1 if ($type ne 'message/rfc822') && re_match($entity, '\.eml');
+
+   return 0;
+}
+
+# Copy the original headers.  The HEADERS file combines multi-line 
+# headers into one -- not what we want for notifying users.  Return
+# a string with the original headers.i
+sub headers ()
+{
+   my ($msg);
+
+   $msg = "Original headers:\n";
+   $msg .= "\n";
+
+   # Create a "From " line using the $Sender and time()
+   $msg .= "From: $Sender  " .  strftime("%a %b %e %T %Y", localtime()) .  "\n";
+
+   # Read the headers in
+   $headers = IO::File->new("<INPUTMSG");
+   while ($_ = $headers->getline)
+   {
+      #Get rid of those nasty CRs
+      s/\r//g;
+
+      # Read till we get the EOH (blank line)
+      last if /^\n$/;
+
+      $msg .= ">" . $_;
+   }
+   $headers->close();
+   $msg .= "\n";
+
+   return ($msg);
+}
+
+# Collect the information about this message into a string to use
+# to return to sender.  
+sub details
+{
+   my ($msg, $recip);
+
+   $msg = "----------------------------------------------------------------\n";
+   $msg .= "Sender     : $Sender\n";
+
+   foreach $recip (@Recipients)
+   {
+      $msg .= "Recipient  : $recip\n";
+   }
+
+   $msg .= "Message-Id : $MessageID\n" if $MessageID ne "<No-Message-ID>";
+   $msg .= "Subject    : $Subject\n";
+
+   return ($msg);
+}
+
+# Build an email message with information on the virus found
+# to send back to the originator of the original message
+sub virus ($)
+{
+   my ($scanner) = shift;
+
+   my ($msg, @lines, $value);
+
+   @lines = split("\n", $VirusScannerMessages);
+
+   if ($scanner eq "Virus:RAV")
+   {
+      foreach $_ (@lines)
+      {
+         if (/^Version: (.+)\.$/)
+         {
+            $value = $1;
+            last;
+         }
+      }
+
+      $msg  = "We received a message claiming to be from you which contained a\n";
+      $msg .= "virus according to Reliable Antivirus (RAV) v$value available from\n";
+      $msg .= "http://www.ravantivirus.com/\n";
+   }
+   elsif ($scanner eq "Virus:FileScan")
+   {
+      $msg  = "We received a message claiming to be from you which contained a\n";
+      $msg .= "virus according to File::Scan v$File::Scan::VERSION, a Perl module from CPAN at\n";
+      $msg .= "http://www.cpan.org/authors/id/H/HD/HDIAS\n";
+   }
+   $msg .= "\n";
+
+   $msg .= "This message was not delivered to the intended recipient, it has\n";
+   $msg .= "been discarded.  For information on removing viruses from your\n";
+   $msg .= "computer, please see http://www.google.com/search?q=antivirus or\n";
+   $msg .= "http://hotbot.lycos.com/?query=antivirus\n";
+   $msg .= "\n";
+
+   $msg .= "   Postmaster\n";
+   $msg .= "\n";
+
+   $msg .= details();
+
+   if ($scanner eq 'Virus:RAV')
+   {
+      foreach $_ (@lines)
+      {
+         $msg .= "Virus      : $1\n" if (/\sInfected: (.+)$/);
+      }
+      $msg .= "\n";
+   }
+   elsif ($scanner eq 'Virus:FileScan')
+   {
+      $VirusScannerMessages =~ /found the '(.+)' virus.\n/m;
+      $msg .= "Virus      : $1\n";
+   }
+   $msg .= "\n";
+
+   $msg .= headers();
+
+   $NotifySenderSubject = "Virus discarded";
+   action_notify_sender($msg);
+   action_discard();
+}
+
+# Notify the sender that we are removing the attachment from the
+# message and tell them to resend it in a different form if they
+# want it delivered to the recipient.
+sub rejected ($$$)
+{
+   my ($entity)    = shift;
+   my ($fname)     = shift;
+   my ($type)      = shift;
+
+   my ($msg);
+
+   unless ($FilterSpam)
+   {
+      unless ($FilterExplained)
+      {
+         $msg  = "We received a message claiming to be from you which contained an\n";
+         $msg .= "executable attachment (batch file, script, program, etc).  In\n";
+         $msg .= "order to protect users from malicious programs, we do not accept\n";
+         $msg .= "these file types thru this mail server.  If you need to send the\n";
+         $msg .= "file to it's intended recipient, you must send it in an archived\n";
+         $msg .= "and/or compressed format.\n";
+         $msg .= "\n";
+   
+         $msg .= "Your email has been sent to the intended recipient without this\n";
+         $msg .= "file included.  A message detailing why it was dropped has been\n";
+         $msg .= "substitued in it's place.\n";
+         $msg .= "\n";
+   
+         $msg .= "   Postmaster\n";
+         $msg .= "\n";
+
+         $msg .= details();
+
+         $FilterExplained = 1;
+      }
+
+      $msg .= "Mime type  : $type\n";
+      $msg .= "File name  : $fname\n";
+      $msg .= "\n";
+   
+      $NotifySenderSubject = "Executable discarded";
+      action_notify_sender($msg);
+   }
+
+   $msg  = "An executable attachment (batch file, script file, program, etc)\n";
+   $msg .= "was received with this email and has been discarded.  It was replaced\n";
+   $msg .= "with this message for your security.  The sender has been informed\n";
+   $msg .= "that in order to send you this file they will need to use an archived\n";
+   $msg .= "and/or compressed format.\n";
+   $msg .= "\n";
+
+   $msg .= "   Postmaster\n";
+   $msg .= "\n";
+
+   action_replace_with_warning($msg);
+}
+
+# Take an FQDN and add it to the list of names, FQDN and each higher 
+# level domain name
+sub break_names ($)
+{
+   $host = shift;
+
+   # As long as this represents a valid host name
+   while ($host =~ /[a-z0-9\-]+\.[a-z][a-z]+$/i) 
+   {
+      push(@FilterHostNames, $host);
+
+      # Chop off the first part of the name 
+      $host =~ s/^[a-z0-9\-]+\.//i;  
+   }
+}
+
+# Determine if the message has this header.  If it does change it, 
+# if not add it.
+sub header ($$)
+{
+   my ($header) = shift;
+   my ($value)  = shift;
+
+   my ($fh, $exists);
+
+   $exists = 0;
+
+   $fh = IO::File->new("< HEADERS");
+   while (!$exists && ($_ = $fh->getline))
+   {
+      $exists = /^$header: /i;
+   }
+   $fh->close;
+
+   if ($exists)
+   {
+      action_change_header($header, $value);
+   }
+   else
+   {
+      action_add_header($header, $value);
+   }
+}
+
+# Has this message already been spam tested by a trusted host?  If so,
+# we don't duplicate another host's work, append multiple headers, etc.
+sub untested
+{
+   my ($fh, $site, $host);
+
+   $fh = IO::File->new("< HEADERS");
+   while ($_ = $fh->getline)
+   {
+      chomp;s/\r//g;
+
+      if (/^X-Spam-Scanner: SpamAssassin \d\.\d\d \([^\)]*\) on ([a-z0-9\-\.]+)$/)
+      {
+         $site = $1;
+         last;
+      }
+   }
+   $fh->close;
+
+   return 1 unless $site;
+
+   # Check it against our list of trusted hosts
+   foreach $host (@FilterSpamTrusted)
+   {
+      return 0 if $site eq $host;
+   }
+
+   return 1;
+}
+
+# Initialize a couple of local lists
+BEGIN
+{
+   my ($fh);
+
+   # Our own global variables
+   $FilterFQDN        = "";
+   @FilterHostNames   = ();
+   @FilterSpamTrusted = ();
+   @FilterSpamDeliver = ();
+
+   # These are the "per message" variables
+   $FilterSpam      = 0;
+   $FilterSpamReport   = "";
+   $FilterExplained = 0;
+
+   # A little discovery mission.  What host is this running on?
+
+   # First, the obvious choices
+   push (@FilterHostNames, "localhost");
+   push (@FilterHostNames, "localhost.localdomain");
+
+   # Ask the system who we are
+   $fh = IO::File->new("hostname --fqdn |");
+   $FilterFQDN = $fh->getline;
+   $fh->close;
+
+   # Throw away the offending EOLN
+   chomp($FilterFQDN);
+   break_names($FilterFQDN);
+
+   # One more possibility, pick up known local names
+   $fh = IO::File->new("< /etc/mail/local-host-names");
+   if ($fh)
+   {
+      while ($_ = $fh->getline)
+      {
+         next if /^\s*#/;
+
+         # Throw away the offending whitespace and EOLN
+         s/^\s//g;s/\s$//g;chomp();
+
+         break_names($_);
+      }
+      $fh->close;
+   }
+
+   # I deliberately do not check all interfaces on the machine.  
+   # While it may be appropriate to check each of the interfaces
+   # by getting it's FQDN and the breaking that up into it's
+   # constitiuent pieces, the work involved is excessive and 
+   # could be temporally expensive.  Besides, if I do that then
+   # I should start checking mailertable, virtusertable, virtdomtable
+   # and a pile of other places.  I'll leave that as an exercise 
+   # to the reader.
+
+   # Keep the spam headers added in by one of our own hosts
+   # read /etc/mail/mimedefang/trusted-hosts
+   $fh = IO::File->new("< /etc/mail/mimedefang/spam-trusted-hosts");
+   if ($fh)
+   {
+      while ($_ = $fh->getline)
+      {
+         next if /^\s*#/;
+
+         # Throw away the offending whitespace and EOLN
+         s/^\s//g;s/\s$//g;chomp();
+
+         push(@FilterSpamTrusted, $_);
+      } 
+      $fh->close;
+   }
+
+   # Who really, really, really wants their spam delivered to
+   # them?
+   $fh = IO::File->new("< /etc/mail/mimedefang/spam-deliver");
+   if ($fh)
+   {
+      while ($_ = $fh->getline)
+      {
+         next if /^\s*#/;
+
+         # Throw away the offending whitespace and EOLN
+         s/^\s//g;s/\s$//g;chomp();
+
+         push(@FilterSpamDeliver, $_);
+      } 
+      $fh->close;
+   }
+}
+
+#
+#
+#  mimedefang.pl looks for these functions
+#
+#
+
+# Check the entire message before it's broken into parts
+sub filter_begin ()
+{
+   # Initialize a few variables
+   $FilterSpam      = 0;
+   $FilterExplained = 0;
+
+   # Messages containing viruses are rejected
+   return virus('Virus:RAV') if $Features{'Virus:RAV'} &&
+                                message_contains_virus_rav();
+   return virus('Virus:FileScan') if $Features{'Virus:FileScan'} && 
+                                     message_contains_virus_filescan();
+
+   # All messages smaller than 49512 (48k) are checked for spam
+   # Headers are added to the message to allow filtering by recipients
+   # based on their preferences.  Give them the score & tests to work
+   # with.
+   if ($Features{"SpamAssassin"} && (-s "./INPUTMSG" < 49512) && untested()) 
+   {
+      my ($hits, $required, $tests, $deliver, $status);
+
+      # Get SpamAssassin's opinion on this message
+      ($hits, $required, $tests, $FilterSpamReport) = spam_assassin_check();
+
+      # Check against our regex list of users to determine if this
+      # high scoring message should be delivered anyways.  If not,
+      # indicate to mimedefang.pl that we need to discard the message.
+      if ($hits >= $required * 2)
+      {
+         $deliver = 0;
+         foreach $addr (@Recipients)
+         {
+            # Braces are not desirable
+            $addr =~ s/[<>]//g;
+
+            foreach $user (@FilterSpamDeliver)
+            {
+               if ($addr =~ /$user/i)
+               {
+                  $deliver = 1;
+                  last;
+               }
+            }
+
+            last if $deliver;
+         }
+
+         # Blast it away!
+         return action_discard() unless ($deliver);
+      }
+
+      if ($hits >= $required / 2)
+      {
+         header("X-Spam-Scanner", 
+                "SpamAssassin $Mail::SpamAssassin::VERSION " . 
+                "(http://www.spamassassin.org/) on $FilterFQDN");
+         header("X-Spam-Score", 
+                sprintf("%2.1f / %2.1f: %2.1f%%", 
+                         $hits, $required, $hits * 100 / $required));
+         header("X-Spam-Tests", $tests);
+         $status = "Suspected";
+
+         if ($hits >= $required)
+         {
+             $FilterSpam = 1;
+             $status = ($hits < $required * 2) ? "Confirmed" : "Assassinated!";
+         }
+
+         header("X-Spam-Disposition", $status);
+      }
+   }
+}
+
+# Main filtering routine, handles each part within the message
+sub filter ($$$$)
+{
+   my ($entity) = shift;
+   my ($fname)  = shift;
+   my ($ext)    = shift;
+   my ($type)   = shift;
+
+   # No sense doing any extra work
+   return if message_rejected();
+
+   # Local uses don't get exectable attachments
+   return rejected($entity, $fname, $type) if (executable($entity, $type, 0));
+
+   return action_accept();
+}
+
+# Filter multipart container parts such as message/rfc822
+sub filter_multipart ($$$$)
+{
+   my ($entity) = shift;
+   my ($fname)  = shift;
+   my ($ext)    = shift;
+   my ($type)   = shift;
+
+   # No sense doing any extra work
+   return if message_rejected();
+
+   # Local uses don't get exectable attachments
+   return rejected($entity, $fname, $type) if (executable($entity, $type, 1));
+
+   return action_accept();
+}
+
+# Final action before message is sent to the recipients
+sub filter_end
+{
+   my ($entity) = shift;
+
+   # No sense doing any extra work
+   return if message_rejected();
+
+   # If SpamAssassin found SPAM, add report.
+   if ($Features{'SpamAssassin'} && $FilterSpam)
+   {
+      action_add_part($entity, "text/plain", "-suggest", "$FilterSpamReport\n",
+                      "SpamAssassinReport.txt", "inline");
+   }
+}
+
+# DO NOT delete the next line, or Perl will complain.
+1;

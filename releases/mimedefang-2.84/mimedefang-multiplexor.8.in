@@ -1,0 +1,541 @@
+.\" $Id$
+.\""
+.TH MIMEDEFANG-MULTIPLEXOR 8 "8 February 2005"
+.UC 4
+.SH NAME
+mimedefang-multiplexor \- Process pool controller for mail filters.
+.SH SYNOPSIS
+.B mimedefang-multiplexor \fR[\fIoptions\fR]
+
+.SH DESCRIPTION
+\fBmimedefang-multiplexor\fR manages a pool of Perl processes for
+scanning e-mail.  It is designed to work in conjunction with
+\fBmimedefang\fR(8) and \fBmimedefang.pl\fR(8).
+
+\fBmimedefang-multiplexor\fR opens a UNIX-domain socket and listens for
+requests for work from \fBmimedefang\fR.  As requests come in,
+\fBmimedefang-multiplexor\fR creates Perl processes as needed to scan
+mail.  The Perl processes are not killed when scanning is completed, but
+continue to run in a loop.  Perl processes are re-used for subsequent
+e-mail messages.  This eliminates the large overhead of starting a
+new Perl process for each incoming message.
+
+To avoid memory leaks, the Perl processes are killed after they have handled
+some number of scans.
+
+.SH OPTIONS
+.TP
+.B \-U \fIuser\fR
+Runs the multiplexor as \fIuser\fR rather than \fIroot\fR.  This
+option is mandatory, and must match the \fB\-U\fR option supplied
+to \fBmimedefang\fR.
+
+.TP
+.B \-m \fIminWorkers\fR
+The minimum number of Perl processes to keep running at all times.  The
+default is zero.
+
+.TP
+.B \-x \fImaxWorkers\fR
+The maximum number of Perl processes to run simultaneously.  If a
+request comes in and all processes are busy, a temporary failure
+is signalled to the SMTP peer.  The default is 2.
+
+.TP
+.B \-r \fImaxRequests\fR
+The maximum number of requests a given process handles before it is killed
+and a replacement started.  The default is 500.
+
+.TP
+.B \-i \fIidleTime\fR
+The idle time in seconds after which to kill of excess Perl processes.
+That is, if the process is idle for longer than this time, and there
+are more than \fIminWorkers\fR running, the process is killed.  Note that
+this is implemented as a timer which ticks every \fIidleTime\fR seconds;
+therefore, processes may be idle for up to twice this time before they
+are killed.  The default for \fIidleTime\fR is 300 seconds.
+
+.TP
+.B \-V \fImaxLifetime\fR
+The maximum lifetime in seconds of a worker before it is killed and a
+replacement started.  The default is -1, which signifies no maximum
+lifetime.  Note that the lifetime check is done only when a worker
+becomes idle after a request, or every time the idle-timeout check is
+made.  On a very quiet system, workers may live for longer than
+\fImaxLifetime\fR by as much as \fIidleTime\fR.  Note also that the
+lifetime is measured not from when the worker started running, but
+from when it was assigned its very first request.  A completely-idle
+worker that has never processed any requests will not be terminated by
+the \fImaxLifetime\fR setting.
+
+.TP
+.B \-b \fIbusyTime\fR
+The longest a Perl process is allowed to spend scanning an e-mail before
+it is declared hung up and killed.  The default is 120 seconds.
+
+.TP
+.B \-Z
+This option specifies that the multiplexor should accept and process
+"status updates" from busy workers.  Note that this consumes one extra
+file descriptor per worker, plus a small amount of CPU time per status
+update.
+
+.TP
+.B \-c \fIcmdTime\fR
+The timeout for communication between
+\fBmimedefang-multiplexor\fR and \fBmimedefang\fR, or between
+\fBmimedefang-multiplexor\fR and a Perl scanning process.  The
+default is 10 seconds.  This timeout should be kept quite short.
+
+.TP
+.B \-w \fIwaitTime\fR
+When \fBmimedefang-multiplexor\fR starts the initial workers, or needs
+to bring the number of running workers up to the number defined by the
+\fB\-m\fR option, it does not start all the workers at once, because this
+could overload your server.  Instead, it starts one worker every
+\fIwaitTime\fR seconds.  The default value for \fIwaitTime\fR is 3.
+
+.TP
+.B \-W \fIwaitTime\fR
+If you use this option, \fBmimedefang-multiplexor\fR will \fInever\fR
+activate a worker until \fIwaitTime\fR seconds have elapsed since the
+last worker activation.  This could result in mail being tempfailed
+if worker activations do not keep pace with incoming mail.  However,
+it may be preferable to tempfail mail rather than allow the load
+on your server to spike up too quickly.  The default value for this
+option is 0, meaning that \fBmimedefang-multiplexor\fR will start
+workers as quickly as necessary to keep up with incoming mail.
+
+.TP
+.B \-z \fIspooldir\fR
+Set the spool directory to \fIspooldir\fR.  If this option is omitted,
+the spool directory defaults to @SPOOLDIR@.
+
+.TP
+.B \-s \fIpathName\fR
+The UNIX-domain socket on which
+\fBmimedefang-multiplexor\fR listens for requests.  This should be
+specified as an absolute pathname.  If this option is not supplied,
+it defaults to mimedefang-multiplexor.sock under the spool directory.
+
+.TP
+.B \-a \fIsocket\fR
+A socket for listening for requests.  This is similar to the
+\fB\-s\fR socket, except that a restricted set of requests
+are processed.  On this socket, the multiplexor will only process
+requests asking for status; it will not accept any commands to do scanning
+or that would consume a worker.  See the SOCKET SPECIFICATION section
+for the format of \fIsocket\fR.
+
+.TP
+.B \-p \fIfileName\fR
+Causes \fBmimedefang-multiplexor\fR to write its process-ID (after
+becoming a daemon) to the specified file.  The file will be owned
+by root.
+
+.TP
+.B \-o \fIfileName\fR
+Causes \fbmimedefang-multiplexor\fR to use \fIfileName\fR as a lock
+file to avoid multiple instances from running.  If you supply
+\fB\-p\fR but not \fB\-o\fR, then \fbmimedefang-multiplexor\fR
+constructs a lock file by appending ".lock" to the pid file.  However,
+this is less secure than having a root-owned pid file in a root-owned
+directory and a lock file writable by the user named by the \fB\-U\fR
+option.  (The lock file must be writable by the \fB\-U\fR user.)
+
+.TP
+.B \-f \fIfilter_path\fR
+Normally, \fBmimedefang-multiplexor\fR executes a Perl filter script called
+\fBmimedefang.pl\fR to scan the e-mail.  However, you can have it
+execute any program you like by specifying the full path to the
+program with the \fB\-f\fR option.  This program must obey the
+protocol documented in \fBmimedefang-protocol\fR(7); see that
+manual page for details.
+
+Note that the \fB-f\fR option does \fInot\fR specify the "filter"
+to use with \fBmimedefang.pl\fR; instead, it specifies the program
+for \fBmimedefang-multiplexor\fR to execute.  You almost certainly should
+\fInot\fR use this option unless you wish to replace \fBmimedefang.pl\fR
+with your own program.
+
+.TP
+.B \-F \fIrules_path\fR
+Specifies the path to the filter rules.  By default,
+\fB@CONFDIR_EVAL@/mimedefang-filter\fR is used.  If you use the \fB\-F\fR
+option, its value is passed to the underlying Perl filter program
+using \fB\-f\fR.
+
+.TP
+.B \-l
+Log certain events, including the output of the Perl workers'
+standard-error, using syslog.  Normally, the multiplexor does not log
+much information.
+
+.TP
+.B \-d
+Write debugging information about event-handling code in
+/var/log/mimedefang-event-debug.log.  This is only of use to people
+debugging \fBmimedefang-multiplexor\fR.
+
+.TP
+.B \-R \fIkbytes\fR
+Limits the resident-set size of the worker filter processes to
+\fIkbytes\fR kilobytes.  This limit is not supported on all operating
+systems; it is known to work on Linux.
+
+.TP
+.B \-M \fIkbytes\fR
+Limits the total memory space of worker filter processes to
+\fIkbytes\fR kilobytes.  This limit is supported on all operating
+systems which support the setrlimit(2) system call.  This should
+include most modern UNIX systems.
+
+We recommend that you monitor your worker filter processes and get a feel
+for how much memory they use.  You should then limit the memory to
+two or three times the worst-case that you have observed.  This can
+help mitigate denial-of-service attacks which use complicated MIME
+messages to force \fBmimedefang.pl\fR to consume lots of memory.
+
+.TP
+.B \-h
+Print usage information and exit.
+
+.TP
+.B \-t \fIfilename\fR
+Log statistical information to \fIfilename\fR.  See the section
+STATISTICS for more information.
+
+.TP
+.B \-T
+Log statistical information using \fBsyslog\fR(2).  You may use
+any \fB\-t\fR and \fB\-T\fR together, in which case statistical
+information is logged in a file and using \fBsyslog\fR.
+
+.TP
+.B \-u
+Flush the statistics file after every write.  Normally,
+\fBmimedefang-multiplexor\fR does not flush the file; this is the best choice
+for minimizing disk I/O on a busy mail server.  However, if you wish to
+watch statistics entries in real-time, you should enable flushing.
+
+.TP
+.B \-D
+Do not fork into the background and become a daemon.  Instead, stay
+in the foreground.  Useful mainly for debugging or if you have a
+supervisory process managing \fBmimedefang-multiplexor\fR.
+
+.TP
+.B \-q \fIqueue_size\fR
+Normally, if all workers are busy and \fBmimedefang-multiplexor\fR receives
+another request, it fails it with the error "No free workers."  However,
+if you use the \fB\-q\fR option, then up to \fIqueue_size\fR requests
+will be queued.  As soon as a worker becomes free, the queued requests
+will be handed off in FIFO order.  If the queue is full and another request
+comes in, then the request is failed with "No free workers".
+
+.TP
+.B \-Q \fIqueue_timeout\fR
+Queued requests should not stay on the queue indefinitely.  If a queued
+request cannot be processed within \fIqueue_timeout\fR (default 30) seconds
+of being placed on the queue, it is failed with a "Queued request timed out"
+message.  See the section "QUEUEING REQUESTS" for more discussion.
+
+.TP
+.B \-O \fIsock\fR
+Listen on a \fInotification socket\fR for connections from \fIlisteners\fR.
+\fBmimedefang-multiplexor\fR can inform external programs of state
+changes by sending messages over a notification socket.  The external
+programs connect to this socket and then listen for notifications.  See
+the section SOCKET SPECIFICATION for the format of \fIsock\fR.
+
+See the \fBmimedefang-notify\fR(7) man page for details of the notification
+protocol.
+
+.TP
+.B \-N \fImap_sock\fR
+Listen on a \fImap socket\fR for Sendmail SOCKETMAP connections.
+As of Sendmail 8.13, you can define a Sendmail map type that talks
+to a daemon over a socket.  \fBmimedefang-multiplexor\fR implements
+that protocol; consult the \fBmimedefang-filter\fR(5) man page
+for detils (see the SOCKET MAPS section).
+
+See the section SOCKET SPECIFICATION for the format of \fImap_sock\fR.
+
+
+
+.TP
+.B \-I \fIbacklog\fR
+When \fBmimedefang-multiplexor\fR creates a listening socket, it
+calculates the "backlog" argument to \fBlisten\fR(2) based on the
+maximum number of workers.  However, you can explicitly set this
+backlog with the \fB\-I\fR option.  Setting the backlog to a high
+value (around 30-50) may help on a very busy server.  If you see mail
+log messages saying "MXCommand: socket: Connection refused" during
+busy periods, then that's an indication you need a higher listen
+backlog.
+
+.TP
+.B \-L \fIinterval\fR
+Log the worker status every \fIinterval\fR seconds.  This logs a line using
+syslog; the line looks like this:
+
+.TP
+.nf
+Worker status: Stopped=s Idle=i Busy=b Killed=k Queued=q Msgs=m Activations=a
+.fi
+
+Here, "Stopped" is the number of non-running workers, "Idle" is the
+number of idle workers, "Busy" is the number of busy workers, "Killed"
+is the number of killed workers yet to be reaped, "Queued" is the
+number of queued requests, "Msgs" is the total number of messages
+processed since the multiplexor began running, and "Activations" is
+the number of times a Perl process has been started since the
+multiplexor began running.
+
+If you supply an \fIinterval\fR of 0 (which is the default), no periodic
+status logging is performed.  If you supply an \fIinterval\fR of less than
+5 seconds, it is silently reset to 5 seconds.
+
+.TP
+\fB\-S \fIfacility\fR
+Specifies the syslog facility for log messages.  The default is
+\fImail\fR.  See \fBopenlog\fR(3) for a list of valid facilities.
+You can use either the short name ("mail") or long name ("LOG_MAIL") for
+the facility name.
+
+.TP
+\fB\-E\fR
+Specifies that the multiplexor should create an embedded Perl interpreter.
+This can improve performance dramatically.  But see the section
+"EMBEDDING PERL" for more information.
+
+.TP
+\fB\-X\fR \fIn\fR
+Specifies that the multiplexor should initiate a "tick" request every
+\fIn\fR seconds.  This causes your \fIfilter_tick\fR function (if defined)
+to be called.  Note that you have no control over which worker executes
+\fIfilter_tick\fR.  If all workers are busy when a tick occurs,
+that tick request is skipped and a warning message is logged.
+
+.TP
+\fB\-P\fR \fIn\fR
+Specifies that the multiplexor should run \fIn\fR tick requests in
+parallel.  Each tick is run as often as specified with the
+\fB\-X\fR argument.  (If you omit the \fB\-P\fR option, then the
+multiplexor behaves as if \fB\-P 1\fR had been specified.)
+
+If you run parallel ticks, each tick is assigned an integer
+identifying its "type".  The type ranges from 0 to \fIn\fR-1.  While
+there may be as many as \fIn\fR tick requests running at a time, only
+one tick of each type will be active at any time.
+
+.TP
+\fB\-Y\fR \fIlabel\fR
+Sets the tag used in the multiplexor's syslog messages to
+\fIlabel\fR instead of \fBmimedefang-multiplexor\fR.
+
+.TP
+\fB\-G\fR
+Normally, \fBmimedefang-multiplexor\fR uses a umask of 027 when
+creating listening sockets.  If you would like the sockets to be
+readable and writeable by the group as well as the owner,
+supply the \fB\-G\fR option.  This causes the umask to be 007
+whenever UNIX-domain sockets are created.
+
+.TP
+\fB\-y\fR \fIn\fR
+Limits the maximum number of concurrent \fBrecipok\fR checks
+to \fIn\fR on a per-domain basis.  The value of \fIn\fR can range
+from 0 (in which case no limit is applied) to \fImaxWorkers\fR, where
+\fImaxWorkers\fR is the argument to the \fB\-x\fR option.  If \fIn\fR is
+outside that range, it is ignored (and no limit is applied.)
+
+.RS
+.PP
+The \fBrecipok\fR command ultimately invokes the \fBfilter_recipient\fR
+function in your filter.  If you are doing recipient verification against
+servers that may be slow or unreliable, you can use the \fB\-y\fR option
+to limit the number of concurrent recipient verifications per domain.
+That way, if one domain's server becomes very slow, it won't consume
+all available workers for recipient verification.  Instead, its
+RCPT commands will be tempfailed and there will be workers available
+to handle RCPT commands for other domains.
+.RE
+
+.SH SOCKET SPECIFICATION
+
+The \fB\-a\fR, \fB\-N\fR and \fB\-O\fR options take a socket as an
+argument.  This socket can be specified as:
+
+.TP
+.B /path/to/socket
+A UNIX-domain socket
+
+.TP
+.B inet:portnum
+A TCP socket bound to port \fIportnum\fR, but which accepts connections
+only from the IPv4 loopback address (127.0.0.1).
+
+.TP
+.B inet_any:portnum
+A TCP socket bound to port \fIportnum\fR which will accept connections
+from any address.  \fIUse inet_any with caution!\fR
+
+.TP
+.B inet6:portnum
+A TCP socket bound to port \fIportnum\fR listening on the IPv6 loopback
+address.
+
+.TP
+.B inet6_any:portnum
+A TCP socket bound to port \fIportnum\fR listening on the IPv6 wildcard
+address.
+
+.SH QUEUEING REQUESTS
+
+Normally, if all workers are busy, any additional requests are failed
+immediately.  However, the \fB\-q\fR and \fB\-Q\fR options allow you
+to queue requests for a short amount of time.  This facility is intended
+to gracefully handle a temporary overload; most of the time, your queue
+should be empty.
+
+Because \fBmimedefang\fR checks the number of free workers when a
+connection is opened and fails the connection if there are no free
+workers, the intent of the queue is to allow SMTP transactions that are
+already underway to continue if there is a slight overload.  Any new
+connections will be failed if all workers are busy, but existing
+connections are allowed to continue.  Queuing requests may improve
+throughput on extremely busy servers.
+
+Note that if you supply the \fB\-q\fR option to \fBmimedefang\fR, then
+even new connections are allowed to queue.  This may improve throughput by
+keeping the worker utilization higher.
+
+The \fB\-R\fR option to \fBmimedefang\fR can be used to reserve a
+specified number of workers for connections from the loopback address.  Using
+the \fB\-R\fR option has the side-effect of permitting new connections
+from the loopback address to queue.
+
+.SH EMBEDDING PERL
+
+Normally, when \fBmimedefang-multiplexor\fR activates a worker, it forks
+and execs \fBmimedefang.pl\fR.  However, if the multiplexor was compiled
+with embedded Perl support, and you supply the \fB\-E\fR command-line
+option, the multiplexor works like this:
+
+.TP
+1
+It creates an embedded Perl interpreter, and sources \fBmimedefang.pl\fR
+with a special command-line argument telling it to read the filter, but
+not to enter the main loop.
+
+.TP
+2
+Each time a worker is activated, the multiplexor calls fork() and runs the
+\fBmimedefang.pl\fR main loop.  This invokes \fBfilter_initialize\fR
+and then runs the main loop.
+
+.PP
+On some platforms (for example, Red Hat Linux 7.3 with Perl 5.6.1), it
+is not safe to destroy and recreate a Perl interpreter without causing
+a memory leak.  On those platforms, if you attempt to reread the filter
+file (by sending the multiplexor a HUP signal or reread command), the
+filter will \fInot\fR be re-read, and a message will be logged to syslog.
+On those platforms, you must kill and restart MIMEDefang if you change the
+filter file.
+
+.PP
+On most platforms, however, a filter reread is accomplished by destroying
+and re-creating the embedded interpreter, re-sourcing \fBmimedefang.pl\fR
+and killing workers as soon as they are idle.
+
+.SH STATISTICS
+With the \fB\-t\fR option, \fBmimedefang-multiplexor\fR logs certain
+events to a file.  This file can be post-processed to gather statistics
+about the multiplexor.  You can use it to tune the number of workers
+you run, adjust timeouts, and so on.
+
+.PP
+Each line of the file looks like this:
+
+.nf
+	YYYY/MM/DD:HH:MM:SS timestamp event key=val key=val...
+.fi
+
+Here, YYYY/MM/DD:HH:MM:SS is the local time of day.  Timestamp is
+the number of seconds since January 1, 1970.  Event is the name
+of an event.  The valid events are:
+
+.TP
+.B StartWorker
+A worker process has been started.
+
+.TP
+.B KillWorker
+A worker process has been killed.
+
+.TP
+.B ReapWorker
+A dead worker process has been reaped.  It is possible to have a ReapWorker
+event without a previous KillWorker event if the worker process terminated
+abnormally.
+
+.TP
+.B StartFilter
+A worker process has begun filtering an e-mail message.
+
+.TP
+.B EndFilter
+A worker process has finished filtering an e-mail message.
+
+.PP
+The possible keys in the key=value pairs are:
+
+.TP
+.B worker=\fIn\fR
+The worker involved in the event.  Every worker is identified by a small
+integer.
+
+.TP
+.B nworkers=\fIn\fR
+The total number of running workers immediately after the event happened.
+
+.TP
+.B nbusy=\fIn\fR
+The number of busy workers (workers which are processing an e-mail message)
+immediately after the event happened.
+
+.TP
+.B reason="\fIstring\fB"
+The reason for a StartWorker or KillWorker event.  (Present only for these
+events.)
+
+.TP
+.B numRequests=\fIn\fR
+The number of e-mails processed by the worker.  Present only for an
+EndFilter event.
+
+.PP
+If you send the \fBmimedefang-multiplexor\fR process a SIGHUP signal
+(kill -1 \fIpid\fR), it closes and reopens the statistics file.  This
+is useful during log file rotation.
+
+.PP
+If you send the \fBmimedefang-multiplexor\fR process a SIGINT signal
+(kill -INT \fIpid\fR), it terminates all active-but-idle workers.  Also,
+any active-and-busy workers terminate as soon as they finish filtering
+the current message.  This is useful to force a reread of the filter rules
+file without stopping and restarting Sendmail.
+
+.PP
+If you send the \fBmimedefang-multiplexor\fR process a SIGTERM signal
+(kill \fIpid\fR), it terminates all workers and exits immediately.
+
+.SH AUTHOR
+\fBmimedefang-mulitplexor\fR was written by Dianne Skoll <dfs@roaringpenguin.com>.
+The \fBmimedefang\fR home page is \fIhttp://www.mimedefang.org/\fR.
+
+.SH SEE ALSO
+mimedefang.pl(8), mimedefang-filter(5), mimedefang(8), mimedefang-protocol(7)
+
+

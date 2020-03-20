@@ -1,0 +1,102 @@
+#
+# GraphDefang -- a set of tools to create graphs of your mimedefang
+#                spam and virus logs.
+#
+# Written by:    John Kirkland
+#                jpk@bl.org
+#
+# Copyright (c) 2002-2003, John Kirkland
+#=============================================================================
+
+DESCRIPTION
+-----------
+
+GraphDefang is a configurable perl utility that parses arbitrary syslog 
+entries and creates a set of configurable charts (png files) with the data.  
+It is possible to output the png files to the filesystem or to a web browser
+via a cgi.
+
+The following attributes are definable:
+
+	* Chart Type 	(stacked_bar or line)
+	* Chart Time	(hourly, weekly, or monthly)
+	* X-Axis	(Summary, Value1, Value2, Sender, Recipient, Subject,
+			 or All)
+	* Y-Axis	(any event logged with md_log within mimedefang-filter)
+	* Top Number of Items to Display
+	* Chart Title
+	* Filter	
+	* X and Y Graph Sizes
+	* Graph Filename
+
+Graphdefang will also cache summary data so that it is not necessary
+to parse and recalculate old data each time new graphs are drawn.
+
+You can see the output in action at:
+
+	http://www.westover.org/~jpk/spam
+
+DOWNLOAD
+--------
+
+         http://www.bl.org/~jpk/graphdefang
+
+
+REQUIRED PERL MODULES
+---------------------
+
+File::ReadBackwards
+GD
+GD::Graph
+Date::Parse;
+Date::Format;
+MLDBM
+Storable
+
+
+INCLUDED FILES
+--------------
+
+graphdefanglib.pl  => Calculation and graphing routines.
+graphdefang.pl     => Front-end perl script.
+graphdefang-config-mimedefang-example 
+                   => Example configuration file for use with mimedefang
+graphdefang-config-spamd-example 
+                   => Example configuration file for use with spamd
+web/index.php      => Very simple php file to display the resulting png files
+web/graphdefang.cgi=> CGI that provides a functional web interface for
+                      using graphdefang.
+event/*            => Event configuration files.
+README             => This file
+TODO               => Prioritized list of next things to work on.
+COPYING            => Copy of the GPL
+
+
+INSTALLATION INSTRUCTIONS
+-------------------------
+
+1.  Install Required Perl Modules
+
+2.  Untar the graphdefang distribution into a directory from where it can run.
+
+3.  (for mimedefang only) Add md_log commands per the example mimedefang-filter
+    (included with mimedefang-2.22+).
+
+4.  Create a file, graphdefang-config, from the examples included with the
+    distribution.  Set $DATAFILE and $OUTPUT_DIR in this file.
+
+5.  Copy web/index.php to the $OUTPUT_DIR web directory.  Set $OUTPUT_DIR in 
+    this file.
+
+6.  Copy graphdefang.cgi to the $OUTPUT_DIR web directory.  Configure perl cgi
+    access for this directory and set $GRAPHDEFANGDIR in this file.
+
+7.  Run graphdefang.pl via cron.  I run mine every 15 mins.  You can also 
+    run adhoc graphdefang queries against the DB by hitting graphdefang.cgi
+    with a web browser.
+
+
+LICENSE
+-------
+GraphDefang is released under the GPL license.  A copy of the GPL is
+included in this distribution under the file, COPYING.

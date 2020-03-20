@@ -1,0 +1,66 @@
+#!/usr/bin/perl -w
+
+# Sample Rows from sympa's log: 
+
+#unsubscribe attempted per list:
+#Jun 11 06:23:24 hdnetwork sympa[18462]: SIG dailywisdom-niv from flyvet@juno.com auth requested (1 seconds)
+
+#unsubscribe per list:
+#Jun 11 06:17:15 hdnetwork sympa[18462]: SIG myutmost from faye.mcgreggor@trcoc.org accepted (1 seconds, 7195 subscribers)
+
+#unsubscribe failed per list:
+#made up 'cuz I couldn't find one:
+#Jun 10 16:01:47 hdnetwork sympa[1412]: SIG dailywisdom-niv from sean@zbanchomemortgage.com refused, auth failed
+
+#unsubscribe rejected -- not on list:
+#Jun 10 16:25:32 hdnetwork sympa[1412]: SIG todaysverse from cwells@stirlingprop.com refused, not on list
+
+
+$event{'sympa'}{'unsubscribe'} = 
+sub {
+	if ($text =~ m/^SIG (\S+) from \S+ auth requested .*$/ ) {
+
+		# get values from regular expression
+
+		# Only summarize data if it is newer than our current MaxDBUnixTime
+		if ($unixtime > $MaxDBUnixTime) {
+
+			$event = "unsubscribe-attempt";
+			$subject = "$1_$event";
+			$value1 = $1;
+
+			$FoundNewRow = 1;
+		}
+	} elsif ($text =~ m/^SIG (\S+) from \S+ accepted .* (\d+) subscribers\).*?$/ ) {
+		
+		if ($unixtime > $MaxDBUnixTime) {
+
+			$event = "unsubscribe-success";
+			$subject = "$1_$event";
+			$value1 = $1;
+			$value2 = $2;
+
+			$FoundNewRow = 1;
+		}
+	} elsif ($text =~ m/^SIG (\S+) from \S+ refused, auth failed.*?$/ ) {
+
+		if ($unixtime > $MaxDBUnixTime) {
+
+			$event = "subscribe-authfail";
+			$subject = "$1_$event";
+			$value1 = $1;
+
+			$FoundNewRow = 1;
+		}
+	} elsif ($text =~ m/^SIG (\S+) from \S+ refused, not on list.*?$/ ) {
+
+		if ($unixtime > $MaxDBUnixTime) {
+
+			$event = "unsubscribe-notonlist";
+			$subject = "$1_$event";
+			$value1 = $1;
+
+			$FoundNewRow = 1;
+		}
+	}
+};

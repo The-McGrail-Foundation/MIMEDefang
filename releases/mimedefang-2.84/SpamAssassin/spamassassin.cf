@@ -1,0 +1,78 @@
+# SpamAssassin user preferences file.
+#
+# Format:
+#
+#   required_hits n
+#		(how many hits are required to tag a mail as spam.)
+#
+#   score SYMBOLIC_TEST_NAME n
+#		(if this is omitted, 1 is used as a default score.
+#		Set the score to 0 to ignore the test.)
+#
+# # starts a comment, whitespace is not significant.
+#
+# NOTE!  In conjunction with MIMEDefang, SpamAssassin can *NOT* make any
+# changes to the message header or body.  Any SpamAssassin settings that
+# relate to changing the message will have *NO EFFECT* when used from
+# MIMEDefang.  Instead, use the various MIMEDefang Perl functions if you
+# need to alter the message.
+###########################################################################
+
+###########################################################################
+# First of all, the generally useful stuff; thresholds and the whitelist
+# of addresses which, for some reason or another, often trigger false
+# positives.
+
+required_hits		5
+
+# Whitelist and blacklist addresses are *not* patterns; they're just normal
+# strings.  one exception is that "*@isp.com" is allowed.  They should be in
+# lower-case.  You can either add multiple addrs on one line,
+# whitespace-separated, or you can use multiple lines.
+#
+# whitelist_from		friend@example.com
+
+# Add your blacklist entries in the same format...
+#
+# blacklist_from	enemy@example.net
+
+# Mail using languages used in these country codes will not be marked
+# as being possibly spam in a foreign language.
+#
+ok_locales		en
+
+# By default, the subject lines of suspected spam will be tagged.
+# This can be disabled here.
+#
+rewrite_subject 0
+
+# By default, spamassassin will include its report in the body
+# of suspected spam. Enabling this causes the report to go in the
+# headers instead. Using 'use_terse_report' for this is recommended.
+#
+# report_header 1
+
+# By default, SpamAssassin uses a fairly long report format.
+# Enabling this uses a shorter format which includes all the
+# information in the normal one, but without the superfluous
+# explanations.
+#
+# use_terse_report 0
+
+# By default, spamassassin will change the Content-type: header of
+# suspected spam to "text/plain". This is a safety feature. If you
+# prefer to leave the Content-type header alone, set this to 0.
+#
+# defang_mime 0
+
+# By default, SpamAssassin will run RBL checks.  If your ISP already
+# does this, set this to 1.
+
+skip_rbl_checks 1
+
+###########################################################################
+# Add your own customised scores for some tests below.  The default scores are
+# read from the installed "spamassassin.cf" file, but you can override them
+# here.  To see the list of tests and their default scores, go to
+# http://spamassassin.taint.org/tests.html .
+

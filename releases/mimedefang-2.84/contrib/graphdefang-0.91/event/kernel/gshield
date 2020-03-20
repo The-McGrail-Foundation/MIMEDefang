@@ -1,0 +1,21 @@
+#!/usr/bin/perl -w
+
+#Oct 27 04:02:30 hdnetwork kernel: gShield (default drop) IN=eth0 OUT= MAC=ff:ff:ff:ff:ff:ff:00:a0:c8:08:2b:2c:08:00 SRC=66.139.79.158 DST=216.201.156.32 LEN=60 TOS=0x00 PREC=0x00 TTL=52 ID=49735 DF PROTO=TCP SPT=51023 DPT=21 WINDOW=5840 RES=0x00 SYN URGP=0
+
+$event{'kernel'}{'gshield'} = 
+sub {
+	if ($text =~ m/^gShield .* SRC=(\S+) DST=(\S+) .* DPT=(\d+)/) {
+		if ($unixtime > $MaxDBUnixTime) {
+			my $src = $1;
+			my $dst = $2;
+			my $dpt = $3;
+
+			$event =  'gShield';
+			$sender = $src;
+			$recipient = $dst;
+			$value1 = $dpt;
+
+			$FoundNewRow = 1;
+		}
+	}
+};

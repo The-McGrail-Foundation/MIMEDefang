@@ -1,0 +1,16 @@
+#!/bin/sh
+# MIMEDefang filter to convert MS Word documents to HTML
+
+# No core files, thanks!
+ulimit -c 0
+
+# Don't spend more than 30s CPU time on the job
+ulimit -t 30
+
+prog="/usr/local/bin/wvHtml"
+if test -x $prog ; then
+    exec $prog FILTERINPUT > FILTEROUTPUT 2>/dev/null
+fi
+
+exit 1
+

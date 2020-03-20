@@ -1,0 +1,44 @@
+#!/usr/bin/perl -w
+
+# Sample Rows from spamd's syslog:
+
+# SPAM:
+#Oct  6 06:25:04 wbs sendmail[23124]: g96BP4C23124: from=<promo@spaceplanet.it>, size=1358, class=0, nrcpts=1, msgid=<200210051058.TZK5253@smtp.fastweb.it>, proto=ESMTP, daemon=MTA, relay=localhost.localdomain [127.0.0.1]
+#Oct  6 06:25:04 wbs spamd[11318]: connection from localhost.localdomain [127.0.0.1] at port 38273
+#Oct  6 06:25:04 wbs spamd[23129]: info: setuid to tex succeeded
+#Oct  6 06:25:04 wbs spamd[23129]: processing message <200210051058.TZK5253@smtp.fastweb.it> for tex:502, expecting 1623 bytes.
+#Oct  6 06:25:06 wbs spamd[23129]: identified spam (6.2/5.0) for tex:502 in 1.3 seconds, 1623 bytes.
+#CLEAN MESSAGE
+#Oct  6 06:40:28 wbs sendmail[23163]: g96BeSC23163: from=<root@moses.wbschool.net>, size=892, class=0, nrcpts=1, msgid=<200210061137.g96Bbv410245@moses.wbschool.net>, proto=ESMTP, daemon=MTA, relay=localhost.localdomain [127.0.0.1]
+#Oct  6 06:40:28 wbs spamd[11318]: connection from localhost.localdomain [127.0.0.1] at port 38318
+#Oct  6 06:40:28 wbs spamd[23168]: info: setuid to dottie succeeded
+#Oct  6 06:40:28 wbs spamd[23168]: processing message <200210061137.g96Bbv410245@moses.wbschool.net> for dottie:509, expecting 1167 bytes.
+#Oct  6 06:40:30 wbs spamd[23168]: clean message (-96.5/8.0) for dottie:509 in 1.5 seconds, 1167 bytes.
+
+$event{'spamd'}{'general'} = 
+sub {
+	if ($text =~ m/^processing message (.+) for (\S+):\d+.+$/) {
+
+		if ($unixtime > $MaxDBUnixTime) {
+			my $msgid = $1;
+			my $for = $2;
+
+			$spamd{$pid}{'msgid'} = $msgid;
+			$spamd{$pid}{'for'} = $for;
+			#provide a lookup for the sendmail parsing section
+			$spamd{$msgid} = $pid;
+		}
+	} elsif ($text =~ m/^(\w+ \w+) \((.+)\/.+\) for .+$/) {
+
+		if ($unixtime > $MaxDBUnixTime) {
+			my $words = $1;
+			my $score = $2;
+
+			if ($words eq 'identified spam') { $event = 'spam' }
+			elsif ($words eq 'clean message') { $event = 'non-spam' }
+
+			$spamd{$pid}{'event'} = $event;
+			$spamd{$pid}{'score'} = $score;
+		}
+	}
+};

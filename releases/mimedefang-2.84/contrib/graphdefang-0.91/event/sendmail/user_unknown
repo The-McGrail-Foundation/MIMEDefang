@@ -1,0 +1,77 @@
+#!/usr/bin/perl -w
+
+# matching against: 
+#Feb 16 18:58:13 westover sendmail[6660]: h1H0wCrt006660: <andresg@moi.net>... User unknown
+#Feb 16 18:58:13 westover sendmail[6660]: h1H0wCrt006660: <andref@moi.net>... User unknown
+#Feb 16 18:58:13 westover sendmail[6660]: h1H0wCrt006660: <andrea@moi.net>... User unknown
+#Feb 16 18:58:14 westover sendmail[6660]: h1H0wCrt006660: <andrae@moi.net>... User unknown
+#Feb 16 18:58:15 westover sendmail[6660]: h1H0wCrt006660: <andie@moi.net>... User unknown
+#Feb 16 18:58:16 westover sendmail[6660]: h1H0wCrt006660: <andreaj@moi.net>... User unknown
+#Feb 16 18:58:17 westover sendmail[6660]: h1H0wCrt006660: <anderso1@moi.net>... User unknown
+#Feb 16 18:58:18 westover sendmail[6660]: h1H0wCrt006660: <andrewb@moi.net>... User unknown
+#Feb 16 18:58:19 westover sendmail[6660]: h1H0wCrt006660: <andrew1@moi.net>... User unknown
+#Feb 16 18:58:20 westover sendmail[6660]: h1H0wCrt006660: <andre_b@moi.net>... User unknown
+#Feb 16 18:58:21 westover sendmail[6660]: h1H0wCrt006660: <andrade@moi.net>... User unknown
+#Feb 16 18:58:22 westover sendmail[6660]: h1H0wCrt006660: <andih@moi.net>... User unknown
+#Feb 16 18:58:23 westover sendmail[6660]: h1H0wCrt006660: <anderton@moi.net>... User unknown
+#Feb 16 18:58:24 westover sendmail[6660]: h1H0wCrt006660: <705aO12943L14764c67@moi.net>... User unknown
+#Feb 16 18:58:25 westover sendmail[6660]: h1H0wCrt006660: <andreasd@moi.net>... User unknown
+#Feb 16 18:58:26 westover sendmail[6660]: h1H0wCrt006660: <andream@moi.net>... User unknown
+#Feb 16 18:58:27 westover sendmail[6660]: h1H0wCrt006660: <andreah@moi.net>... User unknown
+#Feb 16 18:58:28 westover sendmail[6660]: h1H0wCrt006660: <andrea2@moi.net>... User unknown
+#Feb 16 18:58:29 westover sendmail[6660]: h1H0wCrt006660: <andreh@moi.net>... User unknown
+#Feb 16 18:58:30 westover sendmail[6660]: h1H0wCrt006660: <andreasw@moi.net>... User unknown
+#Feb 16 18:58:31 westover sendmail[6660]: h1H0wCrt006660: <andrev@moi.net>... User unknown
+#Feb 16 18:58:32 westover sendmail[6660]: h1H0wCrt006660: <andino@moi.net>... User unknown
+#Feb 16 18:58:33 westover sendmail[6660]: h1H0wCrt006660: <andresr@moi.net>... User unknown
+#Feb 16 18:58:34 westover sendmail[6660]: h1H0wCrt006660: <andreg@moi.net>... User unknown
+#Feb 16 18:58:35 westover sendmail[6660]: h1H0wCrt006660: <andreaz@moi.net>... User unknown
+#Feb 16 18:58:36 westover sendmail[6660]: h1H0wCrt006660: <andreap@moi.net>... User unknown
+#Feb 16 18:58:37 westover sendmail[6660]: h1H0wCrt006660: <andersom@moi.net>... User unknown
+#Feb 16 18:58:38 westover sendmail[6660]: h1H0wCrt006660: <andrejs@moi.net>... User unknown
+#Feb 16 18:58:38 westover sendmail[6660]: h1H0wCrt006660: from=<jennyhorseface@yahoo.co.uk>, size=0, class=0, nrcpts=0, proto=ESMTP, daemon=MTA, relay=cae168-215-231.sc.rr.com [24.168.215.231]
+
+$event{'sendmail'}{'user_unknown'} = 
+sub {
+	if ($text =~ m/^(\S+): from=(.+), size=.+ nrcpts=0, proto=.+ relay=(.*)$/) {
+
+		# Create a temp data hash to store the from and relay info for
+		# user unknown attempts if there were no valid recipients in the 
+		# entire message (nrcpts=0).  
+
+                if ($unixtime > ($MaxDBUnixTime)) {
+			my $id = $1;
+                        my $from = $2;
+                        my $relay = $3;
+
+			$user_unknown{$id}{'from'} = $2;
+			$user_unknown{$id}{'relay'} = $3;
+
+                }
+
+        } elsif ($text =~ m/^(\S+): (\<\S+\>)\.\.\. User unknown$/) {
+
+		if ($unixtime > $MaxDBUnixTime) {
+			$event = 'user_unknown';
+			my $id = $1;
+			$recipient = $2;
+
+			# extract the domain from the unknown user's email address
+			my $domain;
+			if ($recipient =~ m/<.*@(.*)>/) {
+				$domain = $1;
+			}
+			$value1 = "none";
+			$value1 = $domain if defined($domain);
+
+			# extract the 'from' and 'relay' from the temp user_unknown hash
+			$sender = "unknown";
+			$sender = $user_unknown{$id}{'from'} if (defined($user_unknown{$id}{'from'}));
+
+			$value2 = "none";
+			$value2 = $user_unknown{$id}{'relay'} if (defined($user_unknown{$id}{'relay'}));
+
+			$FoundNewRow = 1;
+		}
+	}
+};

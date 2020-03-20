@@ -1,0 +1,47 @@
+Running Sophie with MIMEDefang
+==============================
+
+Sophie (http://www.vanja.com/tools/sophie/) is a virus-scanning daemon that
+uses libsavi from Sophos AntiVirus (http://www.sophos.com/).
+
+To use Sophie with MD, you should use a configure line like this one when
+building Sophie:
+
+./configure \
+ --with-socketfile=/var/spool/MIMEDefang/sophie \
+ --with-pidfile=/var/spool/MIMEDefang/sophie.pid \
+ --with-user=defang \
+ --with-group=defang
+
+This would tell Sophie to run as the same user that MD runs as and to put the
+socket and pid file in MD's spool directory.  If MD doesn't run as defang on
+your system, replace that with whatever user and group you use.  If your
+spool directory is not /var/spool/MIMEDefang, replace that above with
+whatever directory you use.
+
+Make sure you put the compiled sophie binary somewhere in your PATH.
+/usr/local/sbin is a commonly used location.
+
+If you're adding Sophie to an already installed MD, install Sophie first
+then go into the MD source directory.  Run 'make distclean' before you
+reinstall MIMEDefang, otherwise you'll be stuck with what ./configure
+saw the last time you ran it.
+
+In your startup scripts, sophie should start before MIMEDefang.
+
+See the mimedefang-filter man page for more information about setting up
+Sophie in your filter.  Specifically, look for $SophieSock,
+message_contains_virus_sophie(), and entity_contains_virus_sophie()
+
+MD works with Sophie 1.x and 3.x  If you use 3.x, the default sophie.cfg
+with these changes should be enough:
+
+pidfile: /var/spool/MIMEDefang/sophie.pid
+socketfile: /var/spool/MIMEDefang/sophie
+user: defang
+group: defang
+
+Make sure show_virusname is set to yes or MD will not be able to set the
+name of detected viruses in the $VirusName variable.  If error_strings is
+set to yes, MD will be able to report specific error messages returned by
+Sophie.
