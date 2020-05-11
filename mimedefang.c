@@ -15,7 +15,7 @@
 * libmilter/README in the Sendmail 8.11 distribution.
 ***********************************************************************/
 
-#define _BSD_SOURCE 1
+#define _DEFAULT_SOURCE 1
 
 #ifdef __linux__
 /* On Linux, we need this defined to get fdopen.  On BSD, if we define
