@@ -35,6 +35,15 @@ if test "$ac_have_socklen_t" = "yes" ; then
    AC_DEFINE(HAVE_SOCKLEN_T)
 fi
 
+AC_MSG_CHECKING(whether fPIC compiler option is accepted)
+OLD_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -fPIC -Werror"
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdio.h>]], [[return 0;]])],
+    [AC_MSG_RESULT(yes)
+     CFLAGS="$OLD_CFLAGS -fPIC"],
+    [AC_MSG_RESULT(no)
+     CFLAGS="$OLD_CFLAGS"])
+
 for thing in prefix siteprefix vendorprefix installarchlib installprivlib installbin installman1dir installman3dir installscript installsitearch installsitelib; do
     AC_MSG_CHECKING([for Perl installation variable $thing])
     val=`$PERL -V:$thing | sed -e "s/^.*='//" -e "s/';$//"`
