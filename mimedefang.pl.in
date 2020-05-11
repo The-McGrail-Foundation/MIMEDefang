@@ -7371,7 +7371,7 @@ sub get_smtp_return_code {
     my($sock, $recip, $server) = @_;
     my($line, $code, $text, $retval, $dsn);
     while (defined ($line = $sock->getline())) {
-	# Chew up all white space, including CR
+	# Chew up all trailing white space, including CR
 	$line =~ s/\s+$//;
 	if (($line =~ /^\d\d\d$/) or ($line =~ /^\d\d\d\s/)) {
 	    $line =~ /^(\d\d\d)\s*(.*)$/;
@@ -7413,6 +7413,56 @@ sub get_smtp_return_code {
 }
 
 #***********************************************************************
+# %PROCEDURE: get_smtp_extensions
+# %ARGUMENTS:
+#  sock -- a socket connected to an SMTP server
+#  server -- the server we're querying
+# %RETURNS:
+#  A four-element list:(retval, code, dsn, @exts)
+#  where code is a 3-digit SMTP code.
+#  and @exts is a hash of EXTNAME->EXTOPTS
+#  Retval is 'CONTINUE', 'TEMPFAIL' or 'REJECT'.
+# %DESCRIPTION:
+#  Checks SMTP server's supported extensions. 
+#  Expects EHLO to have been sent already (artifact of cribbing get_smtp_return_code)
+#***********************************************************************
+sub get_smtp_extensions {
+    my($sock, $server) = @_;
+    my($ext, $msg, $delim, $line, $code, $text, $retval, $dsn);
+    my %exts;
+    my $LineNum=0;
+    $delim='-';
+    while ( ($delim eq '-' ) && (defined ($line = $sock->getline())))  {
+      # Chew up all trailing white space, including CR
+      $line =~ s/\s+$//;
+      # Line can be:
+      #   '[45]xy $ERROR'           Failure. Don't really care why.       
+      #   '250-hostname'            Initial line in multi-line response  
+      #   '250 hostname'            ONLY line in successful response  
+      #   '250-$EXTNAME $EXTOPTS'   Advertisement of extension with options
+      #   '250 $EXTNAME $EXTOPTS'   Advertisement of extension with options (Final line)
+      $line =~ m/([245][0-9][0-9])([- ])([^ ]+) *(.*)/  or return ('TEMPFAIL', "451", "4.3.0", "$server said: $line");
+      $code=$1;
+      $delim=$2;
+      $ext=$3;
+      $text=$4;
+      md_syslog('info',"get_smtp_extensions: line $LineNum: code=$code, delim=$delim, ext=$ext, text=$text"); 
+      if ( $LineNum == 0 ) {
+        $exts{'hostname'} = $3;
+        $LineNum++;
+        next;
+      }  
+      @exts{$ext} = $text;
+      $LineNum++;
+    }
+
+    $code =~ m/2../ and return ('CONTINUE', "$code", "2.5.0", %exts );
+    $code =~ m/4../ and return ('TEMPFAIL', "$code", "4.0.0", %exts );
+    $code =~ m/5../ and return ('PERMFAIL', "$code", "5.0.0", %exts );
+}
+
+
+#***********************************************************************
 # %PROCEDURE: md_check_against_smtp_server
 # %ARGUMENTS:
 #  sender -- sender e-mail address
@@ -7436,11 +7486,11 @@ sub md_check_against_smtp_server {
 
     # Add angle-brackets if needed
     if (!($sender =~ /^<.*>$/)) {
-	$sender = "<$sender>";
+      $sender = "<$sender>";
     }
 
     if (!($recip =~ /^<.*>$/)) {
-	$recip = "<$recip>";
+      $recip = "<$recip>";
     }
 
     my $sock = IO::Socket::INET->new(PeerAddr => $server,
@@ -7448,17 +7498,17 @@ sub md_check_against_smtp_server {
 				     Proto    => 'tcp',
 				     Timeout  => 15);
     if (!defined($sock)) {
-	return ('TEMPFAIL', "Could not connect to other SMTP server $server: $!");
+      return ('TEMPFAIL', "Could not connect to other SMTP server $server: $!");
     }
 
     ($retval, $code, $dsn, $text) = get_smtp_return_code($sock, $recip, $server);
     if ($retval ne 'CONTINUE') {
-	$sock->print("QUIT\r\n");
-	$sock->flush();
-	# Swallow return value
-	get_smtp_return_code($sock, $recip, $server);
-	$sock->close();
-	return ($retval, $text, $code, $dsn);
+      $sock->print("QUIT\r\n");
+      $sock->flush();
+      # Swallow return value
+      get_smtp_return_code($sock, $recip, $server);
+      $sock->close();
+      return ($retval, $text, $code, $dsn);
     }
 
     # If the banner contains our host name, there's a loop!
@@ -7466,54 +7516,90 @@ sub md_check_against_smtp_server {
     # because presumably that indicates the caller knows
     # what he or she is doing.
     if ($server ne '127.0.0.1' && $server ne '::1') {
-	    my $host_expr = quotemeta(get_host_name());
-	    if ($text =~ /^$host_expr\b/) {
-		    $sock->print("QUIT\r\n");
-		    $sock->flush();
-		    # Swallow return value
-		    get_smtp_return_code($sock, $recip, $server);
-		    $sock->close();
-		    return('REJECT', "Verification server loop!  Trying to verify $recip against myself!",
-			   554, '5.4.6');
-	    }
+      my $host_expr = quotemeta(get_host_name());
+      if ($text =~ /^$host_expr\b/) {
+        $sock->print("QUIT\r\n");
+        $sock->flush();
+        # Swallow return value
+        get_smtp_return_code($sock, $recip, $server);
+        $sock->close();
+        return('REJECT', "Verification server loop!  Trying to verify $recip against myself!",
+        554, '5.4.6');
+      }
     }
 
-    $sock->print("HELO $helo\r\n");
+    $sock->print("EHLO $helo\r\n");
     $sock->flush();
-
-    ($retval, $code, $dsn, $text) = get_smtp_return_code($sock, $recip, $server);
+    my %exts;
+    my $ext;
+    ($retval, $code, $dsn, %exts) = get_smtp_extensions($sock, $recip, $server);
     if ($retval ne 'CONTINUE') {
-	$sock->print("QUIT\r\n");
-	$sock->flush();
-	# Swallow return value
-	get_smtp_return_code($sock, $recip, $server);
-	$sock->close();
-	return ($retval, $text, $code, $dsn);
+      $sock->print("HELO $helo\r\n");
+    } else {
+      foreach $ext ( keys %exts ) {
+        md_syslog('info',"md_check_against_smtp_server extension: $ext $exts{$ext}");
+      }
+      if (exists $exts{'STARTTLS'}) {
+        # send STARTTLS command and read response
+        $sock->print("STARTTLS\r\n");
+        ($retval, $code, $dsn, $text) = get_smtp_return_code($sock, $recip, $server);
+        if ($retval ne 'CONTINUE') {
+          $sock->print("QUIT\r\n");
+          $sock->flush();
+          # Swallow return value
+          get_smtp_return_code($sock, $recip, $server);
+          $sock->close();
+          return ($retval, $text, $code, $dsn);
+        }
+        # if response was successful we can upgrade the socket to SSL now:
+        if ( IO::Socket::SSL->start_SSL($sock,
+          # explicitly set hostname we should use for SNI
+          SSL_hostname => "$server" ) ) {
+          md_syslog('info',"md_check_against_smtp_server: start_SSL succeeded!");
+          # send inside EHLO
+          $sock->print("EHLO $helo\r\n");
+          } else {
+          #back off from using STARTTLS
+          md_syslog('info',"md_check_against_smtp_server: $server offers STARTTLS but fails with error $IO::Socket::SSL::SSL_ERROR. Falling back to plaintext...");
+          $sock->print("EHLO $helo\r\n");
+       }
     }
-
-    $sock->print("MAIL FROM:$sender\r\n");
-    $sock->flush();
-
-    ($retval, $code, $dsn, $text) = get_smtp_return_code($sock, $recip, $server);
-    if ($retval ne 'CONTINUE') {
-	$sock->print("QUIT\r\n");
-	$sock->flush();
-	# Swallow return value
-	get_smtp_return_code($sock, $recip, $server);
-	$sock->close();
-	return ($retval, $text, $code, $dsn);
-    }
-
-    $sock->print("RCPT TO:$recip\r\n");
-    $sock->flush();
-
-    ($retval, $code, $dsn, $text) = get_smtp_return_code($sock, $recip, $server);
+  }
+  # At this point we've either sent a fallback HELO, fallback EHLO, or internal EHLO.
+  # so, get the code...
+  ($retval, $code, $dsn, $text) = get_smtp_return_code($sock, $recip, $server);
+  if ($retval ne 'CONTINUE') {
     $sock->print("QUIT\r\n");
     $sock->flush();
     # Swallow return value
     get_smtp_return_code($sock, $recip, $server);
     $sock->close();
     return ($retval, $text, $code, $dsn);
+  }
+
+  $sock->print("MAIL FROM:$sender\r\n");
+  $sock->flush();
+
+  ($retval, $code, $dsn, $text) = get_smtp_return_code($sock, $recip, $server);
+  if ($retval ne 'CONTINUE') {
+    $sock->print("QUIT\r\n");
+    $sock->flush();
+    # Swallow return value
+    get_smtp_return_code($sock, $recip, $server);
+    $sock->close();
+    return ($retval, $text, $code, $dsn);
+  }
+
+  $sock->print("RCPT TO:$recip\r\n");
+  $sock->flush();
+
+  ($retval, $code, $dsn, $text) = get_smtp_return_code($sock, $recip, $server);
+  $sock->print("QUIT\r\n");
+  $sock->flush();
+  # Swallow return value
+  get_smtp_return_code($sock, $recip, $server);
+  $sock->close();
+  return ($retval, $text, $code, $dsn);
 }
 
 exit(&main) unless caller;
