@@ -717,6 +717,13 @@ match the regular expression.  Call it like this:
 You should \fInot\fR call \fBre_match_in_zip_directory\fR unless you
 know that the entity is a zip file attachment.
 
+.PP
+Another function called \fBre_match_in_rar_directory\fR will look inside
+rar files and return true if any of the file names inside the rar archive
+match the regular expression.
+The function is very similar to \fBre_match_in_zip_directory\fR but the unrar
+binary is required.
+
 .SH GLOBAL VARIABLES SET BY MIMEDEFANG.PL
 
 The following global variables are set by \fBmimedefang.pl\fR and are
