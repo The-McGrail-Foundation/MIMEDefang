@@ -2,6 +2,11 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2020-06-02 Bill Cole <bill@scconsult.com>
+
+    * mimedefang.pl: Added TLS support to md_check_against_smtp_server
+
+
 2018-03-21 Dianne Skoll <dfs@roaringpenguin.com>
 
 	* MIMEDefang 2.84 RELEASED

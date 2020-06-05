@@ -7459,10 +7459,11 @@ sub get_smtp_return_code {
 #  sock -- a socket connected to an SMTP server
 #  server -- the server we're querying
 # %RETURNS:
-#  A four-element list:(retval, code, dsn, @exts)
-#  where code is a 3-digit SMTP code.
-#  and @exts is a hash of EXTNAME->EXTOPTS
-#  Retval is 'CONTINUE', 'TEMPFAIL' or 'REJECT'.
+#  A four-element list:(retval, code, dsn, exts)
+#  retval is 'CONTINUE', 'TEMPFAIL' or 'REJECT'.
+#  code is a 3-digit SMTP code.
+#  dsn is an extended SMTP status code
+#  exts is a hash of EXTNAME->EXTOPTS
 # %DESCRIPTION:
 #  Checks SMTP server's supported extensions. 
 #  Expects EHLO to have been sent already (artifact of cribbing get_smtp_return_code)
@@ -7487,7 +7488,7 @@ sub get_smtp_extensions {
       $delim=$2;
       $ext=$3;
       $text=$4;
-      md_syslog('info',"get_smtp_extensions: line $LineNum: code=$code, delim=$delim, ext=$ext, text=$text"); 
+      md_syslog('debug',"get_smtp_extensions: line $LineNum: code=$code, delim=$delim, ext=$ext, text=$text"); 
       if ( $LineNum == 0 ) {
         $exts{'hostname'} = $3;
         $LineNum++;
@@ -7499,7 +7500,7 @@ sub get_smtp_extensions {
 
     $code =~ m/2../ and return ('CONTINUE', "$code", "2.5.0", %exts );
     $code =~ m/4../ and return ('TEMPFAIL', "$code", "4.0.0", %exts );
-    $code =~ m/5../ and return ('PERMFAIL', "$code", "5.0.0", %exts );
+    $code =~ m/5../ and return ('REJECT', "$code", "5.0.0", %exts );
 }
 
 
@@ -7578,7 +7579,7 @@ sub md_check_against_smtp_server {
       $sock->print("HELO $helo\r\n");
     } else {
       foreach $ext ( keys %exts ) {
-        md_syslog('info',"md_check_against_smtp_server extension: $ext $exts{$ext}");
+        md_syslog('debug',"md_check_against_smtp_server extension: $ext $exts{$ext}");
       }
       if (exists $exts{'STARTTLS'}) {
         # send STARTTLS command and read response
@@ -7596,12 +7597,13 @@ sub md_check_against_smtp_server {
         if ( IO::Socket::SSL->start_SSL($sock,
           # explicitly set hostname we should use for SNI
           SSL_hostname => "$server" ) ) {
-          md_syslog('info',"md_check_against_smtp_server: start_SSL succeeded!");
+          md_syslog('debug',"md_check_against_smtp_server: start_SSL succeeded!");
           # send inside EHLO
           $sock->print("EHLO $helo\r\n");
           } else {
           #back off from using STARTTLS
-          md_syslog('info',"md_check_against_smtp_server: $server offers STARTTLS but fails with error $IO::Socket::SSL::SSL_ERROR. Falling back to plaintext...");
+          no warnings 'once';
+          md_syslog('debug',"md_check_against_smtp_server: $server offers STARTTLS but fails with error $IO::Socket::SSL::SSL_ERROR. Falling back to plaintext...");
           $sock->print("EHLO $helo\r\n");
        }
     }

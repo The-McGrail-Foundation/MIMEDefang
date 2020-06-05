@@ -477,6 +477,10 @@ in a return value of ("TEMPFAIL", $msg).
 The optional argument $port specifies the TCP port to connect to.  If
 it is not supplied, then the default SMTP port of 25 is used.
 
+If the server offers STARTTLS support, TLS step-up is attempted. If TLS 
+step-up fails, the check will fall-back to using clear text and log the 
+failure
+
 .PP
 Suppose the machine \fBfilter.domain.tld\fR is filtering mail destined
 for the real mail server \fBmail.domain.tld\fR.  You could have a
