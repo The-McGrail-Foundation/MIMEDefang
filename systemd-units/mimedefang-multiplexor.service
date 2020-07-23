@@ -22,6 +22,7 @@ ExecStart=/bin/sh -c 'HOME=${SPOOLDIR:=/var/spool/MIMEDefang} \
     `[ -n "$FILTER" ] && echo "-f $FILTER"` \
     `[ -n "$SYSLOG_FACILITY" ] && echo "-S $SYSLOG_FACILITY"` \
     `[ -n "$SUBFILTER" ] && echo "-F $SUBFILTER"` \
+    `[ -n "$MX_MAX_LIFETIME" ] && echo "-V $MX_MAX_LIFETIME"` \
     `[ -n "$MX_MINIMUM" ] && echo "-m $MX_MINIMUM"` \
     `[ -n "$MX_MAXIMUM" ] && echo "-x $MX_MAXIMUM"` \
     `[ -n "$MX_MAP_SOCKET" ] && echo "-N $MX_MAP_SOCKET"` \
