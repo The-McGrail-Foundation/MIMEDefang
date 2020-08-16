@@ -32,7 +32,7 @@ AC_TRY_COMPILE([
 ], [socklen_t x;], ac_have_socklen_t=yes, ac_have_socklen_t=no)
 AC_MSG_RESULT($ac_have_socklen_t)
 if test "$ac_have_socklen_t" = "yes" ; then
-   AC_DEFINE(HAVE_SOCKLEN_T)
+   AC_DEFINE(HAVE_SOCKLEN_T,[],["Whether we have the variable type socklen_t"])
 fi
 
 AC_MSG_CHECKING(whether fPIC compiler option is accepted)
@@ -266,7 +266,7 @@ AC_TRY_COMPILE([
 AC_MSG_RESULT($ac_uint32_t_defined)
 
 if test "$ac_uint32_t_defined" = "yes" ; then
-   AC_DEFINE(HAVE_UINT32_T)
+   AC_DEFINE(HAVE_UINT32_T,[],["whether uint32_t is defined"])
 fi
 
 dnl Check if sys/types.h defines uint32_t
@@ -277,7 +277,7 @@ AC_TRY_COMPILE([
 AC_MSG_RESULT($ac_uint32_t_defined)
 
 if test "$ac_uint32_t_defined" = "yes" ; then
-   AC_DEFINE(HAVE_UINT32_T)
+   AC_DEFINE(HAVE_UINT32_T,[],["whether uint32_t is defined"])
 fi
 
 dnl sig_atomic_t
@@ -287,7 +287,7 @@ AC_TRY_COMPILE([
 ], [sig_atomic_t foo;], ac_have_sig_atomic_t=yes, ac_have_sig_atomic_t=no)
 AC_MSG_RESULT($ac_have_sig_atomic_t)
 if test "$ac_have_sig_atomic_t" = "yes" ; then
-   AC_DEFINE(HAVE_SIG_ATOMIC_T)
+   AC_DEFINE(HAVE_SIG_ATOMIC_T,[],["Whether we have the atomic_t variable type "])
 fi
 
 dnl Check if compiler allows "-pthread" option, but only if
@@ -625,7 +625,7 @@ fi
 dnl rm
 AC_PATH_PROG(RM, rm, no, $PATH)
 
-AC_DEFUN(MD_MILTER_SFIO,[
+AC_DEFUN([MD_MILTER_SFIO],[
     AC_MSG_CHECKING([whether libmilter requires -lsfio])
     RESULT=`$NM $LIBMILTER 2>/dev/null | grep sfsprintf; $NM -D $LIBMILTERSO 2>/dev/null | grep sfsprintf`
     if test -z "$RESULT" ; then
@@ -636,7 +636,7 @@ AC_DEFUN(MD_MILTER_SFIO,[
     fi
 ])
 
-AC_DEFUN(MD_SM_LDAP,[
+AC_DEFUN([MD_SM_LDAP],[
     AC_MSG_CHECKING([whether libsm requires -lldap])
     RESULT=`$NM $LIBSM | grep ldap_`
     if test -z "$RESULT" ; then
@@ -647,7 +647,7 @@ AC_DEFUN(MD_SM_LDAP,[
     fi
 ])
 
-AC_DEFUN(MD_MILTER_LDAP,[
+AC_DEFUN([MD_MILTER_LDAP],[
     AC_MSG_CHECKING([whether libmilter requires -lldap])
     RESULT=`$NM $LIBMILTER 2>/dev/null | grep ldap_; $NM -D $LIBMILTERSO 2>/dev/null | grep ldap_`
     if test -z "$RESULT" ; then
@@ -658,7 +658,7 @@ AC_DEFUN(MD_MILTER_LDAP,[
     fi
 ])
 
-AC_DEFUN(MD_MILTER_SM,[
+AC_DEFUN([MD_MILTER_SM],[
     OLD_LIBS="$LIBS"
     LIBS="$LIBS -lmilter"
     AC_MSG_CHECKING([whether libmilter requires -lsm])

@@ -3390,7 +3390,8 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_have_socklen_t" >&5
 $as_echo "$ac_have_socklen_t" >&6; }
 if test "$ac_have_socklen_t" = "yes" ; then
-   $as_echo "#define HAVE_SOCKLEN_T 1" >>confdefs.h
+
+$as_echo "#define HAVE_SOCKLEN_T /**/" >>confdefs.h
 
 fi
 
@@ -4228,7 +4229,8 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
 $as_echo "$ac_uint32_t_defined" >&6; }
 
 if test "$ac_uint32_t_defined" = "yes" ; then
-   $as_echo "#define HAVE_UINT32_T 1" >>confdefs.h
+
+$as_echo "#define HAVE_UINT32_T /**/" >>confdefs.h
 
 fi
 
@@ -4257,7 +4259,8 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
 $as_echo "$ac_uint32_t_defined" >&6; }
 
 if test "$ac_uint32_t_defined" = "yes" ; then
-   $as_echo "#define HAVE_UINT32_T 1" >>confdefs.h
+
+$as_echo "#define HAVE_UINT32_T /**/" >>confdefs.h
 
 fi
 
@@ -4285,7 +4288,8 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_have_sig_atomic_t" >&5
 $as_echo "$ac_have_sig_atomic_t" >&6; }
 if test "$ac_have_sig_atomic_t" = "yes" ; then
-   $as_echo "#define HAVE_SIG_ATOMIC_T 1" >>confdefs.h
+
+$as_echo "#define HAVE_SIG_ATOMIC_T /**/" >>confdefs.h
 
 fi
 

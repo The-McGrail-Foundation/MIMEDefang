@@ -1,66 +1,110 @@
-/* config.h.in.  Generated automatically from configure.in by autoheader.  */
+/* config.h.in.  Generated from configure.in by autoheader.  */
 
-/* Define if you have the <getopt.h> header file.  */
+/* Define to 1 if you have the <getopt.h> header file. */
 #undef HAVE_GETOPT_H
 
-/* Define if you have the <stdint.h> header file.  */
-#undef HAVE_STDINT_H
-
-/* Define if you have the <unistd.h> header file.  */
-#undef HAVE_UNISTD_H
-
-/* Define if socklen_t is defined in <sys/socket.h> */
-#undef HAVE_SOCKLEN_T
-
-/* Define if uint32_t is defined in <stdint.h> */
-#undef HAVE_UINT32_T
-
-/* Define if we have the initgroups function */
-#undef HAVE_INITGROUPS
-
-/* Define if we have the getpwnam_r function */
+/* Define to 1 if you have the `getpwnam_r' function. */
 #undef HAVE_GETPWNAM_R
 
-/* Define if we have the setrlimit function */
-#undef HAVE_SETRLIMIT
-
-/* Define if we have the snprintf function */
-#undef HAVE_SNPRINTF
-
-/* Define if we have the inet_ntop function */
+/* Define to 1 if you have the `inet_ntop' function. */
 #undef HAVE_INET_NTOP
 
-/* Define if we have the vsnprintf function */
-#undef HAVE_VSNPRINTF
+/* Define to 1 if you have the `initgroups' function. */
+#undef HAVE_INITGROUPS
 
-/* Define if we have the readdir_r function */
-#undef HAVE_READDIR_R
+/* Define to 1 if you have the <inttypes.h> header file. */
+#undef HAVE_INTTYPES_H
 
-/* Define if we have the sig_atomic_t type */
-#undef HAVE_SIG_ATOMIC_T
+/* Define to 1 if you have the `nsl' library (-lnsl). */
+#undef HAVE_LIBNSL
 
-/* Define if we have the pathconf function */
+/* Define to 1 if you have the `pthread' library (-lpthread). */
+#undef HAVE_LIBPTHREAD
+
+/* Define to 1 if you have the `resolv' library (-lresolv). */
+#undef HAVE_LIBRESOLV
+
+/* Define to 1 if you have the `socket' library (-lsocket). */
+#undef HAVE_LIBSOCKET
+
+/* Define to 1 if the system has the type `long long int'. */
+#undef HAVE_LONG_LONG_INT
+
+/* Define to 1 if you have the <memory.h> header file. */
+#undef HAVE_MEMORY_H
+
+/* Define to 1 if you have the `pathconf' function. */
 #undef HAVE_PATHCONF
 
-/* Define if we have the wait3 function */
+/* Define to 1 if you have the <poll.h> header file. */
+#undef HAVE_POLL_H
+
+/* Define to 1 if you have the `readdir_r' function. */
+#undef HAVE_READDIR_R
+
+/* Define to 1 if you have the `setrlimit' function. */
+#undef HAVE_SETRLIMIT
+
+/* "Whether we have the atomic_t variable type " */
+#undef HAVE_SIG_ATOMIC_T
+
+/* Define to 1 if you have the `snprintf' function. */
+#undef HAVE_SNPRINTF
+
+/* "Whether we have the variable type socklen_t" */
+#undef HAVE_SOCKLEN_T
+
+/* Define to 1 if you have the <stdint.h> header file. */
+#undef HAVE_STDINT_H
+
+/* Define to 1 if you have the <stdlib.h> header file. */
+#undef HAVE_STDLIB_H
+
+/* Define to 1 if you have the <strings.h> header file. */
+#undef HAVE_STRINGS_H
+
+/* Define to 1 if you have the <string.h> header file. */
+#undef HAVE_STRING_H
+
+/* Define to 1 if you have the <sys/stat.h> header file. */
+#undef HAVE_SYS_STAT_H
+
+/* Define to 1 if you have the <sys/types.h> header file. */
+#undef HAVE_SYS_TYPES_H
+
+/* "whether uint32_t is defined" */
+#undef HAVE_UINT32_T
+
+/* Define to 1 if you have the <unistd.h> header file. */
+#undef HAVE_UNISTD_H
+
+/* Define to 1 if the system has the type `unsigned long long int'. */
+#undef HAVE_UNSIGNED_LONG_LONG_INT
+
+/* Define to 1 if you have the `vsnprintf' function. */
+#undef HAVE_VSNPRINTF
+
+/* Define to 1 if you have the `wait3' system call. Deprecated, you should no
+   longer depend upon `wait3'. */
 #undef HAVE_WAIT3
 
-/* Required on Compaq Tru-64 UNIX */
-#ifndef __P
-#define __P(X) X
-#endif
+/* Define to the address where bug reports for this package should be sent. */
+#undef PACKAGE_BUGREPORT
 
-#ifndef HAVE_VSNPRINTF
-#define vsnprintf sm_vsnprintf
-#endif
+/* Define to the full name of this package. */
+#undef PACKAGE_NAME
 
-#ifndef HAVE_SNPRINTF
-#define snprintf sm_snprintf
-#endif
+/* Define to the full name and version of this package. */
+#undef PACKAGE_STRING
 
-/* If we do NOT have readdir_r, we have to exec rm for cleanup */
-#ifndef EXEC_RM_FOR_CLEANUP
-#ifndef HAVE_READDIR_R
-#define EXEC_RM_FOR_CLEANUP 1
-#endif
-#endif
+/* Define to the one symbol short name of this package. */
+#undef PACKAGE_TARNAME
+
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
+
+/* Define to the version of this package. */
+#undef PACKAGE_VERSION
+
+/* Define to 1 if you have the ANSI C header files. */
+#undef STDC_HEADERS
