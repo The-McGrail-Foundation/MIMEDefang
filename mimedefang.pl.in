@@ -2469,6 +2469,47 @@ sub re_match_ext {
 }
 
 #***********************************************************************
+# %PROCEDURE: re_match_in_rar_directory
+# %ARGUMENTS:
+#  fname -- name of RAR file
+#  regexp -- a regular expression
+# %RETURNS:
+#  1 if the EXTENSION part of any file in the zip archive matches regexp
+#  Matching is case-insensitive.
+# %DESCRIPTION:
+#  A helper function for filter.
+#***********************************************************************
+sub re_match_in_rar_directory {
+    my($rarname, $regexp) = @_;
+    my ($rf, $beginmark, $file);
+
+    my @unrar_args = ("unrar", "l", "-c-", "-p-", "-idcdp", $rarname);
+
+    unless ($Features{"unrar"}) {
+	md_syslog('err', "Attempted to use re_match_in_rar_directory, but unrar binary is not installed.");
+	return 0;
+    }
+
+    if ( -f $rarname ) {
+      open(UNRAR_PIPE, "-|", @unrar_args)
+                        || die "can't open @unrar_args|: $!";
+      while(<UNRAR_PIPE>) {
+        $rf = $_;
+        if ( $beginmark and ( $rf !~ /^\-\-\-/ ) ) {
+          $rf =~ /([12]\d{3}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]))\s(\d+\:\d+)\s+(.*)/;
+          $file = $5;
+	  return 1 if ((defined $file) and ($file =~ /$regexp/i));
+        }
+        last if ( $beginmark and ( $rf !~ /^\-\-\-/ ) );
+        $beginmark = 1 if ( $rf =~ /^\-\-\-/ );
+      }
+      close(UNRAR_PIPE);
+    }
+
+    return 0;
+}
+
+#***********************************************************************
 # %PROCEDURE: re_match_in_zip_directory
 # %ARGUMENTS:
 #  fname -- name of ZIP file
