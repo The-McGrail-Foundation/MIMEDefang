@@ -116,6 +116,7 @@ $Features{'Virus:AVP5'}      = ('@AVP5@' ne '/bin/false' ? '@AVP5@' : 0);
 $Features{'Virus:KAVSCANNER'} = ('@KAVSCANNER@' ne '/bin/false' ? '@KAVSCANNER@' : 0);
 $Features{'Virus:CLAMAV'}   = ('@CLAMSCAN@' ne '/bin/false' ? '@CLAMSCAN@' : 0);
 $Features{'Virus:CLAMD'}    = ('@CLAMD@' ne '/bin/false' ? '@CLAMD@' : 0);
+$Features{'Virus:CLAMDSCAN'} = ('/bin/false' ne '/bin/false' ? '/bin/false' : 0);
 $Features{'Virus:FPROT'}    = ('@FPROT@' ne '/bin/false' ? '@FPROT@' : 0);
 $Features{'Virus:FPSCAN'}    = ('@FPSCAN@' ne '/bin/false' ? '@FPSCAN@' : 0);
 $Features{'Virus:FSAV'}     = ('@FSAV@' ne '/bin/false' ? '@FSAV@' : 0);
@@ -139,6 +140,7 @@ $Features{'Path:SENDMAIL'}  = '@SENDMAILPROG@';
 $Features{'Path:QUARANTINEDIR'} = '@QDIR@';
 $Features{'Path:SPOOLDIR'}  = '@SPOOLDIR@';
 $Features{'Path:CONFDIR'}   = '@CONFDIR_EVAL@';
+$Features{'Path:CLAMDCONF'} = '@CONFDIR_EVAL@/MD-clamdscan.conf';
 
 # Not in server mode by default
 $ServerMode = 0;
@@ -247,7 +249,7 @@ sub in_message_context {
 # %ARGUMENTS:
 #  name -- a string to syslog if we are in filter wrapup
 # %RETURNS:
-#  1 if we are not in filter wrapup; 0 otherwise. 
+#  1 if we are not in filter wrapup; 0 otherwise.
 #***********************************************************************
 sub in_filter_wrapup {
     my($name) = @_;
@@ -756,7 +758,7 @@ sub fatal {
 #***********************************************************************
 sub synthesize_received_header {
     my($hdr);
-    
+
     my($hn) = $SendmailMacros{"if_name"};
 
     my $strdate = rfc2822_date();
@@ -2380,7 +2382,7 @@ sub stream_by_domain {
     return 0;
 }
 
-=pod 
+=pod
 
 =head2  takeStabAtFilename ( $entity )
 
@@ -3952,6 +3954,67 @@ sub interpret_clamav_code {
 
     # other codes
     return ($code, 'swerr', 'tempfail');
+}
+
+#***********************************************************************
+# %PROCEDURE: entity_contains_virus_clamdscan
+# %ARGUMENTS:
+#  entity -- a MIME entity
+# %RETURNS:
+#  1 if entity contains a virus as reported by clamdscan
+# %DESCRIPTION:
+#  Runs the clamdscan program on the entity.
+#***********************************************************************
+sub entity_contains_virus_clamdscan {
+    unless ($Features{'Virus:CLAMDSCAN'}) {
+	md_syslog('err', "clamav not installed on this system");
+	return (wantarray ? (1, 'not-installed', 'tempfail') : 1);
+    }
+
+    my($entity) = @_;
+    my($body) = $entity->bodyhandle;
+
+    if (!defined($body)) {
+	return (wantarray ? (0, 'ok', 'ok') : 0);
+    }
+
+    # Get filename
+    my($path) = $body->path;
+    if (!defined($path)) {
+	return (wantarray ? (999, 'swerr', 'tempfail') : 1);
+    }
+
+    # Run clamdscan
+    my($code, $category, $action) =
+	run_virus_scanner($Features{'Virus:CLAMDSCAN'} . " -c $Features{'Path:CLAMDCONF'} --no-summary --infected --fdpass --stream $path 2>&1");
+    if ($action ne 'proceed') {
+	return (wantarray ? ($code, $category, $action) : $code);
+    }
+    return (wantarray ? interpret_clamav_code($code) : $code);
+}
+
+#***********************************************************************
+# %PROCEDURE: message_contains_virus_clamdscan
+# %ARGUMENTS:
+#  Nothing
+# %RETURNS:
+#  1 if any file in the working directory contains a virus
+# %DESCRIPTION:
+#  Runs the clamdscan program on the working directory
+#***********************************************************************
+sub message_contains_virus_clamdscan {
+    unless ($Features{'Virus:CLAMDSCAN'}) {
+	md_syslog('err', "clamav not installed on this system");
+	return (wantarray ? (1, 'not-installed', 'tempfail') : 1);
+    }
+
+    # Run clamdscan
+    my($code, $category, $action) =
+	run_virus_scanner($Features{'Virus:CLAMDSCAN'} . " -c $Features{'Path:CLAMDCONF'} --no-summary --infected --fdpass --stream ./Work 2>&1");
+    if ($action ne 'proceed') {
+	return (wantarray ? ($code, $category, $action) : $code);
+    }
+    return (wantarray ? interpret_clamav_code($code) : $code);
 }
 
 #***********************************************************************
@@ -7283,6 +7346,11 @@ sub initialize_virus_scanner_routines {
 	push @VirusScannerEntityRoutines, \&entity_contains_virus_clamd;
     }
 
+    if ($Features{'Virus:CLAMDSCAN'}) {
+	push @VirusScannerMessageRoutines, \&message_contains_virus_clamdscan;
+	push @VirusScannerEntityRoutines, \&entity_contains_virus_clamdscan;
+    }
+
     if ($Features{'Virus:SOPHIE'}) {
 	push @VirusScannerMessageRoutines, \&message_contains_virus_sophie;
 	push @VirusScannerEntityRoutines, \&entity_contains_virus_sophie;
@@ -7465,7 +7533,7 @@ sub get_smtp_return_code {
 #  dsn is an extended SMTP status code
 #  exts is a hash of EXTNAME->EXTOPTS
 # %DESCRIPTION:
-#  Checks SMTP server's supported extensions. 
+#  Checks SMTP server's supported extensions.
 #  Expects EHLO to have been sent already (artifact of cribbing get_smtp_return_code)
 #***********************************************************************
 sub get_smtp_extensions {
@@ -7478,9 +7546,9 @@ sub get_smtp_extensions {
       # Chew up all trailing white space, including CR
       $line =~ s/\s+$//;
       # Line can be:
-      #   '[45]xy $ERROR'           Failure. Don't really care why.       
-      #   '250-hostname'            Initial line in multi-line response  
-      #   '250 hostname'            ONLY line in successful response  
+      #   '[45]xy $ERROR'           Failure. Don't really care why.
+      #   '250-hostname'            Initial line in multi-line response
+      #   '250 hostname'            ONLY line in successful response
       #   '250-$EXTNAME $EXTOPTS'   Advertisement of extension with options
       #   '250 $EXTNAME $EXTOPTS'   Advertisement of extension with options (Final line)
       $line =~ m/([245][0-9][0-9])([- ])([^ ]+) *(.*)/  or return ('TEMPFAIL', "451", "4.3.0", "$server said: $line");
@@ -7488,12 +7556,12 @@ sub get_smtp_extensions {
       $delim=$2;
       $ext=$3;
       $text=$4;
-      md_syslog('debug',"get_smtp_extensions: line $LineNum: code=$code, delim=$delim, ext=$ext, text=$text"); 
+      md_syslog('debug',"get_smtp_extensions: line $LineNum: code=$code, delim=$delim, ext=$ext, text=$text");
       if ( $LineNum == 0 ) {
         $exts{'hostname'} = $3;
         $LineNum++;
         next;
-      }  
+      }
       @exts{$ext} = $text;
       $LineNum++;
     }
