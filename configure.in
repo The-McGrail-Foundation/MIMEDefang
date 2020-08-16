@@ -537,6 +537,10 @@ if test "$ac_cv_antivirus" = "yes"; then
 	AC_PATH_PROG(CLAMSCAN,    clamscan, /bin/false, $ANTIVIR_PATH)
     fi
 
+    if test "$ac_cv_clamav" = yes; then
+	AC_PATH_PROG(CLAMDSCAN,    clamdscan, /bin/false, $ANTIVIR_PATH)
+    fi
+
     if test "$ac_cv_AvpLinux" = yes; then
 	AC_PATH_PROG(AVP,    AvpLinux, /bin/false, $ANTIVIR_PATH)
 	AC_PATH_PROG(AVP_KAVDAEMON, kavdaemon, /bin/false, $ANTIVIR_PATH)
@@ -597,6 +601,7 @@ test -z "$SOPHOS" && SOPHOS=/bin/false
 test -z "$SAVSCAN" && SAVSCAN=/bin/false
 test -z "$TREND" && TREND=/bin/false
 test -z "$CLAMSCAN" && CLAMSCAN=/bin/false
+test -z "$CLAMDSCAN" && CLAMDSCAN=/bin/false
 test -z "$AVP" && AVP=/bin/false
 test -z "$AVP5" && AVP5=/bin/false
 test -z "$AVP_KAVDAEMON" && AVP_KAVDAEMON=/bin/false
@@ -897,6 +902,17 @@ else
 	fi
     else
 	echo "CLAMSCAN 'clamav'    YES - $CLAMSCAN"
+	GOT_VIRUS_SCANNER=1
+    fi
+
+    if test "$CLAMDSCAN" = "/bin/false" ; then
+	if test "$ac_cv_clamav" != "yes" ; then
+	    echo "CLAMDSCAN 'clamav'    NO (Disabled by configure command)"
+	else
+	    echo "CLAMDSCAN 'clamav'    NO (not found)"
+	fi
+    else
+	echo "CLAMDSCAN 'clamav'    YES - $CLAMDSCAN"
 	GOT_VIRUS_SCANNER=1
     fi
 

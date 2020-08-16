@@ -661,6 +661,7 @@ CSAV
 AVP5
 AVP_KAVDAEMON
 AVP
+CLAMDSCAN
 CLAMSCAN
 KAVSCANNER
 TREND
@@ -5322,6 +5323,50 @@ fi
 
     fi
 
+    if test "$ac_cv_clamav" = yes; then
+	# Extract the first word of "clamdscan", so it can be a program name with args.
+set dummy clamdscan; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_path_CLAMDSCAN+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  case $CLAMDSCAN in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_CLAMDSCAN="$CLAMDSCAN" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $ANTIVIR_PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
+    ac_cv_path_CLAMDSCAN="$as_dir/$ac_word$ac_exec_ext"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_CLAMDSCAN" && ac_cv_path_CLAMDSCAN="/bin/false"
+  ;;
+esac
+fi
+CLAMDSCAN=$ac_cv_path_CLAMDSCAN
+if test -n "$CLAMDSCAN"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $CLAMDSCAN" >&5
+$as_echo "$CLAMDSCAN" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+    fi
+
     if test "$ac_cv_AvpLinux" = yes; then
 	# Extract the first word of "AvpLinux", so it can be a program name with args.
 set dummy AvpLinux; ac_word=$2
@@ -5862,6 +5907,7 @@ test -z "$SOPHOS" && SOPHOS=/bin/false
 test -z "$SAVSCAN" && SAVSCAN=/bin/false
 test -z "$TREND" && TREND=/bin/false
 test -z "$CLAMSCAN" && CLAMSCAN=/bin/false
+test -z "$CLAMDSCAN" && CLAMDSCAN=/bin/false
 test -z "$AVP" && AVP=/bin/false
 test -z "$AVP5" && AVP5=/bin/false
 test -z "$AVP_KAVDAEMON" && AVP_KAVDAEMON=/bin/false
@@ -7699,6 +7745,17 @@ else
 	fi
     else
 	echo "CLAMSCAN 'clamav'    YES - $CLAMSCAN"
+	GOT_VIRUS_SCANNER=1
+    fi
+
+    if test "$CLAMDSCAN" = "/bin/false" ; then
+	if test "$ac_cv_clamav" != "yes" ; then
+	    echo "CLAMDSCAN 'clamav'    NO (Disabled by configure command)"
+	else
+	    echo "CLAMDSCAN 'clamav'    NO (not found)"
+	fi
+    else
+	echo "CLAMDSCAN 'clamav'    YES - $CLAMDSCAN"
 	GOT_VIRUS_SCANNER=1
     fi
 
