@@ -23,7 +23,7 @@
 #define PERLPARSE_NUM_ARGS 6
 
 static PerlInterpreter *my_perl = NULL;
-extern void xs_init ();
+extern void xs_init (pTHX);
 
 void
 init_embedded_interpreter(int argc, char **argv, char **env)
