@@ -4903,6 +4903,8 @@ sub message_contains_virus_sophie {
 sub entity_contains_virus_clamd {
     my ($entity) = shift;
     my ($clamd_sock) = $ClamdSock;
+    my $inet = 0;
+
     $clamd_sock = shift if (@_ > 0);
     $clamd_sock = '@SPOOLDIR@/clamd.sock' if (!defined($clamd_sock));
     if (!defined($entity->bodyhandle)) {
@@ -4911,7 +4913,12 @@ sub entity_contains_virus_clamd {
     if (!defined($entity->bodyhandle->path)) {
 	return (wantarray ? (999, 'swerr', 'tempfail') : 1);
     }
-    my $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    if($clamd_sock =~ /\:/) {
+      $sock = IO::Socket::INET->new($clamd_sock);
+      $inet = 1;
+    } else {
+      $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    }
     if (defined $sock) {
 	my $path = $entity->bodyhandle->path;
 	# If path is not absolute, add cwd
@@ -4942,7 +4949,7 @@ sub entity_contains_virus_clamd {
 	    # If it's a zip module failure, try falling back on clamscan.
 	    # This is despicable, but it might work
 	    if ($err_detail =~ /(?:zip module failure|not supported data format)/i &&
-		$Features{'Virus:CLAMAV'}) {
+		$Features{'Virus:CLAMAV'} && ($inet eq 0)) {
 		my ($code, $category, $action) =
 		run_virus_scanner($Features{'Virus:CLAMAV'} . " -r --unzip --unrar --stdout --no-summary --infected $CWD/Work 2>&1");
 		if ($action ne 'proceed') {
@@ -4975,9 +4982,15 @@ sub message_contains_virus_clamd {
     $clamd_sock = shift if (@_ > 0);
     $clamd_sock = '@SPOOLDIR@/clamd.sock' if (!defined($clamd_sock));
     my ($output,$sock);
+    my $inet = 0;
 
     # PING/PONG test to make sure clamd is alive
-    $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    if($clamd_sock =~ /\:/) {
+      $sock = IO::Socket::INET->new($clamd_sock);
+      $inet = 1;
+    } else {
+      $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    }
 
     if (!defined($sock)) {
 	md_syslog('err', "Could not connect to clamd daemon at $clamd_sock");
@@ -5013,7 +5026,11 @@ sub message_contains_virus_clamd {
     }
 
     # open up a socket and scan each file in ./Work
-    $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    if($clamd_sock =~ /\:/) {
+      $sock = IO::Socket::INET->new($clamd_sock);
+    } else {
+      $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    }
     if (defined $sock) {
 	if (!$sock->print("SCAN $CWD/Work\n")) {
 	    $sock->close;
@@ -5039,7 +5056,7 @@ sub message_contains_virus_clamd {
 	    # If it's a zip module failure, try falling back on clamscan.
 	    # This is despicable, but it might work
 	    if ($err_detail =~ /(?:zip module failure|not supported data format)/i &&
-		$Features{'Virus:CLAMAV'}) {
+		$Features{'Virus:CLAMAV'} && ($inet eq 0)) {
 		my ($code, $category, $action) =
 		    run_virus_scanner($Features{'Virus:CLAMAV'} . " -r --unzip --unrar --stdout --no-summary --infected $CWD/Work 2>&1");
 		if ($action ne 'proceed') {
