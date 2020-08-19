@@ -806,6 +806,9 @@ $Features{"Virus:SOPHIE"} is the full path to Sophie if it is installed;
 $Features{"Virus:CLAMD"} is the full path to clamd if it is installed;
 0 if it is not.
 
+$Features{"Virus:CLAMDSCAN"} is the full path to clamdscan if it is installed;
+0 if it is not.
+
 $Features{"Virus:TROPHIE"} is the full path to Trophie if it is installed;
 0 if it is not.
 
@@ -1873,6 +1876,8 @@ $action is a string containing the recommended action:
 .TP
 .B message_contains_virus_clamav()
 .TP
+.B message_contains_virus_clamdscan()
+.TP
 .B message_contains_virus_avp()
 .TP
 .B message_contains_virus_avp5()
@@ -1978,6 +1983,8 @@ for \fBmessage_contains_virus()\fR.
 .B entity_contains_virus_sophos($entity)
 .TP
 .B entity_contains_virus_clamav($entity)
+.TP
+.B entity_contains_virus_clamdscan($entity)
 .TP
 .B entity_contains_virus_avp($entity)
 .TP
@@ -2382,7 +2389,7 @@ F-Secure fsav (http://www.f-secure.com)
 
 .TP
 .B o
-The clamscan command-line scanner and the clamd daemon from
+The clamscan and clamdscan command-line scanners and the clamd daemon from
 Clam AntiVirus (http://www.clamav.net/)
 
 .TP
