@@ -3986,7 +3986,7 @@ sub entity_contains_virus_clamdscan {
 
     # Run clamdscan
     my($code, $category, $action) =
-	run_virus_scanner($Features{'Virus:CLAMDSCAN'} . " -c $Features{'Path:CLAMDCONF'} --no-summary --infected --fdpass --stream $path 2>&1");
+	run_virus_scanner($Features{'Virus:CLAMDSCAN'} . " -c " . $Features{'Path:CLAMDCONF'} . " --no-summary --infected --fdpass --stream $path 2>&1");
     if ($action ne 'proceed') {
 	return (wantarray ? ($code, $category, $action) : $code);
     }
@@ -4010,7 +4010,7 @@ sub message_contains_virus_clamdscan {
 
     # Run clamdscan
     my($code, $category, $action) =
-	run_virus_scanner($Features{'Virus:CLAMDSCAN'} . " -c $Features{'Path:CLAMDCONF'} --no-summary --infected --fdpass --stream ./Work 2>&1");
+	run_virus_scanner($Features{'Virus:CLAMDSCAN'} . " -c " . $Features{'Path:CLAMDCONF'} . " --no-summary --infected --fdpass --stream ./Work 2>&1");
     if ($action ne 'proceed') {
 	return (wantarray ? ($code, $category, $action) : $code);
     }

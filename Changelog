@@ -2,6 +2,11 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2020-08-19 Giovanni Bechis <g.bechis@snb.it>
+
+    * mimedefang.pl: Add support to scan messages for viruses on a remote
+    Clamav server using clamdscan client.
+
 2020-08-16 Giovanni Bechis <g.bechis@snb.it>
 
     * mimedefang.pl: Add re_match_in_rar_directory function to match
