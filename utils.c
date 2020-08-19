@@ -14,12 +14,6 @@
 
 #define _DEFAULT_SOURCE 1
 
-#ifdef __linux__
-/* On Linux, we need this defined to get fdopen.  On BSD, if we define
- * it, we don't get all the u_char, u_long, etc definitions.  GRR! */
-#define _POSIX_SOURCE 1
-#endif
-
 #include "config.h"
 #include "mimedefang.h"
 
