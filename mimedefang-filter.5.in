@@ -364,6 +364,11 @@ example, a connection to a database server), you \fImust\fR run that
 code inside \fBfilter_initialize\fR and not directly from the filter,
 because the multiplexor closes all open descriptors when it activates
 a new worker.
+From within \fBfilter_initialize\fR a configuration file could be loaded
+by calling \fBread_config\fR.
+\fBread_config\fR accepts a configuration file path and it can be used
+to overwrite global variables.
+Configuration file format is pure Perl code.
 
 When a worker is about to exit, \fBmimedefang.pl\fR calls the function
 \fBfilter_cleanup\fR (if it is defined) with no arguments.  This

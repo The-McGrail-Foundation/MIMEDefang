@@ -73,6 +73,7 @@ use Time::Local;
 use MIME::Parser;
 use Sys::Hostname;
 use File::Spec qw ();
+use Errno qw(ENOENT EACCES);
 
 # Detect these Perl modules at run-time.  Can explicitly prevent
 # loading of these modules by setting $Features{"xxx"} = 0;
@@ -7711,6 +7712,38 @@ sub md_check_against_smtp_server {
   get_smtp_return_code($sock, $recip, $server);
   $sock->close();
   return ($retval, $text, $code, $dsn);
+}
+
+#***********************************************************************
+# %PROCEDURE: read_config
+# %ARGUMENTS:
+#  configuration file path
+# %RETURNS:
+#  return 1 if configuration file cannot be loaded; 0 otherwise
+# %DESCRIPTION:
+#  loads a configuration file to overwrite global variables values
+#***********************************************************************
+# Derivative work from amavisd-new read_config_file($$)
+# Copyright (C) 2002-2018 Mark Martinec
+sub read_config($) {
+  my($config_file) = @_;
+  my(@stat_list) = stat($config_file);  # symlinks-friendly
+  my $errn = @stat_list ? 0 : 0+$!;
+  my $owner_uid = $stat_list[4];
+  my $msg;
+
+  if ($errn == ENOENT) { $msg = "does not exist" }
+  elsif ($errn)        { $msg = "is inaccessible: $!" }
+  elsif (-d _)         { $msg = "is a directory" }
+  elsif (-S _ || -b _ || -c _) { $msg = "is not a regular file or pipe" }
+  elsif ($owner_uid) { $msg = "should be owned by root (uid 0)" }
+  if (defined $msg)    {
+    md_syslog("crit", "Config file \"$config_file\" $msg");
+    return 1;
+  }
+  if (defined(do $config_file)) {}
+  return 0;
+ 1;
 }
 
 exit(&main) unless caller;
