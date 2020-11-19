@@ -78,6 +78,7 @@ MIMEDefang has the following software requirements:
 
 	Mail::SpamAssassin (http://www.spamassassin.org/) - spam detector
 	HTML::Parser (CPAN) - Needed for append_html_boilerplate function
+	Test::Class and Test::Most - Needed to run regression tests
 
 4) Sendmail 8.12.x or 8.13.x.  Get the latest version.  Note that we
    no longer support MIMEDefang with Sendmail 8.11.x
