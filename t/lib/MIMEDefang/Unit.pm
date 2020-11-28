@@ -12,7 +12,7 @@ sub include_mimedefang : Test(startup)
 	no warnings 'redefine';
 	local *CORE::GLOBAL::exit = sub { };
 	local @ARGV = ();
-	do 'mimedefang.pl.in';
+	do './mimedefang.pl.in';
 	use warnings 'redefine';
 }
 1;
