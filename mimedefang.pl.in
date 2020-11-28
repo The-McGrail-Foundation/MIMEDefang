@@ -7497,13 +7497,13 @@ sub get_smtp_return_code {
 	    if ($code =~ /^[123]/) {
 		$retval = 'CONTINUE';
 	    } elsif ($code =~ /^4/) {
-		md_syslog('info', "md_check_against_smtp_server for $recip on $server returned $code $dsn $text");
+		md_syslog('info', "get_smtp_return_code: for $recip on $server returned $code $dsn $text");
 		$retval = 'TEMPFAIL';
 	    } elsif ($code =~ /^5/) {
-		md_syslog('info', "md_check_against_smtp_server for $recip on $server returned $code $dsn $text");
+		md_syslog('info', "get_smtp_return_code: for $recip on $server returned $code $dsn $text");
 		$retval = 'REJECT';
 	    } else {
-		md_syslog('warning', "Invalid SMTP reply code $code from server $server for $recip");
+		md_syslog('warning', "get_smtp_return_code: Invalid SMTP reply code $code from server $server for $recip");
 		$retval = 'TEMPFAIL';
 	    }
 	    return ($retval, $code, $dsn, $text);
@@ -7512,11 +7512,11 @@ sub get_smtp_return_code {
 
     my $msg;
     if( defined $line ) {
-        $msg = "Invalid response [$line] from SMTP server";
-        md_syslog('info', "md_check_against_smtp_server for $recip on $server returned invalid response [$line]");
+        $msg = "get_smtp_return_code: Invalid response [$line] from SMTP server";
+        md_syslog('info', "get_smtp_return_code: Check for $recip on $server returned invalid response [$line]");
     } else {
-        $msg = "Empty response from SMTP server";
-        md_syslog('info', "md_check_against_smtp_server for $recip on $server returned an empty response");
+        $msg = "get_smtp_return_code: Empty response from SMTP server";
+        md_syslog('info', "get_smtp_return_code: for $recip on $server returned an empty response");
     }
 
     return ('TEMPFAIL', "451", "4.3.0", $msg );
@@ -7529,7 +7529,7 @@ sub get_smtp_return_code {
 #  server -- the server we're querying
 # %RETURNS:
 #  A four-element list:(retval, code, dsn, exts)
-#  retval is 'CONTINUE', 'TEMPFAIL' or 'REJECT'.
+#  retval is 'CONTINUE', 'TEMPFAIL', or 'REJECT'.
 #  code is a 3-digit SMTP code.
 #  dsn is an extended SMTP status code
 #  exts is a hash of EXTNAME->EXTOPTS
@@ -7607,7 +7607,7 @@ sub md_check_against_smtp_server {
     my $sock = IO::Socket::INET->new(PeerAddr => $server,
 				     PeerPort => $port,
 				     Proto    => 'tcp',
-				     Timeout  => 15);
+				     Timeout  => 25);
     if (!defined($sock)) {
       return ('TEMPFAIL', "Could not connect to other SMTP server $server: $!");
     }
@@ -7674,8 +7674,15 @@ sub md_check_against_smtp_server {
           no warnings 'once';
           md_syslog('debug',"md_check_against_smtp_server: $server offers STARTTLS but fails with error $IO::Socket::SSL::SSL_ERROR. Falling back to plaintext...");
           $sock->print("EHLO $helo\r\n");
-       }
-    }
+         }
+      } else {
+         md_syslog('debug',"md_check_against_smtp_server: STARTTLS not available");
+         $sock->print("RSET\r\n");
+         $sock->flush();
+         # Swallow return value
+         get_smtp_return_code($sock, $recip, $server); 
+         $sock->print("EHLO $helo\r\n");
+      }
   }
   # At this point we've either sent a fallback HELO, fallback EHLO, or internal EHLO.
   # so, get the code...
@@ -7688,7 +7695,7 @@ sub md_check_against_smtp_server {
     $sock->close();
     return ($retval, $text, $code, $dsn);
   }
-
+  md_syslog('debug',"md_check_against_smtp_server: Checking sender $sender");
   $sock->print("MAIL FROM:$sender\r\n");
   $sock->flush();
 
@@ -7702,6 +7709,7 @@ sub md_check_against_smtp_server {
     return ($retval, $text, $code, $dsn);
   }
 
+  md_syslog('debug',"md_check_against_smtp_server: Checking recipient $recip");
   $sock->print("RCPT TO:$recip\r\n");
   $sock->flush();
 
