@@ -228,6 +228,7 @@ static int
 doCmd(char const *sock, char const *cmd, int decode)
 {
     char ans[SMALLBUF];
+    size_t l;
 
     if (MXCommand(sock, cmd, ans, sizeof(ans)) < 0) {
 	return EXIT_FAILURE;
@@ -238,7 +239,7 @@ doCmd(char const *sock, char const *cmd, int decode)
     printf("%s", ans);
 
     /* If it didn't end with a newline, add one */
-    size_t l = strlen(ans);
+    l = strlen(ans);
     if (l > 0) {
 	if (ans[l-1] != '\n') {
 	    printf("\n");
