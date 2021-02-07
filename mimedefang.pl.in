@@ -562,6 +562,15 @@ sub time_str {
 		   $year + 1900, $mon+1, $mday, $hour, $min, $sec);
 }
 
+#***********************************************************************
+# %PROCEDURE: hour_str
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  The current time in the form: "YYYY-MM-DD-HH"
+# %DESCRIPTION:
+#  Returns a string representing the current time.
+#***********************************************************************
 sub hour_str {
     my($sec, $min, $hour, $mday, $mon, $year, $junk);
     ($sec, $min, $hour, $mday, $mon, $year, $junk) = localtime(time());
