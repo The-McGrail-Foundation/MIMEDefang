@@ -63,6 +63,7 @@ use vars qw($HTMLFoundEndBody $HTMLBoilerplate $SASpamTester);
 
 use Socket;
 use IO::Socket;
+use IO::Socket::SSL;
 use IO::Select;
 use IO::Handle;
 use IO::File;
