@@ -771,20 +771,25 @@ sub synthesize_received_header {
     my($hdr);
 
     my($hn) = $SendmailMacros{"if_name"};
+    my($auth) = $SendmailMacros{"auth_authen"};
 
     my $strdate = rfc2822_date();
 
     $hn = get_host_name() unless (defined($hn) and ($hn ne ""));
     if ($RealRelayHostname ne "[$RealRelayAddr]") {
-	$hdr = "Received: from $Helo ($RealRelayHostname [$RealRelayAddr])\n";
+      $hdr = "Received: from $Helo ($RealRelayHostname [$RealRelayAddr])\n";
     } else {
-	$hdr = "Received: from $Helo ([$RealRelayAddr])\n";
+      $hdr = "Received: from $Helo ([$RealRelayAddr])\n";
     }
-    $hdr .= "\tby $hn (envelope-sender $Sender) (MIMEDefang) with ESMTP id $MsgID";
-    if ($#Recipients != 0) {
-	$hdr .= "; ";
+    if($auth) {
+      $hdr .= "\tby $hn (envelope-sender $Sender) (MIMEDefang) with ESMTPA id $MsgID";
     } else {
-	$hdr .= "\n\tfor " . $Recipients[0] . "; ";
+      $hdr .= "\tby $hn (envelope-sender $Sender) (MIMEDefang) with ESMTP id $MsgID";
+    }
+    if ($#Recipients != 0) {
+      $hdr .= "; ";
+    } else {
+      $hdr .= "\n\tfor " . $Recipients[0] . "; ";
     }
 
     $hdr .= $strdate . "\n";
