@@ -7780,6 +7780,40 @@ sub read_config($) {
  1;
 }
 
+#***********************************************************************
+# %PROCEDURE: is_ip_private
+# %ARGUMENTS:
+#  ip address
+# %RETURNS:
+#  return 1 if ip address is private (as defined by rfc1918 and 4193),
+#  0 otherwise
+# %DESCRIPTION
+#  checks if an ip address is private
+#***********************************************************************
+sub is_ip_private($) {
+  my ($ip) = @_;
+
+  $private_ip = qr{^(?:
+    127\.|
+    0?10\.|
+    172\.0?1[6-9]\.|
+    172\.0?2[0-9]\.|
+    172\.0?3[0-2]\.|
+    192\.168\.|
+    169\.254\.|
+    ::1|
+    [fF][cCdD][0-9a-fA-F]{2}:|
+    [fF][eE][89aAbB][0-9a-fA-F]:
+    )
+  }xi;
+
+  if($ip =~ $private_ip) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
 exit(&main) unless caller;
 #------------------------------------------------------------
 1;
