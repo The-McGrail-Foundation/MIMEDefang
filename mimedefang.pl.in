@@ -7578,7 +7578,7 @@ sub get_smtp_extensions {
         $LineNum++;
         next;
       }
-      @exts{$ext} = $text;
+      $exts{$ext} = $text;
       $LineNum++;
     }
 
