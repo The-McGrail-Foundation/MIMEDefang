@@ -7659,13 +7659,14 @@ sub md_check_against_smtp_server {
     $sock->flush();
     my %exts;
     my $ext;
-    ($retval, $code, $dsn, %exts) = get_smtp_extensions($sock, $recip, $server);
-    if ($retval ne 'CONTINUE') {
-      $sock->print("HELO $helo\r\n");
+     ($retval, $code, $dsn, %exts) = get_smtp_extensions($sock, $recip, $server);
+     if ($retval ne 'CONTINUE') {
+       $sock->print("HELO $helo\r\n");
     } else {
-      foreach $ext ( keys %exts ) {
-        md_syslog('debug',"md_check_against_smtp_server extension: $ext $exts{$ext}");
-      }
+    # Uncomment to debug (and/or uncomment similar line in get_smtp_extensions)
+    #   foreach $ext ( keys %exts ) {
+    #     md_syslog('debug',"md_check_against_smtp_server extension: $ext $exts{$ext}");
+    #   }
       if (exists $exts{'STARTTLS'}) {
         # send STARTTLS command and read response
         $sock->print("STARTTLS\r\n");
