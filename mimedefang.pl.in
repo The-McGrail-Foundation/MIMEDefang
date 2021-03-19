@@ -7572,7 +7572,8 @@ sub get_smtp_extensions {
       $delim=$2;
       $ext=$3;
       $text=$4;
-      md_syslog('debug',"get_smtp_extensions: line $LineNum: code=$code, delim=$delim, ext=$ext, text=$text");
+      # uncomment to debug parsing
+      # md_syslog('debug',"get_smtp_extensions: line $LineNum: code=$code, delim=$delim, ext=$ext, text=$text");
       if ( $LineNum == 0 ) {
         $exts{'hostname'} = $3;
         $LineNum++;
