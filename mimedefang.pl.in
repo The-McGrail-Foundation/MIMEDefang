@@ -7624,7 +7624,7 @@ sub md_check_against_smtp_server {
       $recip = "<$recip>";
     }
 
-    # Set SSL_startHandshake to start in plain mode,
+    # Set SSL_startHansshake to start in plain mode,
     # SSL_verify_mode to SSL_VERIFY_NONE to make the check work
     # with self-signed certificates and SSL_hostname for SNI
     my $sock = IO::Socket::SSL->new(PeerAddr => $server,
