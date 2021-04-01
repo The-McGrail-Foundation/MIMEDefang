@@ -7620,7 +7620,13 @@ sub md_check_against_smtp_server {
       $recip = "<$recip>";
     }
 
-    my $sock = IO::Socket::INET->new(PeerAddr => $server,
+    # Set SSL_startHansshake to start in plain mode,
+    # SSL_verify_mode to SSL_VERIFY_NONE to make the check work
+    # with self-signed certificates and SSL_hostname for SNI
+    my $sock = IO::Socket::SSL->new(PeerAddr => $server,
+             SSL_startHandshake => 0,
+             SSL_verify_mode => SSL_VERIFY_NONE,
+             SSL_hostname => "$server",
 				     PeerPort => $port,
 				     Proto    => 'tcp',
 				     Timeout  => 25);
@@ -7680,18 +7686,17 @@ sub md_check_against_smtp_server {
           return ($retval, $text, $code, $dsn);
         }
         # if response was successful we can upgrade the socket to SSL now:
-        if ( IO::Socket::SSL->start_SSL($sock,
-          # explicitly set hostname we should use for SNI
-          SSL_hostname => "$server" ) ) {
+        if ( $sock->connect_SSL ) {
           md_syslog('debug',"md_check_against_smtp_server: start_SSL succeeded!");
           # send inside EHLO
           $sock->print("EHLO $helo\r\n");
-          } else {
+        } else {
           #back off from using STARTTLS
+          $sock->stop_SSL;
           no warnings 'once';
           md_syslog('debug',"md_check_against_smtp_server: $server offers STARTTLS but fails with error $IO::Socket::SSL::SSL_ERROR. Falling back to plaintext...");
           $sock->print("EHLO $helo\r\n");
-         }
+        }
       } else {
          md_syslog('debug',"md_check_against_smtp_server: STARTTLS not available");
          $sock->print("RSET\r\n");
