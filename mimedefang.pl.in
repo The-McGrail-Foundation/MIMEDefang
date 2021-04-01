@@ -7629,6 +7629,7 @@ sub md_check_against_smtp_server {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     my $sock = IO::Socket::INET->new(PeerAddr => $server,
 =======
 =======
@@ -7647,6 +7648,9 @@ sub md_check_against_smtp_server {
 >>>>>>> 762f0d5 (Revert "modify SSL parameters to make the check work with self-signed certificates")
 =======
 >>>>>>> e597774 (modify SSL parameters to make the check work with self-signed certificates)
+=======
+    my $sock = IO::Socket::INET->new(PeerAddr => $server,
+>>>>>>> 28091f5 (Revert "modify SSL parameters to make the check work with self-signed certificates")
 				     PeerPort => $port,
 				     Proto    => 'tcp',
 				     Timeout  => 25);
@@ -7706,17 +7710,18 @@ sub md_check_against_smtp_server {
           return ($retval, $text, $code, $dsn);
         }
         # if response was successful we can upgrade the socket to SSL now:
-        if ( $sock->connect_SSL ) {
+        if ( IO::Socket::SSL->start_SSL($sock,
+          # explicitly set hostname we should use for SNI
+          SSL_hostname => "$server" ) ) {
           md_syslog('debug',"md_check_against_smtp_server: start_SSL succeeded!");
           # send inside EHLO
           $sock->print("EHLO $helo\r\n");
-        } else {
+          } else {
           #back off from using STARTTLS
-          $sock->stop_SSL;
           no warnings 'once';
           md_syslog('debug',"md_check_against_smtp_server: $server offers STARTTLS but fails with error $IO::Socket::SSL::SSL_ERROR. Falling back to plaintext...");
           $sock->print("EHLO $helo\r\n");
-        }
+         }
       } else {
          md_syslog('debug',"md_check_against_smtp_server: STARTTLS not available");
          $sock->print("RSET\r\n");
