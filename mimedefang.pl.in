@@ -7627,6 +7627,7 @@ sub md_check_against_smtp_server {
     }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     my $sock = IO::Socket::INET->new(PeerAddr => $server,
 =======
     # Set SSL_startHansshake to start in plain mode,
@@ -7637,6 +7638,9 @@ sub md_check_against_smtp_server {
              SSL_verify_mode => SSL_VERIFY_NONE,
              SSL_hostname => "$server",
 >>>>>>> 9eeb866 (modify SSL parameters to make the check work with self-signed certificates)
+=======
+    my $sock = IO::Socket::INET->new(PeerAddr => $server,
+>>>>>>> 762f0d5 (Revert "modify SSL parameters to make the check work with self-signed certificates")
 				     PeerPort => $port,
 				     Proto    => 'tcp',
 				     Timeout  => 25);
