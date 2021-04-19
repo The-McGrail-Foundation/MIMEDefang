@@ -194,6 +194,8 @@ struct privdata {
     unsigned char filterFailed; /* Filter failed */
 };
 
+static int set_queueid(SMFICTX *ctx);
+
 static void append_macro_value(dynamic_buffer *dbuf,
 			       SMFICTX *ctx,
 			       char *macro);
@@ -687,10 +689,13 @@ mfconnect(SMFICTX *ctx, char *hostname, _SOCK_ADDR *sa)
     }
 
 
+    /* Try grabbing the Queue ID */
+    set_queueid(ctx);
+
     if (doRelayCheck) {
 	char buf2[SMALLBUF];
 	int n = MXRelayOK(MultiplexorSocketName, buf2, data->hostip,
-			  data->hostname, data->hostport, data->myip, data->daemon_port);
+			  data->hostname, data->hostport, data->myip, data->daemon_port, data->qid);
 	if (n == MD_REJECT) {
 	    /* Can't call smfi_setreply from connect callback */
 	    /* set_dsn(ctx, buf2, 5); */
@@ -750,10 +755,14 @@ helo(SMFICTX *ctx, char *helohost)
 	data->heloArg = NULL;
     }
     data->heloArg = strdup_with_log(helohost);
+
+    /* Try grabbing the Queue ID */
+    set_queueid(ctx);
+
     if (doHeloCheck) {
 	char buf2[SMALLBUF];
 	int n = MXHeloOK(MultiplexorSocketName, buf2, data->hostip,
-			 data->hostname, data->heloArg, data->hostport, data->myip, data->daemon_port);
+			 data->hostname, data->heloArg, data->hostport, data->myip, data->daemon_port, data->qid);
 	if (n == MD_REJECT) {
 	    set_dsn(ctx, buf2, 5);
 	    cleanup(ctx);
@@ -805,7 +814,6 @@ envfrom(SMFICTX *ctx, char **from)
     int i;
     char buffer[SMALLBUF];
     char buf2[SMALLBUF];
-    char *queueid;
     char **macro;
     dynamic_buffer dbuf;
 
@@ -824,23 +832,8 @@ envfrom(SMFICTX *ctx, char **from)
 	return SMFIS_TEMPFAIL;
     }
 
-    /* Obtain the queue identifier */
-    queueid = smfi_getsymval(ctx, "i");
-
-    if (data->qid && data->qid != NOQUEUE) {
-	free(data->qid);
-	data->qid = NOQUEUE;
-	data->qid_written = 0;
-    }
-    if (queueid && *queueid) {
-	data->qid = strdup_with_log(queueid);
-	if (!data->qid) {
-	    data->qid = NOQUEUE;
-	    cleanup(ctx);
-	    DEBUG_EXIT("envfrom", "SMFIS_TEMPFAIL");
-	    return SMFIS_TEMPFAIL;
-	}
-    }
+    /* Set the Queue ID if it hasn't yet been set */
+    set_queueid(ctx);
 
     /* Copy sender */
     if (data->sender) {
@@ -957,8 +950,8 @@ envfrom(SMFICTX *ctx, char **from)
 	data->myip = NULL;
     }
 
-    if (queueid) {
-	append_mx_command(&dbuf, 'Q', queueid);
+    if (data->qid && data->qid != NOQUEUE) {
+	append_mx_command(&dbuf, 'Q', data->qid);
 	data->qid_written = 1;
     }
 
@@ -1186,27 +1179,21 @@ rcptto(SMFICTX *ctx, char **to)
 
     /* Apparently, Postfix offers an option to set the "i" macro at
        rcptto time */
-    if (!data->qid || (data->qid == NOQUEUE)) {
-	char *queueid = smfi_getsymval(ctx, "i");
-	if (queueid && *queueid) {
-	    if (!data->qid_written) {
-		/* Write this out separately; the write below may be skipped */
-		data->cmdFD = get_fd(data, "COMMANDS", data->cmdFD);
-		if (data->cmdFD >= 0) {
-		    dbuf_init(&dbuf);
-		    append_mx_command(&dbuf, 'Q', queueid);
-		    if (write_dbuf(&dbuf, data->cmdFD, data, "COMMANDS") >= 0) {
-			data->qid_written = 1;
-		    }
-		    dbuf_free(&dbuf);
-		    data->cmdFD = put_fd(data->cmdFD);
-		}
-	    }
-	    data->qid = strdup_with_log(queueid);
-	    if (!data->qid) {
-		data->qid = NOQUEUE;
-	    }
-	}
+    set_queueid(ctx);
+    if (data->qid && data->qid != NOQUEUE) {
+        if (!data->qid_written) {
+            /* Write this out separately; the write below may be skipped */
+            data->cmdFD = get_fd(data, "COMMANDS", data->cmdFD);
+            if (data->cmdFD >= 0) {
+                dbuf_init(&dbuf);
+                append_mx_command(&dbuf, 'Q', data->qid);
+                if (write_dbuf(&dbuf, data->cmdFD, data, "COMMANDS") >= 0) {
+                    data->qid_written = 1;
+                }
+                dbuf_free(&dbuf);
+                data->cmdFD = put_fd(data->cmdFD);
+            }
+        }
     }
 
     rcpt_mailer = smfi_getsymval(ctx, "{rcpt_mailer}");
@@ -1461,17 +1448,8 @@ eoh(SMFICTX *ctx)
 	return SMFIS_TEMPFAIL;
     }
 
-    /* If we don't have a qid yet, try to get one here.
-       Postfix only sets "i" at EOH, DATA and EOM */
-    if (!data->qid || (data->qid == NOQUEUE)) {
-	char *queueid = smfi_getsymval(ctx, "i");
-	if (queueid && *queueid) {
-	    data->qid = strdup_with_log(queueid);
-	    if (!data->qid) {
-		data->qid = NOQUEUE;
-	    }
-	}
-    }
+    /* Set the Queue ID if it hasn't yet been set */
+    set_queueid(ctx);
 
     /* We can close headerFD to save a descriptor */
     if (data->headerFD >= 0 && closefd(data->headerFD) < 0) {
@@ -1530,17 +1508,8 @@ body(SMFICTX *ctx, u_char *text, size_t len)
 	return SMFIS_TEMPFAIL;
     }
 
-    /* If we don't have a qid yet, try to get one here.
-       Postfix only sets "i" at EOH, DATA and EOM */
-    if (!data->qid || (data->qid == NOQUEUE)) {
-	char *queueid = smfi_getsymval(ctx, "i");
-	if (queueid && *queueid) {
-	    data->qid = strdup_with_log(queueid);
-	    if (!data->qid) {
-		data->qid = NOQUEUE;
-	    }
-	}
-    }
+    /* Set the Queue ID if it hasn't yet been set */
+    set_queueid(ctx);
 
     /* Write to file and scan body for suspicious characters */
     if (len) {
@@ -1665,17 +1634,8 @@ eom(SMFICTX *ctx)
 
     dbuf_init(&dbuf);
 
-    /* If we don't have a qid yet, try to get one here.
-       Postfix only sets "i" at EOH, DATA and EOM */
-    if (!data->qid || (data->qid == NOQUEUE)) {
-	char *queueid = smfi_getsymval(ctx, "i");
-	if (queueid && *queueid) {
-	    data->qid = strdup_with_log(queueid);
-	    if (!data->qid) {
-		data->qid = NOQUEUE;
-	    }
-	}
-    }
+    /* Set the Queue ID if it hasn't yet been set */
+    set_queueid(ctx);
 
     if (!data->qid_written && data->qid && (data->qid != NOQUEUE)) {
 	append_mx_command(&dbuf, 'Q', data->qid);
@@ -3033,4 +2993,54 @@ write_dbuf(dynamic_buffer *dbuf,
     syslog(LOG_WARNING, "%s: Unable to write %d bytes to file %s (ret = %d): %m",
 	   data->qid, DBUF_LEN(dbuf), filename, i);
     return -1;
+}
+
+/**********************************************************************
+*%FUNCTION: set_queueid
+*%ARGUMENTS:
+* ctx -- Sendmail filter mail context
+*%RETURNS:
+* -2: Could not set queue ID because no 'i' macro available
+* -1: Some other error (eg, strdup failed)
+*  0: Success
+*%DESCRIPTION:
+* Obtains the Sendmail "i" macro and sets the privata data->qid
+* string to the value of the macro, if its value could be obtained.
+***********************************************************************/
+static int
+set_queueid(SMFICTX *ctx)
+{
+    struct privdata *data = DATA;
+    char const *queueid;
+
+    /* This should never happen... not much we can do if it does */
+    if (!data) {
+        return -1;
+    }
+
+    /* Get value of "i" macro */
+    queueid = smfi_getsymval(ctx, "i");
+
+    if (!queueid) {
+        /* Macro not set - nothing we can do.  */
+        return -2;
+    }
+
+    /* If qid is already set and is the same as what
+       we have, do nothing */
+    if (data->qid && !strcmp(data->qid, queueid)) {
+        return 0;
+    }
+
+    /* If qid is already set, free it */
+    if (data->qid && data->qid != NOQUEUE) {
+        free(data->qid);
+        data->qid_written = 0;
+    }
+    data->qid = strdup_with_log(queueid);
+    if (!data->qid) {
+        data->qid = NOQUEUE;
+        return -1;
+    }
+    return 0;
 }

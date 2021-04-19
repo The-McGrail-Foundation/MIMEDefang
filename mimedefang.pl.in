@@ -5853,17 +5853,20 @@ sub handle_tick
 #***********************************************************************
 sub handle_relayok
 {
-	my ($hostip, $hostname, $port, $myip, $myport) = @_;
-	if(!defined(&filter_relay)) {
-		send_filter_answer('CONTINUE', "ok", "filter_relay", "host $hostip ($hostname)");
-		return;
-	}
+        my ($hostip, $hostname, $port, $myip, $myport, $qid) = @_;
 
-	# Set up globals
-	$RelayAddr     = $hostip;
-	$RelayHostname = $hostname;
-	my ($ok, $msg, $code, $dsn, $delay) = filter_relay($hostip, $hostname, $port, $myip, $myport);
-	send_filter_answer($ok, $msg, "filter_relay", "host $hostip ($hostname)", $code, $dsn, $delay);
+        if(!defined(&filter_relay)) {
+            send_filter_answer('CONTINUE', "ok", "filter_relay", "host $hostip ($hostname)");
+            return;
+        }
+
+        # Set up globals
+        $RelayAddr     = $hostip;
+        $RelayHostname = $hostname;
+        $QueueID       = $qid;
+        $MsgID         = $qid;
+        my ($ok, $msg, $code, $dsn, $delay) = filter_relay($hostip, $hostname, $port, $myip, $myport, $qid);
+        send_filter_answer($ok, $msg, "filter_relay", "host $hostip ($hostname)", $code, $dsn, $delay);
 }
 
 #***********************************************************************
@@ -5881,7 +5884,7 @@ sub handle_relayok
 #***********************************************************************
 sub handle_helook
 {
-	my ($ip, $name, $helo, $port, $myip, $myport) = @_;
+	my ($ip, $name, $helo, $port, $myip, $myport, $qid) = @_;
 	if(!defined(&filter_helo)) {
 		send_filter_answer('CONTINUE', "ok", "filter_helo", "helo $helo");
 		return;
@@ -5891,8 +5894,9 @@ sub handle_helook
 	$RelayAddr     = $ip;
 	$RelayHostname = $name;
 	$Helo          = $helo;
-
-	my ($ok, $msg, $code, $dsn, $delay) = filter_helo($ip, $name, $helo, $port, $myip, $myport);
+        $QueueID       = $qid;
+        $MsgID         = $qid;
+	my ($ok, $msg, $code, $dsn, $delay) = filter_helo($ip, $name, $helo, $port, $myip, $myport, $qid);
 	send_filter_answer($ok, $msg, "filter_helo", "helo $helo", $code, $dsn, $delay);
 }
 

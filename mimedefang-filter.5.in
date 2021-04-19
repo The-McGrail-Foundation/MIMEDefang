@@ -118,17 +118,21 @@ Note that for this check to take place, you must use the \-r flag with
 \fBmimedefang\fR.
 
 .PP
-\fBfilter_relay\fR is passed five arguments: $hostip is the IP address
+\fBfilter_relay\fR is passed six arguments: $hostip is the IP address
 of the relay host (for example, "127.0.0.1"), $hostname is the
 host name if known (for example, "localhost.localdomain").  If the host
 name could not be determined, $hostname is $hostip enclosed in
 square brackets.  (That is, ("$hostname" eq "[$hostip]") will be true.)
 
 .PP
-The remaining three arguments to \fBfilter_relay\fR are
-$port, $myip and $myport which contain the client's TCP
-port, the Sendmail daemon's listening IP address and the
-Sendmail daemon's listening port.
+The remaining four arguments to \fBfilter_relay\fR are
+$port, $myip, $myport and $qid, which contain the client's TCP
+port, the Sendmail daemon's listening IP address, the
+Sendmail daemon's listening port, and the Sendmail Queue-ID,
+respectively.  \fINote\fR that the Queue-ID may not yet be
+available at this stage (for example, Postfix does not allocate
+a queue-ID this early.)  If the Queue-ID is not available,
+the string NOQUEUE is passed instead.
 
 .PP
 \fBfilter_relay\fR must return a two-element list:
@@ -189,16 +193,19 @@ Note that for this function to be called, you must use the
 \-H flag with \fBmimedefang\fR.
 
 .PP
-\fBfilter_helo\fR is passed six arguments: $ip and $name are the IP
+\fBfilter_helo\fR is passed seven arguments: $ip and $name are the IP
 address and name of the sending relay, as in \fBfilter_relay\fR.  The
 third argument, $helo, is the argument supplied in the HELO/EHLO command.
 
 .PP
-The remaining three arguments to \fBfilter_relay\fR are
-$port, $myip and $myport which contain the client's TCP
-port, the Sendmail daemon's listening IP address and the
-Sendmail daemon's listening port.
-
+The remaining four arguments to \fBfilter_helo\fR are
+$port, $myip, $myport and $qid, which contain the client's TCP
+port, the Sendmail daemon's listening IP address, the
+Sendmail daemon's listening port, and the Sendmail Queue-ID,
+respectively.  \fINote\fR that the Queue-ID may not yet be
+available at this stage (for example, Postfix does not allocate
+a queue-ID this early.)  If the Queue-ID is not available,
+the string NOQUEUE is passed instead.
 
 .PP
 \fBfilter_helo\fR must return a two-to-five element list: ($code,
@@ -897,10 +904,12 @@ contains the string "NOQUEUE".
 
 .TP
 .B $QueueID
-The Sendmail queue identifier if it could be determined.  Otherwise,
-contains the string "NOQUEUE". This variable \fIis\fR set correctly
-in \fBfilter_sender\fR and \fBfilter_recipient\fR, but it is \fInot\fR
-available in \fBfilter_relay\fR.
+The Sendmail queue identifier if it could be determined.  This
+variable \fIis\fR set correctly in \fBfilter_relay\fR,
+\fBfilter_helo\fR, \fBfilter_sender\fR and \fBfilter_recipient\fR.
+Note, however, that Postfix may not allocate a queue ID until
+\fBfilter_recipient\fR time.  If a Queue-ID has not yet been
+allocated, $QueueID is set to "NOQUEUE".
 
 .TP
 .B $MsgID

@@ -573,6 +573,7 @@ munch_mx_return(char *ans, char *msg, char const *qid)
 *  port -- client port
 *  myip -- My IP address, if known.
 *  daemon_port -- Listening port
+*  qid -- Queue ID
 * %RETURNS:
 *  1 if it's OK to accept connections from this host; 0 if not, -1 if error.
 *  If connection is rejected, error message *may* be set.
@@ -584,7 +585,8 @@ MXRelayOK(char const *sockname,
 	  char const *name,
 	  unsigned int port,
 	  char const *myip,
-	  unsigned int daemon_port)
+	  unsigned int daemon_port,
+          char const *qid)
 {
     char cmd[SMALLBUF];
     char ans[SMALLBUF];
@@ -607,7 +609,10 @@ MXRelayOK(char const *sockname,
 	myip = "UNKNOWN";
     }
 
-    if (percent_encode_command(1, cmd, sizeof(cmd), "relayok", ip, name, port_string, myip, daemon_port_string, NULL) < 0) {
+    if (!qid || !*qid) {
+        qid = "NOQUEUE";
+    }
+    if (percent_encode_command(1, cmd, sizeof(cmd), "relayok", ip, name, port_string, myip, daemon_port_string, qid, NULL) < 0) {
 	return MD_TEMPFAIL;
     }
     if (MXCommand(sockname, cmd, ans, SMALLBUF-1, NULL) < 0) return MD_TEMPFAIL;
@@ -625,6 +630,7 @@ MXRelayOK(char const *sockname,
 *  port -- client port
 *  myip -- My IP address, if known.
 *  daemon_port -- Listening port
+*  qid -- Queue ID
 * %RETURNS:
 *  1 if it's OK to accept messages from this sender; 0 if not, -1 if error or
 *  we should tempfail.
@@ -637,7 +643,8 @@ MXHeloOK(char const *sockname,
 	 char const *helo,
 	 unsigned int port,
 	 char const *myip,
-	 unsigned int daemon_port)
+	 unsigned int daemon_port,
+         char const *qid)
 {
     char cmd[SMALLBUF];
     char ans[SMALLBUF];
@@ -664,7 +671,11 @@ MXHeloOK(char const *sockname,
 	myip = "UNKNOWN";
     }
 
-    if (percent_encode_command(1, cmd, sizeof(cmd), "helook", ip, name, helo, port_string, myip, daemon_port_string, NULL) < 0) {
+    if (!qid || !*qid) {
+        qid = "NOQUEUE";
+    }
+
+    if (percent_encode_command(1, cmd, sizeof(cmd), "helook", ip, name, helo, port_string, myip, daemon_port_string, qid, NULL) < 0) {
 	return MD_TEMPFAIL;
     }
     if (MXCommand(sockname, cmd, ans, SMALLBUF-1, NULL) < 0) return MD_TEMPFAIL;
