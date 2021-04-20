@@ -194,7 +194,7 @@ struct privdata {
     unsigned char filterFailed; /* Filter failed */
 };
 
-static int set_queueid(SMFICTX *ctx);
+static void set_queueid(SMFICTX *ctx);
 
 static void append_macro_value(dynamic_buffer *dbuf,
 			       SMFICTX *ctx,
@@ -3000,14 +3000,12 @@ write_dbuf(dynamic_buffer *dbuf,
 *%ARGUMENTS:
 * ctx -- Sendmail filter mail context
 *%RETURNS:
-* -2: Could not set queue ID because no 'i' macro available
-* -1: Some other error (eg, strdup failed)
-*  0: Success
+* Nothing.
 *%DESCRIPTION:
 * Obtains the Sendmail "i" macro and sets the privata data->qid
 * string to the value of the macro, if its value could be obtained.
 ***********************************************************************/
-static int
+static void
 set_queueid(SMFICTX *ctx)
 {
     struct privdata *data = DATA;
@@ -3018,13 +3016,13 @@ set_queueid(SMFICTX *ctx)
 
     if (!queueid) {
         /* Macro not set - nothing we can do.  */
-        return -2;
+        return;
     }
 
     /* If qid is already set and is the same as what
        we have, do nothing */
     if (data->qid && !strcmp(data->qid, queueid)) {
-        return 0;
+        return;
     }
 
     /* If qid is already set, free it */
@@ -3035,7 +3033,5 @@ set_queueid(SMFICTX *ctx)
     data->qid = strdup_with_log(queueid);
     if (!data->qid) {
         data->qid = NOQUEUE;
-        return -1;
     }
-    return 0;
 }
