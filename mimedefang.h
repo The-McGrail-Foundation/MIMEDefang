@@ -30,10 +30,10 @@ extern int MXScanDir(char const *sockname, char const *qid, char const *dir);
 extern int MXCommand(char const *sockname, char const *cmd, char *buf, int len, char const *qid);
 extern int MXRelayOK(char const *sockname, char *msg,
 		     char const *ip, char const *name, unsigned int port,
-		     char const *myip, unsigned int daemon_port);
+		     char const *myip, unsigned int daemon_port, char const *qid);
 extern int MXHeloOK(char const *sockname, char *msg,
 		    char const *ip, char const *name, char const *helo,
-		    unsigned int port, char const *myip, unsigned int daemon_port);
+		    unsigned int port, char const *myip, unsigned int daemon_port, char const *qid);
 
 extern int MXSenderOK(char const *sockname, char *msg,
 		      char const **sender_argv, char const *ip, char const *name,
