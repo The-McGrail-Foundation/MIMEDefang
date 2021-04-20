@@ -3013,11 +3013,6 @@ set_queueid(SMFICTX *ctx)
     struct privdata *data = DATA;
     char const *queueid;
 
-    /* This should never happen... not much we can do if it does */
-    if (!data) {
-        return -1;
-    }
-
     /* Get value of "i" macro */
     queueid = smfi_getsymval(ctx, "i");
 
