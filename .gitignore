@@ -1,11 +1,19 @@
+*.bak
+*.o
 .DS_Store
+MANIFEST
 Makefile
 config.h
 config.log
 config.status
 examples/init-script
+md-mx-ctrl
 md-mx-ctrl.8
+mimedefang
+mimedefang-*.tar.gz
+mimedefang-*.tar.gz.sig
 mimedefang-filter.5
+mimedefang-multiplexor
 mimedefang-multiplexor.8
 mimedefang-notify.7
 mimedefang-protocol.7
@@ -17,3 +25,4 @@ redhat/mimedefang-sysconfig
 script/mimedefang-util
 script/mimedefang-util.1
 watch-mimedefang
+xs_init.c
