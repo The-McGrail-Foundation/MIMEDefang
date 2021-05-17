@@ -22,6 +22,7 @@ ExecStartPre=/bin/rm -f $SOCKET
 ExecStart=/bin/sh -c 'exec /usr/bin/mimedefang -D \
     `[ -n "$LOOPBACK_RESERVED_CONNECTIONS" ] && echo "-R $LOOPBACK_RESERVED_CONNECTIONS"` \
     -m $MX_SOCKET \
+    '[ "$USE_SETSYMLIST" = "yes" ] && echo "-y"` \
     `[ -n "$SPOOLDIR" ] && echo "-z $SPOOLDIR"` \
     `[ -n "$MX_USER" ] && echo "-U $MX_USER"` \
     `[ -n "$SYSLOG_FACILITY" ] && echo "-S $SYSLOG_FACILITY"` \
