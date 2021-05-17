@@ -169,6 +169,7 @@ start() {
 	   $([ -n "$LOOPBACK_RESERVED_CONNECTIONS" ] && echo "-R $LOOPBACK_RESERVED_CONNECTIONS") \
 	   $([ -n "$MX_USER" ] && echo "-U $MX_USER") \
 	   $([ -n "$SYSLOG_FACILITY" ] && echo "-S $SYSLOG_FACILITY") \
+           $([ "$USE_SETSYMLIST" = "yes" ] && echo "-y") \
 	   $([ "$LOG_FILTER_TIME" = "yes" ] && echo "-T") \
 	   $([ "$MX_RELAY_CHECK" = "yes" ] && echo "-r") \
 	   $([ "$MX_HELO_CHECK" = "yes" ] && echo "-H") \
