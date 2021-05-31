@@ -55,8 +55,6 @@ rm_r(char const *qid, char const *dir)
     struct stat sbuf;
     DIR *d;
     struct dirent *entry;
-    struct dirent *result = NULL;
-    int n;
     int retcode = 0;
     int errno_save;
 
@@ -100,17 +98,7 @@ rm_r(char const *qid, char const *dir)
       return -1;
     }
 
-    for (;;) {
-      n = readdir_r(d, entry, &result);
-      if (n != 0) {
-	      errno = n;
-	      syslog(LOG_WARNING, "%s: readdir_r failed: %m", qid);
-	      closedir(d);
-	      free(entry);
-	      errno = n;
-	      return -1;
-	    }
-	    if (!result) break;
+    while((entry = readdir(d)) != NULL) {
 	    if (!strcmp(entry->d_name, ".") ||
 	      !strcmp(entry->d_name, "..")) {
 	      continue;
