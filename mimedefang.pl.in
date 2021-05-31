@@ -169,7 +169,7 @@ $CachedTimezone = "";
 $SyslogFacility = "mail";
 undef $GraphDefangSyslogFacility;
 
-$URL = 'http://www.roaringpenguin.com/mimedefang/enduser.php3';
+$URL = 'https://mimedefang.org';
 $CSSHost    = "127.0.0.1:7777:local";
 $FprotdHost = "127.0.0.1:10200";
 $Fprotd6Host = "127.0.0.1:10200";
