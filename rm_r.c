@@ -83,8 +83,8 @@ rm_r(char const *qid, char const *dir)
     entry = (struct dirent *) malloc(sizeof(struct dirent) + pathconf(dir, _PC_NAME_MAX) + 1);
 #else
     /* Can't use _POSIX_NAME_MAX because it's often defined as 14...
-       useless... */
-    entry = (struct dirent *) malloc(sizeof(struct dirent) + 257);
+       use NAME_MAX instead */
+    entry = (struct dirent *) malloc(sizeof(struct dirent) + NAME_MAX);
 #endif
     if (!entry) {
       syslog(LOG_WARNING, "%s: Unable to allocate space for dirent entry: %m", qid);
