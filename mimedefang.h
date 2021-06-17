@@ -11,7 +11,7 @@
 #ifndef MIMEDEFANG_H
 #define MIMEDEFANG_H 1
 
-#define SMALLBUF 8192
+#define SMALLBUF 16384
 #define BIGBUF 65536
 
 /* Identifier is 7 chars long: 5 time plus 2 counter */
