@@ -114,7 +114,7 @@ if( $actions{'datadump'}) {
 } elsif( $actions{'prettyprint'} ) {
 	print $entity->stringify_header,
 		"\n",
-		pretty_print_mail( $entity, 8192 );
+		pretty_print_mail( $entity, 16384 );
 }
 
 exit(0);

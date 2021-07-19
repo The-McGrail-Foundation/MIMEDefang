@@ -534,12 +534,12 @@ sub write_result_line
 		}
 	}
 
-	# We have an 8kb limit on the length of lines in RESULTS, including
+	# We have a 16kb limit on the length of lines in RESULTS, including
 	# trailing newline and null used in the milter.  So, we limit $cmd +
-	# $args to 8190 bytes.
-	if( length $line > 8190 ) {
-		md_syslog( 'warning',  "Cannot write line over 8190 bytes long to RESULTS file; truncating.  Original line began with: " . substr $line, 0, 40);
-		$line = substr $line, 0, 8190;
+	# $args to 16382 bytes.
+	if( length $line > 16382 ) {
+		md_syslog( 'warning',  "Cannot write line over 16382 bytes long to RESULTS file; truncating.  Original line began with: " . substr $line, 0, 40);
+		$line = substr $line, 0, 16382;
 	}
 
 	print $results_fh "$line\n" or die "Could not write RESULTS line: $!";
