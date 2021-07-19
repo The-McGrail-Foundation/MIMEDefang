@@ -18,6 +18,7 @@ TimeoutStopSec=30s
 # mimedefang-multiplexor, so upstream prefers it here also to be consistent.
 Environment=LC_ALL=C MX_SOCKET=/var/spool/MIMEDefang/mimedefang-multiplexor.sock MX_USER=defang SOCKET=/var/spool/MIMEDefang/mimedefang.sock
 EnvironmentFile=-/etc/default/mimedefang
+EnvironmentFile=-/etc/sysconfig/mimedefang
 ExecStartPre=/bin/rm -f $SOCKET
 ExecStart=/bin/sh -c 'exec /usr/bin/mimedefang -D \
     `[ -n "$LOOPBACK_RESERVED_CONNECTIONS" ] && echo "-R $LOOPBACK_RESERVED_CONNECTIONS"` \

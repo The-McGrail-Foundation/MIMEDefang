@@ -13,6 +13,7 @@ KillMode=mixed
 # Locale should be set to "C" for generating valid date headers
 Environment=LC_ALL=C MX_BUSY=600 MX_LOG=yes MX_MAXIMUM=10 MX_MINIMUM=2 MX_SOCKET=/var/spool/MIMEDefang/mimedefang-multiplexor.sock MX_USER=defang
 EnvironmentFile=-/etc/default/mimedefang
+EnvironmentFile=-/etc/sysconfig/mimedefang
 # This can be removed with MIMEDefang 2.82, but is required for older versions:
 # SuccessExitStatus=1
 ExecStart=/bin/sh -c 'HOME=${SPOOLDIR:=/var/spool/MIMEDefang} \

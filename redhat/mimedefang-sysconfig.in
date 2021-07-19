@@ -260,6 +260,9 @@ MX_BUSY=600
 # Any extra arguments to mimedefang
 # MD_EXTRA="-a auth_author"
 
+# setting USE_SETSYMLIST=yes adds the "-y" command-line
+# USE_SETSYMLIST=yes
+
 # SUBFILTER specifies which filter rules file to use
 # SUBFILTER=@CONFDIR_EVAL@/mimedefang-filter
 
