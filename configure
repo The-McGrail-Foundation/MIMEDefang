@@ -752,7 +752,6 @@ with_milterlib
 with_confsubdir
 with_spooldir
 with_quarantinedir
-enable_cleanup_with_rm
 enable_pthread_flag
 enable_check_perl_modules
 enable_debugging
@@ -1407,9 +1406,6 @@ Optional Features:
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
   --disable-embedded-perl Disable embedded Perl interpreter
   --enable-poll           Use poll(2) instead of select(2) in multiplexor
-  --enable-cleanup-with-rm
-			  Fork/exec "/bin/rm" to clean up instead of
-			  using built-in C code
   --enable-pthread-flag   Supply the -pthread flag to the C compiler
   --disable-check-perl-modules
 			  Disable compile-time checks for Perl modules
@@ -4040,14 +4036,6 @@ if test "${with_quarantinedir+set}" = set; then :
   withval=$with_quarantinedir; QDIR=$with_quarantinedir
 else
   QDIR=/var/spool/MD-Quarantine
-fi
-
-
-# Check whether --enable-cleanup-with-rm was given.
-if test "${enable_cleanup_with_rm+set}" = set; then :
-  enableval=$enable_cleanup_with_rm; ac_cv_cleanup_with_rm=$enableval
-else
-  ac_cv_cleanup_with_rm=no
 fi
 
 
