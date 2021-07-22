@@ -1,30 +1,36 @@
+#!/usr/bin/perl
+
 #***********************************************************************
 #
 # gen-ip-validator.pl
 #
 # Generate a random number used to confirm IP address header.
 #
-# Copyright (C) 2000-2005 Roaring Penguin Software Inc.
+# * This program may be distributed under the terms of the GNU General
+# * Public License, Version 2, or (at your option) any later version.
 #
 #***********************************************************************
 
+use Crypt::OpenSSL::Random;
 use Digest::SHA1;
 
-$ctx = Digest::SHA1->new;
+my $rng;
 
-$data = "";
-for ($i=0; $i<256; $i++) {
-    $data .= pack("C", rand(256));
-}
-$data .= `ls -l; ps; date; uptime; uname -a`;
-
-if (-r "/dev/urandom") {
+for (;;) {
+  $rng .= sprintf "%x\n", rand(0xffffffff);
+  if (-r "/dev/urandom") {
     open(IN, "</dev/urandom");
     read(IN, $junk, 64);
-    $data .= $junk;
+    $rng .= $junk;
     close(IN);
+  }
+  last if(Crypt::OpenSSL::Random::random_status());
 }
+Crypt::OpenSSL::Random::random_seed($rng);
+
+my $ctx = Digest::SHA1->new;
+my $data = Crypt::OpenSSL::Random::random_bytes(256);
 
 $ctx->add($data);
-$d = $ctx->hexdigest;
-print "X-MIMEDefang-Relay-$d\n";
+my $rnd = $ctx->hexdigest;
+print "X-MIMEDefang-Relay-$rnd\n";
