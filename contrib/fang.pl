@@ -40,6 +40,9 @@
 #
 ######################################################################
 
+use strict;
+use warnings;
+
 use Net::SMTP;
 use MIME::Lite;
 use Getopt::Std;

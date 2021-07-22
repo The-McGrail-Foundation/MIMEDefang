@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/perl
 #
 # GraphDefang -- a set of tools to create graphs of your mimedefang
 #                spam and virus logs.
@@ -24,6 +24,8 @@
 #=============================================================================
 
 use strict;
+use warnings;
+
 use vars qw($MYDIR $OUTPUT_DIR $SUMMARYDB $QUIET $NODB $DATAFILE @DATAFILES @GRAPHS %TZ);
 
 # Argument parsing
@@ -44,7 +46,7 @@ GetOptions( 	'quiet'  => \$QUIET,
 		'nomax'  => \$nomax,
 		'help|?' => \$help,
 		'man'	 => \$man,
-		'file=s' => \$file ) or pod2usage(2);;
+		'file=s' => \$file ) or pod2usage(2);
 
 pod2usage(1) if $help;
 pod2usage(-exitstatus => 0, -verbose => 2) if $man;
