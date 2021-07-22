@@ -1,9 +1,11 @@
-#!/usr/bin/perl -w
+#!/usr/bin/perl
 
 use strict;
+use warnings;
+
 use MLDBM qw(DB_File Storable);
 use Fcntl;
-use Time::Local;
+use Time::Local qw( timelocal_modern );
 
 my $SUMMARYDB = "./SummaryDB.db";
 
@@ -16,18 +18,18 @@ tie (%data_db, 'MLDBM', $SUMMARYDB, O_RDWR|O_CREAT, 0644)
 %data = %data_db;
 untie (%data_db);
 
-#reset the max time to 12/31/02 23:59:59 in the local timezone
+#reset the max time to 12/31/2020 23:59:59 in the local timezone
 
-my $year = 2002;
+my $year = 2020;
 my $mon = 11; # 0 - 11
 my $mday = 31; # 1 - 31
 my $hour = 23;
 my $min = 59;
 my $sec = 59;
 
-my $unixtime = timelocal($sec, $min, $hour, $mday, $mon, $year);
+my $unixtime = timelocal_modern($sec, $min, $hour, $mday, $mon, $year);
 
-print "Current max time: $data{'max'}\n";
+print "Current max time: $data{'max'}\n" if defined $data{'max'};
 
 $data{'max'} = $unixtime;
 
