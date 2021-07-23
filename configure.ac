@@ -129,14 +129,6 @@ AC_ARG_WITH(quarantinedir,
 AC_ARG_ENABLE(pthread-flag,
 [  --enable-pthread-flag   Supply the -pthread flag to the C compiler], FORCE_PTHREAD_FLAG=-pthread, FORCE_PTHREAD_FLAG="")
 
-if test "$ac_cv_cleanup_with_rm" = "yes" ; then
-   CLEANUP_DEFS="-DEXEC_RM_FOR_CLEANUP"
-else
-   CLEANUP_DEFS=""
-fi
-
-AC_SUBST(CLEANUP_DEFS)
-
 AC_ARG_ENABLE(check-perl-modules,
 [  --disable-check-perl-modules
 			  Disable compile-time checks for Perl modules], ac_cv_perlmodcheck=$enableval, ac_cv_perlmodcheck=yes)

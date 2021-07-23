@@ -680,7 +680,6 @@ EMBPERLLIBS
 EMBPERLLDFLAGS
 EMBPERLCFLAGS
 HAVE_SPAM_ASSASSIN
-CLEANUP_DEFS
 CONFSUBDIR
 IP_HEADER
 DEFANGUSER
@@ -4045,14 +4044,6 @@ if test "${enable_pthread_flag+set}" = set; then :
 else
   FORCE_PTHREAD_FLAG=""
 fi
-
-
-if test "$ac_cv_cleanup_with_rm" = "yes" ; then
-   CLEANUP_DEFS="-DEXEC_RM_FOR_CLEANUP"
-else
-   CLEANUP_DEFS=""
-fi
-
 
 
 # Check whether --enable-check-perl-modules was given.
