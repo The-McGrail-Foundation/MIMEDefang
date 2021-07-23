@@ -11,26 +11,46 @@
 #
 #***********************************************************************
 
-use Crypt::OpenSSL::Random;
+use constant HAS_OPENSSL_RANDOM => eval { require Crypt::OpenSSL::Random; };
+
+BEGIN
+{
+  eval{
+    Crypt::OpenSSL::Random->import
+  };
+}
+
 use Digest::SHA1;
 
-my $rng;
+sub read_urandom($) {
+  my $len = shift;
+  my $junk;
 
-for (;;) {
-  $rng .= sprintf "%x\n", rand(0xffffffff);
   if (-r "/dev/urandom") {
     open(IN, "</dev/urandom");
-    read(IN, $junk, 64);
-    $rng .= $junk;
+    read(IN, $junk, $len);
     close(IN);
   }
-  last if(Crypt::OpenSSL::Random::random_status());
+
+  return $junk;
 }
-Crypt::OpenSSL::Random::random_seed($rng);
+
+my $rng;
+my $data;
+
+if(HAS_OPENSSL_RANDOM) {
+  for (;;) {
+    $rng .= sprintf "%x\n", rand(0xffffffff);
+    $rng .= read_urandom(64);
+    last if(Crypt::OpenSSL::Random::random_status());
+  }
+  Crypt::OpenSSL::Random::random_seed($rng);
+  $data = Crypt::OpenSSL::Random::random_bytes(256);
+} else {
+  $data = read_urandom(256);
+}
 
 my $ctx = Digest::SHA1->new;
-my $data = Crypt::OpenSSL::Random::random_bytes(256);
-
 $ctx->add($data);
 my $rnd = $ctx->hexdigest;
 print "X-MIMEDefang-Relay-$rnd\n";
