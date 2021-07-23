@@ -1,30 +1,56 @@
+#!/usr/bin/perl
+
 #***********************************************************************
 #
 # gen-ip-validator.pl
 #
 # Generate a random number used to confirm IP address header.
 #
-# Copyright (C) 2000-2005 Roaring Penguin Software Inc.
+# * This program may be distributed under the terms of the GNU General
+# * Public License, Version 2, or (at your option) any later version.
 #
 #***********************************************************************
 
+use constant HAS_OPENSSL_RANDOM => eval { require Crypt::OpenSSL::Random; };
+
+BEGIN
+{
+  eval{
+    Crypt::OpenSSL::Random->import
+  };
+}
+
 use Digest::SHA1;
 
-$ctx = Digest::SHA1->new;
+sub read_urandom($) {
+  my $len = shift;
+  my $junk;
 
-$data = "";
-for ($i=0; $i<256; $i++) {
-    $data .= pack("C", rand(256));
-}
-$data .= `ls -l; ps; date; uptime; uname -a`;
-
-if (-r "/dev/urandom") {
+  if (-r "/dev/urandom") {
     open(IN, "</dev/urandom");
-    read(IN, $junk, 64);
-    $data .= $junk;
+    read(IN, $junk, $len);
     close(IN);
+  }
+
+  return $junk;
 }
 
+my $rng;
+my $data;
+
+if(HAS_OPENSSL_RANDOM) {
+  for (;;) {
+    $rng .= sprintf "%x\n", rand(0xffffffff);
+    $rng .= read_urandom(64);
+    last if(Crypt::OpenSSL::Random::random_status());
+  }
+  Crypt::OpenSSL::Random::random_seed($rng);
+  $data = Crypt::OpenSSL::Random::random_bytes(256);
+} else {
+  $data = read_urandom(256);
+}
+
+my $ctx = Digest::SHA1->new;
 $ctx->add($data);
-$d = $ctx->hexdigest;
-print "X-MIMEDefang-Relay-$d\n";
+my $rnd = $ctx->hexdigest;
+print "X-MIMEDefang-Relay-$rnd\n";
