@@ -242,6 +242,21 @@ beta-check:
 		exit 1; \
 	fi
 
+distro-rc: rc-check
+	mkdir mimedefang-$(VERSION)-rc$(RC)
+	tar -c -T MANIFEST -f - | (cd mimedefang-$(VERSION)-rc$(RC); tar xf -)
+	$(PERL) -p -e 's/#VERSION#/$(VERSION)/;s/#RELEASE#/0.rc$(RC)/;s/#RC#/-rc$(RC)/g' < redhat/mimedefang-spec.in > mimedefang-$(VERSION)-rc$(RC)/redhat/mimedefang.spec
+	tar cvf mimedefang-$(VERSION)-rc$(RC).tar mimedefang-$(VERSION)-rc$(RC)
+	gzip -v -f -9 mimedefang-$(VERSION)-rc$(RC).tar
+	rm -rf mimedefang-$(VERSION)-rc$(RC)
+	gpg --detach-sign mimedefang-$(VERSION)-rc$(RC).tar.gz
+
+rc-check:
+	@if test "$(RC)" = "" ; then \
+		echo "Usage: make distro-rc RC=<x>"; \
+		exit 1; \
+	fi
+
 test:
 	prove -It/lib --recurse t/unit
 
