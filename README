@@ -210,9 +210,6 @@ Summary of useful ./configure options:
                           (/var/spool/MD-Quarantine)
 
   --enable-poll           Use poll(2) instead of select(2) in multiplexor
-  --enable-cleanup-with-rm
-                          Fork/exec /bin/rm to clean up instead of
-                          using built-in C code
 
   --disable-check-perl-modules
                           Disable compile-time checks for Perl modules
