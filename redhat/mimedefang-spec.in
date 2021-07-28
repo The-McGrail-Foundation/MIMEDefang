@@ -140,9 +140,9 @@ Version:       #VERSION#
 Release:       #RELEASE#
 License:       GPL
 Group:         Networking/Mail
-Source0:       http://www.roaringpenguin.com/%{name}/%{name}-%{version}#BETA#.tar.gz
-Url:           http://www.roaringpenguin.com/%{name}
-Vendor:        Roaring Penguin Software Inc.
+Source0:       http://www.mimedefang.org/releases/%{name}-%{version}#RC#.tar.gz
+Url:           http://www.mimedefang.org
+Vendor:        MIMEDefang
 Buildroot:     %{_tmppath}/%{name}-root
 Requires:      sendmail > 8.12.0
 Requires:      perl-Digest-SHA1 perl-MIME-tools perl-IO-stringy perl-MailTools perl-Unix-Syslog
@@ -169,7 +169,7 @@ willingness of your e-mail users to commit to security, or they will
 complain loudly about MIMEDefang.
 
 %prep
-%setup -q -n %{name}-%{version}#BETA#
+%setup -q -n %{name}-%{version}#RC#
 autoconf
 %configure --prefix=%{_prefix} \
             --mandir=%{_mandir} \
