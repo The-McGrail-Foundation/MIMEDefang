@@ -6,6 +6,9 @@
 *
 * Copyright (C) 2002-2005 by Roaring Penguin Software Inc.
 *
+* This program may be distributed under the terms of the GNU General
+* Public License, Version 2, or (at your option) any later version.
+*
 ***********************************************************************/
 
 #ifndef MIMEDEFANG_H
