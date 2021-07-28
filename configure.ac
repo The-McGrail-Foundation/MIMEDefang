@@ -484,6 +484,7 @@ AC_ARG_ENABLE(nvcc,   [  --disable-nvcc          Do not include support for Nvcc
 AC_ARG_ENABLE(clamd,   [  --disable-clamd         Do not include support for clamd], ac_cv_clamd=$enableval, ac_cv_clamd=yes)
 AC_ARG_ENABLE(trophie, [  --disable-trophie       Do not include support for Trophie], ac_cv_trophie=$enableval, ac_cv_trophie=yes)
 AC_ARG_ENABLE(nod32,   [  --disable-nod32         Do not include support for Eset NOD32], ac_cv_nod32=$enableval, ac_cv_nod32=yes)
+AC_ARG_ENABLE(rspamc,   [  --disable-rspamc       Do not include support for Rspamd], ac_cv_rspamc=$enableval, ac_cv_rspamc=yes)
 
 ANTIVIR_PATH="$PATH:/usr/lib/AntiVir:/usr/local/uvscan:/opt/AVP:/etc/iscan:/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bd7:/usr/local/bd7/bin:/opt/kav/bin:/opt/kav/5.5/kav4unix/bin/:/opt/eset/nod32/bin"
 
@@ -580,6 +581,10 @@ if test "$ac_cv_antivirus" = "yes"; then
     fi
 fi
 
+if test "$ac_cv_rspamc" = yes; then
+   AC_PATH_PROG(RSPAMC, rspamc, /bin/false, $PATH)
+fi
+
 test -z "$HBEDV" && HBEDV=/bin/false
 test -z "$VEXIRA" && VEXIRA=/bin/false
 test -z "$NAI" && NAI=/bin/false
@@ -602,6 +607,7 @@ test -z "$NVCC" && NVCC=/bin/false
 test -z "$CLAMD" && CLAMD=/bin/false
 test -z "$TROPHIE" && TROPHIE=/bin/false
 test -z "$NOD32" && NOD32=/bin/false
+test -z "$RSPAMC" && RSPAMC=/bin/false
 
 if test "$ac_cv_debugging" = yes ; then
     ENABLE_DEBUGGING=-DENABLE_DEBUGGING
