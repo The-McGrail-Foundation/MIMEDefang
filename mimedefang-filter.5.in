@@ -1822,13 +1822,16 @@ SpamAssassin related functions.
 
 .TP
 .B rspamd_check([ $config_file ]) *experimental*
-This function returns a four-element list of the form ($hits, $required, 
-$tests, $report).  $hits is the "score" given to the message by Rspamd
+This function returns a six-element list of the form ($hits, $required, 
+$tests, $report, $action, $is_spam).
+$hits is the "score" given to the message by Rspamd
 (higher score means more likely SPAM). $required is the number of hits 
 required before Rspamd concludes that the message is SPAM.  $tests
 is a list of Rspamd test names, and $report is text
-detailing which tests triggered and their point score.  This gives you 
-insight into why Rspamd concluded that the message is SPAM. 
+detailing which tests triggered and their point score.
+$action is the action that rspamd(8) wants to apply and $is_spam is a boolean
+value that determines if the message is spam or not.
+This gives you insight into why Rspamd concluded that the message is SPAM. 
  
 .TP
 .B md_copy_orig_msg_to_work_dir()

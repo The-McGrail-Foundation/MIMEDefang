@@ -7797,9 +7797,9 @@ sub read_config($) {
 #***********************************************************************
 sub rspamd_check {
     my $rp;
-    my ($hits, $req, $tests, $report);
+    my ($hits, $req, $tests, $report, $action, $is_spam);
 
-    unless ($Features{"Rspamd"}) {
+    unless ($Features{"Path:RSPAMC"}) {
         md_syslog('err', "Attempt to call Rspamd function, but Rspamd is not installed.");
         return undef;
     }
@@ -7811,19 +7811,34 @@ sub rspamd_check {
                         || die "can't open rspamc: $!";
       while(<RSPAMD_PIPE>) {
         $rp = $_;
-        if($rp =~ /Score: (.*) \/ (.*)/) {
-          $hits = $1;
-          $req = $2;
+        {
+          if($rp =~ /Action: (.*)/) {
+            $action = $1;
+          }
         }
-        if($rp =~ /Symbol: (.*)/) {
-          $tests .= $1 . "\n";
+        {
+          if($rp =~ /Spam: (.*)/) {
+            $is_spam = $1;
+          }
+        }
+        {
+          if($rp =~ /Score: (.*) \/ (.*)/) {
+            $hits = $1;
+            $req = $2;
+          }
+        }
+        {
+          if($rp =~ /Symbol: (.*)/) {
+            $tests .= $1 . ", ";
+          }
         }
         $report .= $rp . "\n";
       }
+      $tests =~ s/\, $//;
       close(RSPAMD_PIPE);
     }
 
-    return ($hits, $req, $tests, $report);
+    return ($hits, $req, $tests, $report, $action, $is_spam);
 }
 
 exit(&main) unless caller;
