@@ -144,6 +144,8 @@ $Features{'Path:SPOOLDIR'}  = '@SPOOLDIR@';
 $Features{'Path:CONFDIR'}   = '@CONFDIR_EVAL@';
 $Features{'Path:CLAMDCONF'} = '@CONFDIR_EVAL@/MD-clamdscan.conf';
 
+$Features{"Path:RSPAMC"} = ('@RSPAMC@' ne '/bin/false' ? '@RSPAMC@' : 0);
+
 # Not in server mode by default
 $ServerMode = 0;
 
@@ -7778,6 +7780,50 @@ sub read_config($) {
   if (defined(do $config_file)) {}
   return 0;
  1;
+}
+
+#***********************************************************************
+# %PROCEDURE: rspamd_check
+# %ARGUMENTS:
+#  config -- optional rspamd config file
+# %RETURNS:
+#  An array of four elements,
+#       Weight of message ('hits')
+#       Number of hits required before Rspamd conciders a message spam
+#       Comma separated list of symbolic test names that were triggered
+#       A 'report' string, detailing tests that failed and their weights
+# %DESCRIPTION:
+#  Scans message using Rspamd (http://rspamd.org)
+#***********************************************************************
+sub rspamd_check {
+    my $rp;
+    my ($hits, $req, $tests, $report);
+
+    unless ($Features{"Rspamd"}) {
+        md_syslog('err', "Attempt to call Rspamd function, but Rspamd is not installed.");
+        return undef;
+    }
+
+    my @rs = ($Features{"Path:RSPAMC"}, "./INPUTMSG");
+
+    if ( -f $Features{"Path:RSPAMC"} ) {
+      open(RSPAMD_PIPE, "-|", @rs)
+                        || die "can't open rspamc: $!";
+      while(<RSPAMD_PIPE>) {
+        $rp = $_;
+        if($rp =~ /Score: (.*) \/ (.*)/) {
+          $hits = $1;
+          $req = $2;
+        }
+        if($rp =~ /Symbol: (.*)/) {
+          $tests .= $1 . "\n";
+        }
+        $report .= $rp . "\n";
+      }
+      close(RSPAMD_PIPE);
+    }
+
+    return ($hits, $req, $tests, $report);
 }
 
 exit(&main) unless caller;

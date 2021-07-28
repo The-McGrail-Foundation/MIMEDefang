@@ -827,6 +827,9 @@ $Features{"Virus:TROPHIE"} is the full path to Trophie if it is installed;
 $Features{"Virus:NOD32"} is the full path to ESET NOD32 nod32cli if it is installed;
 0 if it is not.
 
+$Features{"Path:RSPAMC"} is the full path to rspamc(1) if it is installed;
+0 if it is not.
+
 \fBNOTE:\fR Perl-module based features such as SpamAssassin are determined at
 runtime and may change as these are added and removed.  Most Virus features are
 predetermined at the time of configuration and do not adapt to runtime
@@ -1817,6 +1820,16 @@ This function returns a Mail::SpamAssassin::NoMailAudit object with the
 current email message contained in it.  It may be used to perform other 
 SpamAssassin related functions.
 
+.TP
+.B rspamd_check([ $config_file ]) *experimental*
+This function returns a four-element list of the form ($hits, $required, 
+$tests, $report).  $hits is the "score" given to the message by Rspamd
+(higher score means more likely SPAM). $required is the number of hits 
+required before Rspamd concludes that the message is SPAM.  $tests
+is a list of Rspamd test names, and $report is text
+detailing which tests triggered and their point score.  This gives you 
+insight into why Rspamd concluded that the message is SPAM. 
+ 
 .TP
 .B md_copy_orig_msg_to_work_dir()
 Normally, virus-scanners are passed only the unpacked, decoded parts

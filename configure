@@ -649,6 +649,7 @@ PTHREAD_FLAG
 ENABLE_DEBUGGING
 RM
 SENDMAILPROG
+RSPAMC
 NOD32
 TROPHIE
 CLAMD
@@ -776,6 +777,7 @@ enable_nvcc
 enable_clamd
 enable_trophie
 enable_nod32
+enable_rspamc
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1431,6 +1433,7 @@ Optional Features:
   --disable-clamd         Do not include support for clamd
   --disable-trophie       Do not include support for Trophie
   --disable-nod32         Do not include support for Eset NOD32
+  --disable-rspamc       Do not include support for Rspamd
 
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
@@ -4927,6 +4930,13 @@ else
   ac_cv_nod32=yes
 fi
 
+# Check whether --enable-rspamc was given.
+if test "${enable_rspamc+set}" = set; then :
+  enableval=$enable_rspamc; ac_cv_rspamc=$enableval
+else
+  ac_cv_rspamc=yes
+fi
+
 
 ANTIVIR_PATH="$PATH:/usr/lib/AntiVir:/usr/local/uvscan:/opt/AVP:/etc/iscan:/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bd7:/usr/local/bd7/bin:/opt/kav/bin:/opt/kav/5.5/kav4unix/bin/:/opt/eset/nod32/bin"
 
@@ -5903,6 +5913,50 @@ fi
     fi
 fi
 
+if test "$ac_cv_rspamc" = yes; then
+   # Extract the first word of "rspamc", so it can be a program name with args.
+set dummy rspamc; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_path_RSPAMC+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  case $RSPAMC in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_RSPAMC="$RSPAMC" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
+    ac_cv_path_RSPAMC="$as_dir/$ac_word$ac_exec_ext"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_RSPAMC" && ac_cv_path_RSPAMC="/bin/false"
+  ;;
+esac
+fi
+RSPAMC=$ac_cv_path_RSPAMC
+if test -n "$RSPAMC"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $RSPAMC" >&5
+$as_echo "$RSPAMC" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+fi
+
 test -z "$HBEDV" && HBEDV=/bin/false
 test -z "$VEXIRA" && VEXIRA=/bin/false
 test -z "$NAI" && NAI=/bin/false
@@ -5925,6 +5979,7 @@ test -z "$NVCC" && NVCC=/bin/false
 test -z "$CLAMD" && CLAMD=/bin/false
 test -z "$TROPHIE" && TROPHIE=/bin/false
 test -z "$NOD32" && NOD32=/bin/false
+test -z "$RSPAMC" && RSPAMC=/bin/false
 
 if test "$ac_cv_debugging" = yes ; then
     ENABLE_DEBUGGING=-DENABLE_DEBUGGING
