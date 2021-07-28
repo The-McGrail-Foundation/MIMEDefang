@@ -4,17 +4,17 @@ affect your filter.
 
 2021-07-28 Giovanni Bechis <g.bechis@snb.it>
 
-  * add experimental support to scan emails with Rspamd antispam
+	* add experimental support to scan emails with Rspamd antispam
 
 2021-07-20 Giovanni Bechis <g.bechis@snb.it>
 
-  * remove --enable_cleanup_with_rm "configure" parameter,
-	  switch to non reentrant version of readdir(3)
+	* remove --enable_cleanup_with_rm "configure" parameter,
+	switch to non reentrant version of readdir(3)
 
 2021-04-20 Dianne Skoll <dianne@skoll.ca>
 
 	* Obtain the Queue-ID as early as possible in the SMTP
-	session.  Requires the "-y" command-line option to mimedefang.
+	session. Requires the "-y" command-line option to mimedefang.
 
 	* Add support for USE_SETSYMLIST in the system unit and Red Hat
 	init script; setting USE_SETSYMLIST=yes adds the "-y" command-line
