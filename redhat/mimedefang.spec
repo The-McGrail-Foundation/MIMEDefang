@@ -1,6 +1,9 @@
 ##########################################################################
 # Copyright @2002, Roaring Penguin Software Inc.  All rights reserved.
 #
+# * This program may be distributed under the terms of the GNU General
+# * Public License, Version 2, or (at your option) any later version.
+#
 # Project     : MIMEDefang
 # Component   : redhat/mimedefang.spec
 # Author      : Michael McLagan <Michael.McLagan@linux.org>
