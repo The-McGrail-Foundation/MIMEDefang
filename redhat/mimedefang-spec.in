@@ -145,7 +145,7 @@ Url:           http://www.mimedefang.org
 Vendor:        MIMEDefang
 Buildroot:     %{_tmppath}/%{name}-root
 Requires:      sendmail > 8.12.0
-Requires:      perl-Digest-SHA1 perl-MIME-tools perl-IO-stringy perl-MailTools perl-Unix-Syslog
+Requires:      perl-Digest-SHA1 perl-MIME-tools perl-MailTools perl-Unix-Syslog
 BuildRequires: sendmail-devel > 8.12.0
 BuildRequires: autoconf > 2.55
 
