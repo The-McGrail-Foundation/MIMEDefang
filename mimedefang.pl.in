@@ -7630,17 +7630,22 @@ sub md_check_against_smtp_server {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     my $sock = IO::Socket::INET->new(PeerAddr => $server,
 =======
 =======
 >>>>>>> e597774 (modify SSL parameters to make the check work with self-signed certificates)
     # Set SSL_startHansshake to start in plain mode,
+=======
+    # Set SSL_startHandshake to start in plain mode,
+>>>>>>> b805b9a (sync with upstream)
     # SSL_verify_mode to SSL_VERIFY_NONE to make the check work
     # with self-signed certificates and SSL_hostname for SNI
     my $sock = IO::Socket::SSL->new(PeerAddr => $server,
              SSL_startHandshake => 0,
              SSL_verify_mode => SSL_VERIFY_NONE,
              SSL_hostname => "$server",
+<<<<<<< HEAD
 <<<<<<< HEAD
 >>>>>>> 9eeb866 (modify SSL parameters to make the check work with self-signed certificates)
 =======
@@ -7651,6 +7656,8 @@ sub md_check_against_smtp_server {
 =======
     my $sock = IO::Socket::INET->new(PeerAddr => $server,
 >>>>>>> 28091f5 (Revert "modify SSL parameters to make the check work with self-signed certificates")
+=======
+>>>>>>> b805b9a (sync with upstream)
 				     PeerPort => $port,
 				     Proto    => 'tcp',
 				     Timeout  => 25);
@@ -7710,18 +7717,17 @@ sub md_check_against_smtp_server {
           return ($retval, $text, $code, $dsn);
         }
         # if response was successful we can upgrade the socket to SSL now:
-        if ( IO::Socket::SSL->start_SSL($sock,
-          # explicitly set hostname we should use for SNI
-          SSL_hostname => "$server" ) ) {
+        if ( $sock->connect_SSL ) {
           md_syslog('debug',"md_check_against_smtp_server: start_SSL succeeded!");
           # send inside EHLO
           $sock->print("EHLO $helo\r\n");
-          } else {
+        } else {
           #back off from using STARTTLS
+          $sock->stop_SSL;
           no warnings 'once';
           md_syslog('debug',"md_check_against_smtp_server: $server offers STARTTLS but fails with error $IO::Socket::SSL::SSL_ERROR. Falling back to plaintext...");
           $sock->print("EHLO $helo\r\n");
-         }
+        }
       } else {
          md_syslog('debug',"md_check_against_smtp_server: STARTTLS not available");
          $sock->print("RSET\r\n");
@@ -7804,6 +7810,7 @@ sub read_config($) {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 #***********************************************************************
 # %PROCEDURE: rspamd_check
 # %ARGUMENTS:
@@ -7863,6 +7870,8 @@ sub rspamd_check {
     return ($hits, $req, $tests, $report, $action, $is_spam);
 }
 
+=======
+>>>>>>> b805b9a (sync with upstream)
 exit(&main) unless caller;
 #------------------------------------------------------------
 1;
