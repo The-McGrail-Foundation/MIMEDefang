@@ -649,6 +649,7 @@ PTHREAD_FLAG
 ENABLE_DEBUGGING
 RM
 SENDMAILPROG
+RSPAMC
 NOD32
 TROPHIE
 CLAMD
@@ -680,7 +681,6 @@ EMBPERLLIBS
 EMBPERLLDFLAGS
 EMBPERLCFLAGS
 HAVE_SPAM_ASSASSIN
-CLEANUP_DEFS
 CONFSUBDIR
 IP_HEADER
 DEFANGUSER
@@ -719,6 +719,7 @@ infodir
 docdir
 oldincludedir
 includedir
+runstatedir
 localstatedir
 sharedstatedir
 sysconfdir
@@ -751,7 +752,6 @@ with_milterlib
 with_confsubdir
 with_spooldir
 with_quarantinedir
-enable_cleanup_with_rm
 enable_pthread_flag
 enable_check_perl_modules
 enable_debugging
@@ -776,6 +776,7 @@ enable_nvcc
 enable_clamd
 enable_trophie
 enable_nod32
+enable_rspamc
 '
       ac_precious_vars='build_alias
 host_alias
@@ -824,6 +825,7 @@ datadir='${datarootdir}'
 sysconfdir='${prefix}/etc'
 sharedstatedir='${prefix}/com'
 localstatedir='${prefix}/var'
+runstatedir='${localstatedir}/run'
 includedir='${prefix}/include'
 oldincludedir='/usr/include'
 docdir='${datarootdir}/doc/${PACKAGE}'
@@ -1076,6 +1078,15 @@ do
   | -silent | --silent | --silen | --sile | --sil)
     silent=yes ;;
 
+  -runstatedir | --runstatedir | --runstatedi | --runstated \
+  | --runstate | --runstat | --runsta | --runst | --runs \
+  | --run | --ru | --r)
+    ac_prev=runstatedir ;;
+  -runstatedir=* | --runstatedir=* | --runstatedi=* | --runstated=* \
+  | --runstate=* | --runstat=* | --runsta=* | --runst=* | --runs=* \
+  | --run=* | --ru=* | --r=*)
+    runstatedir=$ac_optarg ;;
+
   -sbindir | --sbindir | --sbindi | --sbind | --sbin | --sbi | --sb)
     ac_prev=sbindir ;;
   -sbindir=* | --sbindir=* | --sbindi=* | --sbind=* | --sbin=* \
@@ -1213,7 +1224,7 @@ fi
 for ac_var in	exec_prefix prefix bindir sbindir libexecdir datarootdir \
 		datadir sysconfdir sharedstatedir localstatedir includedir \
 		oldincludedir docdir infodir htmldir dvidir pdfdir psdir \
-		libdir localedir mandir
+		libdir localedir mandir runstatedir
 do
   eval ac_val=\$$ac_var
   # Remove trailing slashes.
@@ -1366,6 +1377,7 @@ Fine tuning of the installation directories:
   --sysconfdir=DIR        read-only single-machine data [PREFIX/etc]
   --sharedstatedir=DIR    modifiable architecture-independent data [PREFIX/com]
   --localstatedir=DIR     modifiable single-machine data [PREFIX/var]
+  --runstatedir=DIR       modifiable per-process data [LOCALSTATEDIR/run]
   --libdir=DIR            object code libraries [EPREFIX/lib]
   --includedir=DIR        C header files [PREFIX/include]
   --oldincludedir=DIR     C header files for non-gcc [/usr/include]
@@ -1395,9 +1407,6 @@ Optional Features:
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
   --disable-embedded-perl Disable embedded Perl interpreter
   --enable-poll           Use poll(2) instead of select(2) in multiplexor
-  --enable-cleanup-with-rm
-			  Fork/exec "/bin/rm" to clean up instead of
-			  using built-in C code
   --enable-pthread-flag   Supply the -pthread flag to the C compiler
   --disable-check-perl-modules
 			  Disable compile-time checks for Perl modules
@@ -1423,6 +1432,7 @@ Optional Features:
   --disable-clamd         Do not include support for clamd
   --disable-trophie       Do not include support for Trophie
   --disable-nod32         Do not include support for Eset NOD32
+  --disable-rspamc       Do not include support for Rspamd
 
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
@@ -4031,28 +4041,12 @@ else
 fi
 
 
-# Check whether --enable-cleanup-with-rm was given.
-if test "${enable_cleanup_with_rm+set}" = set; then :
-  enableval=$enable_cleanup_with_rm; ac_cv_cleanup_with_rm=$enableval
-else
-  ac_cv_cleanup_with_rm=no
-fi
-
-
 # Check whether --enable-pthread-flag was given.
 if test "${enable_pthread_flag+set}" = set; then :
   enableval=$enable_pthread_flag; FORCE_PTHREAD_FLAG=-pthread
 else
   FORCE_PTHREAD_FLAG=""
 fi
-
-
-if test "$ac_cv_cleanup_with_rm" = "yes" ; then
-   CLEANUP_DEFS="-DEXEC_RM_FOR_CLEANUP"
-else
-   CLEANUP_DEFS=""
-fi
-
 
 
 # Check whether --enable-check-perl-modules was given.
@@ -4068,7 +4062,7 @@ if test "$ac_cv_perlmodcheck" = "no" ; then
 $as_echo "Compile-time checking for Perl modules disabled" >&6; }
       HAVE_SPAM_ASSASSIN=yes
 else
-    for module in 'IO::Socket' 'MIME::Tools 5.410 ()' 'MIME::WordDecoder' 'Digest::SHA1' ; do
+    for module in 'IO::Socket' 'IO::Socket::SSL' 'MIME::Tools 5.410 ()' 'MIME::WordDecoder' 'Digest::SHA1' ; do
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for Perl module $module" >&5
 $as_echo_n "checking for Perl module $module... " >&6; }
 	(echo "use lib '$PERLINSTALLSITELIB'; use $module;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
@@ -4925,6 +4919,13 @@ if test "${enable_nod32+set}" = set; then :
   enableval=$enable_nod32; ac_cv_nod32=$enableval
 else
   ac_cv_nod32=yes
+fi
+
+# Check whether --enable-rspamc was given.
+if test "${enable_rspamc+set}" = set; then :
+  enableval=$enable_rspamc; ac_cv_rspamc=$enableval
+else
+  ac_cv_rspamc=yes
 fi
 
 
@@ -5903,6 +5904,50 @@ fi
     fi
 fi
 
+if test "$ac_cv_rspamc" = yes; then
+   # Extract the first word of "rspamc", so it can be a program name with args.
+set dummy rspamc; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_path_RSPAMC+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  case $RSPAMC in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_RSPAMC="$RSPAMC" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
+    ac_cv_path_RSPAMC="$as_dir/$ac_word$ac_exec_ext"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_RSPAMC" && ac_cv_path_RSPAMC="/bin/false"
+  ;;
+esac
+fi
+RSPAMC=$ac_cv_path_RSPAMC
+if test -n "$RSPAMC"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $RSPAMC" >&5
+$as_echo "$RSPAMC" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+fi
+
 test -z "$HBEDV" && HBEDV=/bin/false
 test -z "$VEXIRA" && VEXIRA=/bin/false
 test -z "$NAI" && NAI=/bin/false
@@ -5925,6 +5970,7 @@ test -z "$NVCC" && NVCC=/bin/false
 test -z "$CLAMD" && CLAMD=/bin/false
 test -z "$TROPHIE" && TROPHIE=/bin/false
 test -z "$NOD32" && NOD32=/bin/false
+test -z "$RSPAMC" && RSPAMC=/bin/false
 
 if test "$ac_cv_debugging" = yes ; then
     ENABLE_DEBUGGING=-DENABLE_DEBUGGING
@@ -6045,7 +6091,7 @@ fi
 
 
 
-VERSION=2.84
+VERSION=2.85
 
 
 if test "$ac_cv_func_snprintf" != "yes" -o "$ac_cv_func_vsnprintf" != "yes" ; then

@@ -6,12 +6,15 @@
 *
 * Copyright (C) 2002-2005 by Roaring Penguin Software Inc.
 *
+* This program may be distributed under the terms of the GNU General
+* Public License, Version 2, or (at your option) any later version.
+*
 ***********************************************************************/
 
 #ifndef MIMEDEFANG_H
 #define MIMEDEFANG_H 1
 
-#define SMALLBUF 8192
+#define SMALLBUF 16384
 #define BIGBUF 65536
 
 /* Identifier is 7 chars long: 5 time plus 2 counter */
@@ -30,10 +33,10 @@ extern int MXScanDir(char const *sockname, char const *qid, char const *dir);
 extern int MXCommand(char const *sockname, char const *cmd, char *buf, int len, char const *qid);
 extern int MXRelayOK(char const *sockname, char *msg,
 		     char const *ip, char const *name, unsigned int port,
-		     char const *myip, unsigned int daemon_port);
+		     char const *myip, unsigned int daemon_port, char const *qid);
 extern int MXHeloOK(char const *sockname, char *msg,
 		    char const *ip, char const *name, char const *helo,
-		    unsigned int port, char const *myip, unsigned int daemon_port);
+		    unsigned int port, char const *myip, unsigned int daemon_port, char const *qid);
 
 extern int MXSenderOK(char const *sockname, char *msg,
 		      char const **sender_argv, char const *ip, char const *name,

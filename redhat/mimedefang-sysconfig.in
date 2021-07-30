@@ -3,6 +3,9 @@
 ##########################################################################
 # Copyright @2002, Roaring Penguin Software Inc.  All rights reserved.
 #
+# * This program may be distributed under the terms of the GNU General
+# * Public License, Version 2, or (at your option) any later version.
+#
 # Project     : MIMEDefang
 # Component   : redhat/mimedefang-sysconfig
 # Author      : Michael McLagan <Michael.McLagan@linux.org>
@@ -259,6 +262,9 @@ MX_BUSY=600
 
 # Any extra arguments to mimedefang
 # MD_EXTRA="-a auth_author"
+
+# setting USE_SETSYMLIST=yes adds the "-y" command-line
+# USE_SETSYMLIST=yes
 
 # SUBFILTER specifies which filter rules file to use
 # SUBFILTER=@CONFDIR_EVAL@/mimedefang-filter

@@ -1,15 +1,17 @@
-/***************************************************************/
-/*                                                             */
-/*  DYNBUF.C                                                   */
-/*                                                             */
-/*  Implementation of functions for manipulating dynamic       */
-/*  buffers.                                                   */
-/*                                                             */
-/*  This file was part of REMIND.                              */
-/*  Copyright (C) 1992-1998 by Dianne Skoll                    */
-/*  Copyright (C) 1999-2007 by Roaring Penguin Software Inc.   */
-/*                                                             */
-/***************************************************************/
+/**********************************************************************/
+/*                                                                    */
+/*  DYNBUF.C                                                          */
+/*                                                                    */
+/*  Implementation of functions for manipulating dynamic              */
+/*  buffers.                                                          */
+/*                                                                    */
+/*  This file was part of REMIND.                                     */
+/*  Copyright (C) 1992-1998 by Dianne Skoll                           */
+/*  Copyright (C) 1999-2007 by Roaring Penguin Software Inc.          */
+/* This program may be distributed under the terms of the GNU General */
+/* Public License, Version 2, or (at your option) any later version.  */
+/*                                                                    */
+/**********************************************************************/
 
 #include "dynbuf.h"
 #include <stdlib.h>

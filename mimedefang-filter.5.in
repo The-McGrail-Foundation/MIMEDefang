@@ -118,17 +118,21 @@ Note that for this check to take place, you must use the \-r flag with
 \fBmimedefang\fR.
 
 .PP
-\fBfilter_relay\fR is passed five arguments: $hostip is the IP address
+\fBfilter_relay\fR is passed six arguments: $hostip is the IP address
 of the relay host (for example, "127.0.0.1"), $hostname is the
 host name if known (for example, "localhost.localdomain").  If the host
 name could not be determined, $hostname is $hostip enclosed in
 square brackets.  (That is, ("$hostname" eq "[$hostip]") will be true.)
 
 .PP
-The remaining three arguments to \fBfilter_relay\fR are
-$port, $myip and $myport which contain the client's TCP
-port, the Sendmail daemon's listening IP address and the
-Sendmail daemon's listening port.
+The remaining four arguments to \fBfilter_relay\fR are
+$port, $myip, $myport and $qid, which contain the client's TCP
+port, the Sendmail daemon's listening IP address, the
+Sendmail daemon's listening port, and the Sendmail Queue-ID,
+respectively.  \fINote\fR that the Queue-ID may not yet be
+available at this stage (for example, Postfix does not allocate
+a queue-ID this early.)  If the Queue-ID is not available,
+the string NOQUEUE is passed instead.
 
 .PP
 \fBfilter_relay\fR must return a two-element list:
@@ -189,16 +193,19 @@ Note that for this function to be called, you must use the
 \-H flag with \fBmimedefang\fR.
 
 .PP
-\fBfilter_helo\fR is passed six arguments: $ip and $name are the IP
+\fBfilter_helo\fR is passed seven arguments: $ip and $name are the IP
 address and name of the sending relay, as in \fBfilter_relay\fR.  The
 third argument, $helo, is the argument supplied in the HELO/EHLO command.
 
 .PP
-The remaining three arguments to \fBfilter_relay\fR are
-$port, $myip and $myport which contain the client's TCP
-port, the Sendmail daemon's listening IP address and the
-Sendmail daemon's listening port.
-
+The remaining four arguments to \fBfilter_helo\fR are
+$port, $myip, $myport and $qid, which contain the client's TCP
+port, the Sendmail daemon's listening IP address, the
+Sendmail daemon's listening port, and the Sendmail Queue-ID,
+respectively.  \fINote\fR that the Queue-ID may not yet be
+available at this stage (for example, Postfix does not allocate
+a queue-ID this early.)  If the Queue-ID is not available,
+the string NOQUEUE is passed instead.
 
 .PP
 \fBfilter_helo\fR must return a two-to-five element list: ($code,
@@ -364,6 +371,11 @@ example, a connection to a database server), you \fImust\fR run that
 code inside \fBfilter_initialize\fR and not directly from the filter,
 because the multiplexor closes all open descriptors when it activates
 a new worker.
+From within \fBfilter_initialize\fR a configuration file could be loaded
+by calling \fBread_config\fR.
+\fBread_config\fR accepts a configuration file path and it can be used
+to overwrite global variables.
+Configuration file format is pure Perl code.
 
 When a worker is about to exit, \fBmimedefang.pl\fR calls the function
 \fBfilter_cleanup\fR (if it is defined) with no arguments.  This
@@ -815,6 +827,9 @@ $Features{"Virus:TROPHIE"} is the full path to Trophie if it is installed;
 $Features{"Virus:NOD32"} is the full path to ESET NOD32 nod32cli if it is installed;
 0 if it is not.
 
+$Features{"Path:RSPAMC"} is the full path to rspamc(1) if it is installed;
+0 if it is not.
+
 \fBNOTE:\fR Perl-module based features such as SpamAssassin are determined at
 runtime and may change as these are added and removed.  Most Virus features are
 predetermined at the time of configuration and do not adapt to runtime
@@ -892,10 +907,12 @@ contains the string "NOQUEUE".
 
 .TP
 .B $QueueID
-The Sendmail queue identifier if it could be determined.  Otherwise,
-contains the string "NOQUEUE". This variable \fIis\fR set correctly
-in \fBfilter_sender\fR and \fBfilter_recipient\fR, but it is \fInot\fR
-available in \fBfilter_relay\fR.
+The Sendmail queue identifier if it could be determined.  This
+variable \fIis\fR set correctly in \fBfilter_relay\fR,
+\fBfilter_helo\fR, \fBfilter_sender\fR and \fBfilter_recipient\fR.
+Note, however, that Postfix may not allocate a queue ID until
+\fBfilter_recipient\fR time.  If a Queue-ID has not yet been
+allocated, $QueueID is set to "NOQUEUE".
 
 .TP
 .B $MsgID
@@ -1803,6 +1820,19 @@ This function returns a Mail::SpamAssassin::NoMailAudit object with the
 current email message contained in it.  It may be used to perform other 
 SpamAssassin related functions.
 
+.TP
+.B rspamd_check([ $config_file ]) *experimental*
+This function returns a six-element list of the form ($hits, $required, 
+$tests, $report, $action, $is_spam).
+$hits is the "score" given to the message by Rspamd
+(higher score means more likely SPAM). $required is the number of hits 
+required before Rspamd concludes that the message is SPAM.  $tests
+is a list of Rspamd test names, and $report is text
+detailing which tests triggered and their point score.
+$action is the action that rspamd(8) wants to apply and $is_spam is a boolean
+value that determines if the message is spam or not.
+This gives you insight into why Rspamd concluded that the message is SPAM. 
+ 
 .TP
 .B md_copy_orig_msg_to_work_dir()
 Normally, virus-scanners are passed only the unpacked, decoded parts

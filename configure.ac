@@ -126,21 +126,8 @@ AC_ARG_WITH(quarantinedir,
 			  (/var/spool/MD-Quarantine)],
 	QDIR=$with_quarantinedir, QDIR=/var/spool/MD-Quarantine)
 
-AC_ARG_ENABLE(cleanup-with-rm,
-[  --enable-cleanup-with-rm
-			  Fork/exec "/bin/rm" to clean up instead of
-			  using built-in C code], ac_cv_cleanup_with_rm=$enableval, ac_cv_cleanup_with_rm=no)
-
 AC_ARG_ENABLE(pthread-flag,
 [  --enable-pthread-flag   Supply the -pthread flag to the C compiler], FORCE_PTHREAD_FLAG=-pthread, FORCE_PTHREAD_FLAG="")
-
-if test "$ac_cv_cleanup_with_rm" = "yes" ; then
-   CLEANUP_DEFS="-DEXEC_RM_FOR_CLEANUP"
-else
-   CLEANUP_DEFS=""
-fi
-
-AC_SUBST(CLEANUP_DEFS)
 
 AC_ARG_ENABLE(check-perl-modules,
 [  --disable-check-perl-modules
@@ -152,7 +139,7 @@ if test "$ac_cv_perlmodcheck" = "no" ; then
    dnl for installation of spamassassin.cf
    HAVE_SPAM_ASSASSIN=yes
 else
-    for module in 'IO::Socket' 'MIME::Tools 5.410 ()' 'MIME::WordDecoder' 'Digest::SHA1' ; do
+    for module in 'IO::Socket' 'IO::Socket::SSL' 'MIME::Tools 5.410 ()' 'MIME::WordDecoder' 'Digest::SHA1' ; do
 	AC_MSG_CHECKING([for Perl module $module])
 	(echo "use lib '$PERLINSTALLSITELIB'; use $module;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
 	if test $? != 0 ; then
@@ -497,6 +484,7 @@ AC_ARG_ENABLE(nvcc,   [  --disable-nvcc          Do not include support for Nvcc
 AC_ARG_ENABLE(clamd,   [  --disable-clamd         Do not include support for clamd], ac_cv_clamd=$enableval, ac_cv_clamd=yes)
 AC_ARG_ENABLE(trophie, [  --disable-trophie       Do not include support for Trophie], ac_cv_trophie=$enableval, ac_cv_trophie=yes)
 AC_ARG_ENABLE(nod32,   [  --disable-nod32         Do not include support for Eset NOD32], ac_cv_nod32=$enableval, ac_cv_nod32=yes)
+AC_ARG_ENABLE(rspamc,   [  --disable-rspamc       Do not include support for Rspamd], ac_cv_rspamc=$enableval, ac_cv_rspamc=yes)
 
 ANTIVIR_PATH="$PATH:/usr/lib/AntiVir:/usr/local/uvscan:/opt/AVP:/etc/iscan:/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bd7:/usr/local/bd7/bin:/opt/kav/bin:/opt/kav/5.5/kav4unix/bin/:/opt/eset/nod32/bin"
 
@@ -593,6 +581,10 @@ if test "$ac_cv_antivirus" = "yes"; then
     fi
 fi
 
+if test "$ac_cv_rspamc" = yes; then
+   AC_PATH_PROG(RSPAMC, rspamc, /bin/false, $PATH)
+fi
+
 test -z "$HBEDV" && HBEDV=/bin/false
 test -z "$VEXIRA" && VEXIRA=/bin/false
 test -z "$NAI" && NAI=/bin/false
@@ -615,6 +607,7 @@ test -z "$NVCC" && NVCC=/bin/false
 test -z "$CLAMD" && CLAMD=/bin/false
 test -z "$TROPHIE" && TROPHIE=/bin/false
 test -z "$NOD32" && NOD32=/bin/false
+test -z "$RSPAMC" && RSPAMC=/bin/false
 
 if test "$ac_cv_debugging" = yes ; then
     ENABLE_DEBUGGING=-DENABLE_DEBUGGING
@@ -701,7 +694,7 @@ fi
 
 AC_SUBST(ENABLE_DEBUGGING)
 AC_SUBST(PTHREAD_FLAG)
-VERSION=2.84
+VERSION=2.85
 AC_SUBST(VERSION)
 
 dnl Jigger for machines without snprintf

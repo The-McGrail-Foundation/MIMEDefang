@@ -19,7 +19,7 @@ HAVE_SPAM_ASSASSIN=@HAVE_SPAM_ASSASSIN@
 DEFS=-D_POSIX_PTHREAD_SEMANTICS \
 	@EMBPERLDEFS@ \
 	@USEPOLL@ \
-	@ENABLE_DEBUGGING@ @CLEANUP_DEFS@ -DPERL_PATH=\"@PERL@\" \
+	@ENABLE_DEBUGGING@ -DPERL_PATH=\"@PERL@\" \
 	-DMIMEDEFANG_PL=\"$(prefix)/bin/mimedefang.pl\" \
 	-DRM=\"@RM@\" \
 	-DVERSION=\"@VERSION@\" \
@@ -239,6 +239,21 @@ distro-beta: beta-check
 beta-check:
 	@if test "$(BETA)" = "" ; then \
 		echo "Usage: make distro-beta BETA=<x>"; \
+		exit 1; \
+	fi
+
+distro-rc: rc-check
+	mkdir mimedefang-$(VERSION)-rc$(RC)
+	tar -c -T MANIFEST -f - | (cd mimedefang-$(VERSION)-rc$(RC); tar xf -)
+	$(PERL) -p -e 's/#VERSION#/$(VERSION)/;s/#RELEASE#/0.rc$(RC)/;s/#RC#/-rc$(RC)/g' < redhat/mimedefang-spec.in > mimedefang-$(VERSION)-rc$(RC)/redhat/mimedefang.spec
+	tar cvf mimedefang-$(VERSION)-rc$(RC).tar mimedefang-$(VERSION)-rc$(RC)
+	gzip -v -f -9 mimedefang-$(VERSION)-rc$(RC).tar
+	rm -rf mimedefang-$(VERSION)-rc$(RC)
+	gpg --detach-sign mimedefang-$(VERSION)-rc$(RC).tar.gz
+
+rc-check:
+	@if test "$(RC)" = "" ; then \
+		echo "Usage: make distro-rc RC=<x>"; \
 		exit 1; \
 	fi
 

@@ -63,6 +63,7 @@ use vars qw($HTMLFoundEndBody $HTMLBoilerplate $SASpamTester);
 
 use Socket;
 use IO::Socket;
+use IO::Socket::SSL;
 use IO::Select;
 use IO::Handle;
 use IO::File;
@@ -73,6 +74,7 @@ use Time::Local;
 use MIME::Parser;
 use Sys::Hostname;
 use File::Spec qw ();
+use Errno qw(ENOENT EACCES);
 
 # Detect these Perl modules at run-time.  Can explicitly prevent
 # loading of these modules by setting $Features{"xxx"} = 0;
@@ -142,6 +144,8 @@ $Features{'Path:SPOOLDIR'}  = '@SPOOLDIR@';
 $Features{'Path:CONFDIR'}   = '@CONFDIR_EVAL@';
 $Features{'Path:CLAMDCONF'} = '@CONFDIR_EVAL@/MD-clamdscan.conf';
 
+$Features{"Path:RSPAMC"} = ('@RSPAMC@' ne '/bin/false' ? '@RSPAMC@' : 0);
+
 # Not in server mode by default
 $ServerMode = 0;
 
@@ -167,7 +171,7 @@ $CachedTimezone = "";
 $SyslogFacility = "mail";
 undef $GraphDefangSyslogFacility;
 
-$URL = 'http://www.roaringpenguin.com/mimedefang/enduser.php3';
+$URL = 'https://mimedefang.org/enduser/';
 $CSSHost    = "127.0.0.1:7777:local";
 $FprotdHost = "127.0.0.1:10200";
 $Fprotd6Host = "127.0.0.1:10200";
@@ -532,12 +536,12 @@ sub write_result_line
 		}
 	}
 
-	# We have an 8kb limit on the length of lines in RESULTS, including
+	# We have a 16kb limit on the length of lines in RESULTS, including
 	# trailing newline and null used in the milter.  So, we limit $cmd +
-	# $args to 8190 bytes.
-	if( length $line > 8190 ) {
-		md_syslog( 'warning',  "Cannot write line over 8190 bytes long to RESULTS file; truncating.  Original line began with: " . substr $line, 0, 40);
-		$line = substr $line, 0, 8190;
+	# $args to 16382 bytes.
+	if( length $line > 16382 ) {
+		md_syslog( 'warning',  "Cannot write line over 16382 bytes long to RESULTS file; truncating.  Original line began with: " . substr $line, 0, 40);
+		$line = substr $line, 0, 16382;
 	}
 
 	print $results_fh "$line\n" or die "Could not write RESULTS line: $!";
@@ -561,6 +565,15 @@ sub time_str {
 		   $year + 1900, $mon+1, $mday, $hour, $min, $sec);
 }
 
+#***********************************************************************
+# %PROCEDURE: hour_str
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  The current time in the form: "YYYY-MM-DD-HH"
+# %DESCRIPTION:
+#  Returns a string representing the current time.
+#***********************************************************************
 sub hour_str {
     my($sec, $min, $hour, $mday, $mon, $year, $junk);
     ($sec, $min, $hour, $mday, $mon, $year, $junk) = localtime(time());
@@ -760,20 +773,25 @@ sub synthesize_received_header {
     my($hdr);
 
     my($hn) = $SendmailMacros{"if_name"};
+    my($auth) = $SendmailMacros{"auth_authen"};
 
     my $strdate = rfc2822_date();
 
     $hn = get_host_name() unless (defined($hn) and ($hn ne ""));
     if ($RealRelayHostname ne "[$RealRelayAddr]") {
-	$hdr = "Received: from $Helo ($RealRelayHostname [$RealRelayAddr])\n";
+      $hdr = "Received: from $Helo ($RealRelayHostname [$RealRelayAddr])\n";
     } else {
-	$hdr = "Received: from $Helo ([$RealRelayAddr])\n";
+      $hdr = "Received: from $Helo ([$RealRelayAddr])\n";
     }
-    $hdr .= "\tby $hn (envelope-sender $Sender) (MIMEDefang) with ESMTP id $MsgID";
-    if ($#Recipients != 0) {
-	$hdr .= "; ";
+    if($auth) {
+      $hdr .= "\tby $hn (envelope-sender $Sender) (MIMEDefang) with ESMTPA id $MsgID";
     } else {
-	$hdr .= "\n\tfor " . $Recipients[0] . "; ";
+      $hdr .= "\tby $hn (envelope-sender $Sender) (MIMEDefang) with ESMTP id $MsgID";
+    }
+    if ($#Recipients != 0) {
+      $hdr .= "; ";
+    } else {
+      $hdr .= "\n\tfor " . $Recipients[0] . "; ";
     }
 
     $hdr .= $strdate . "\n";
@@ -5854,17 +5872,20 @@ sub handle_tick
 #***********************************************************************
 sub handle_relayok
 {
-	my ($hostip, $hostname, $port, $myip, $myport) = @_;
-	if(!defined(&filter_relay)) {
-		send_filter_answer('CONTINUE', "ok", "filter_relay", "host $hostip ($hostname)");
-		return;
-	}
+        my ($hostip, $hostname, $port, $myip, $myport, $qid) = @_;
 
-	# Set up globals
-	$RelayAddr     = $hostip;
-	$RelayHostname = $hostname;
-	my ($ok, $msg, $code, $dsn, $delay) = filter_relay($hostip, $hostname, $port, $myip, $myport);
-	send_filter_answer($ok, $msg, "filter_relay", "host $hostip ($hostname)", $code, $dsn, $delay);
+        if(!defined(&filter_relay)) {
+            send_filter_answer('CONTINUE', "ok", "filter_relay", "host $hostip ($hostname)");
+            return;
+        }
+
+        # Set up globals
+        $RelayAddr     = $hostip;
+        $RelayHostname = $hostname;
+        $QueueID       = $qid;
+        $MsgID         = $qid;
+        my ($ok, $msg, $code, $dsn, $delay) = filter_relay($hostip, $hostname, $port, $myip, $myport, $qid);
+        send_filter_answer($ok, $msg, "filter_relay", "host $hostip ($hostname)", $code, $dsn, $delay);
 }
 
 #***********************************************************************
@@ -5882,7 +5903,7 @@ sub handle_relayok
 #***********************************************************************
 sub handle_helook
 {
-	my ($ip, $name, $helo, $port, $myip, $myport) = @_;
+	my ($ip, $name, $helo, $port, $myip, $myport, $qid) = @_;
 	if(!defined(&filter_helo)) {
 		send_filter_answer('CONTINUE', "ok", "filter_helo", "helo $helo");
 		return;
@@ -5892,8 +5913,9 @@ sub handle_helook
 	$RelayAddr     = $ip;
 	$RelayHostname = $name;
 	$Helo          = $helo;
-
-	my ($ok, $msg, $code, $dsn, $delay) = filter_helo($ip, $name, $helo, $port, $myip, $myport);
+        $QueueID       = $qid;
+        $MsgID         = $qid;
+	my ($ok, $msg, $code, $dsn, $delay) = filter_helo($ip, $name, $helo, $port, $myip, $myport, $qid);
 	send_filter_answer($ok, $msg, "filter_helo", "helo $helo", $code, $dsn, $delay);
 }
 
@@ -7513,13 +7535,13 @@ sub get_smtp_return_code {
 	    if ($code =~ /^[123]/) {
 		$retval = 'CONTINUE';
 	    } elsif ($code =~ /^4/) {
-		md_syslog('info', "md_check_against_smtp_server for $recip on $server returned $code $dsn $text");
+		md_syslog('info', "get_smtp_return_code: for $recip on $server returned $code $dsn $text");
 		$retval = 'TEMPFAIL';
 	    } elsif ($code =~ /^5/) {
-		md_syslog('info', "md_check_against_smtp_server for $recip on $server returned $code $dsn $text");
+		md_syslog('info', "get_smtp_return_code: for $recip on $server returned $code $dsn $text");
 		$retval = 'REJECT';
 	    } else {
-		md_syslog('warning', "Invalid SMTP reply code $code from server $server for $recip");
+		md_syslog('warning', "get_smtp_return_code: Invalid SMTP reply code $code from server $server for $recip");
 		$retval = 'TEMPFAIL';
 	    }
 	    return ($retval, $code, $dsn, $text);
@@ -7528,11 +7550,11 @@ sub get_smtp_return_code {
 
     my $msg;
     if( defined $line ) {
-        $msg = "Invalid response [$line] from SMTP server";
-        md_syslog('info', "md_check_against_smtp_server for $recip on $server returned invalid response [$line]");
+        $msg = "get_smtp_return_code: Invalid response [$line] from SMTP server";
+        md_syslog('info', "get_smtp_return_code: Check for $recip on $server returned invalid response [$line]");
     } else {
-        $msg = "Empty response from SMTP server";
-        md_syslog('info', "md_check_against_smtp_server for $recip on $server returned an empty response");
+        $msg = "get_smtp_return_code: Empty response from SMTP server";
+        md_syslog('info', "get_smtp_return_code: for $recip on $server returned an empty response");
     }
 
     return ('TEMPFAIL', "451", "4.3.0", $msg );
@@ -7545,7 +7567,7 @@ sub get_smtp_return_code {
 #  server -- the server we're querying
 # %RETURNS:
 #  A four-element list:(retval, code, dsn, exts)
-#  retval is 'CONTINUE', 'TEMPFAIL' or 'REJECT'.
+#  retval is 'CONTINUE', 'TEMPFAIL', or 'REJECT'.
 #  code is a 3-digit SMTP code.
 #  dsn is an extended SMTP status code
 #  exts is a hash of EXTNAME->EXTOPTS
@@ -7573,13 +7595,14 @@ sub get_smtp_extensions {
       $delim=$2;
       $ext=$3;
       $text=$4;
-      md_syslog('debug',"get_smtp_extensions: line $LineNum: code=$code, delim=$delim, ext=$ext, text=$text");
+      # uncomment to debug parsing
+      # md_syslog('debug',"get_smtp_extensions: line $LineNum: code=$code, delim=$delim, ext=$ext, text=$text");
       if ( $LineNum == 0 ) {
         $exts{'hostname'} = $3;
         $LineNum++;
         next;
       }
-      @exts{$ext} = $text;
+      $exts{$ext} = $text;
       $LineNum++;
     }
 
@@ -7620,10 +7643,41 @@ sub md_check_against_smtp_server {
       $recip = "<$recip>";
     }
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
     my $sock = IO::Socket::INET->new(PeerAddr => $server,
+=======
+=======
+>>>>>>> e597774 (modify SSL parameters to make the check work with self-signed certificates)
+    # Set SSL_startHansshake to start in plain mode,
+=======
+    # Set SSL_startHandshake to start in plain mode,
+>>>>>>> b805b9a (sync with upstream)
+    # SSL_verify_mode to SSL_VERIFY_NONE to make the check work
+    # with self-signed certificates and SSL_hostname for SNI
+    my $sock = IO::Socket::SSL->new(PeerAddr => $server,
+             SSL_startHandshake => 0,
+             SSL_verify_mode => SSL_VERIFY_NONE,
+             SSL_hostname => "$server",
+<<<<<<< HEAD
+<<<<<<< HEAD
+>>>>>>> 9eeb866 (modify SSL parameters to make the check work with self-signed certificates)
+=======
+    my $sock = IO::Socket::INET->new(PeerAddr => $server,
+>>>>>>> 762f0d5 (Revert "modify SSL parameters to make the check work with self-signed certificates")
+=======
+>>>>>>> e597774 (modify SSL parameters to make the check work with self-signed certificates)
+=======
+    my $sock = IO::Socket::INET->new(PeerAddr => $server,
+>>>>>>> 28091f5 (Revert "modify SSL parameters to make the check work with self-signed certificates")
+=======
+>>>>>>> b805b9a (sync with upstream)
 				     PeerPort => $port,
 				     Proto    => 'tcp',
-				     Timeout  => 15);
+				     Timeout  => 25);
     if (!defined($sock)) {
       return ('TEMPFAIL', "Could not connect to other SMTP server $server: $!");
     }
@@ -7659,13 +7713,14 @@ sub md_check_against_smtp_server {
     $sock->flush();
     my %exts;
     my $ext;
-    ($retval, $code, $dsn, %exts) = get_smtp_extensions($sock, $recip, $server);
-    if ($retval ne 'CONTINUE') {
-      $sock->print("HELO $helo\r\n");
+     ($retval, $code, $dsn, %exts) = get_smtp_extensions($sock, $recip, $server);
+     if ($retval ne 'CONTINUE') {
+       $sock->print("HELO $helo\r\n");
     } else {
-      foreach $ext ( keys %exts ) {
-        md_syslog('debug',"md_check_against_smtp_server extension: $ext $exts{$ext}");
-      }
+    # Uncomment to debug (and/or uncomment similar line in get_smtp_extensions)
+    #   foreach $ext ( keys %exts ) {
+    #     md_syslog('debug',"md_check_against_smtp_server extension: $ext $exts{$ext}");
+    #   }
       if (exists $exts{'STARTTLS'}) {
         # send STARTTLS command and read response
         $sock->print("STARTTLS\r\n");
@@ -7679,19 +7734,25 @@ sub md_check_against_smtp_server {
           return ($retval, $text, $code, $dsn);
         }
         # if response was successful we can upgrade the socket to SSL now:
-        if ( IO::Socket::SSL->start_SSL($sock,
-          # explicitly set hostname we should use for SNI
-          SSL_hostname => "$server" ) ) {
+        if ( $sock->connect_SSL ) {
           md_syslog('debug',"md_check_against_smtp_server: start_SSL succeeded!");
           # send inside EHLO
           $sock->print("EHLO $helo\r\n");
-          } else {
+        } else {
           #back off from using STARTTLS
+          $sock->stop_SSL;
           no warnings 'once';
           md_syslog('debug',"md_check_against_smtp_server: $server offers STARTTLS but fails with error $IO::Socket::SSL::SSL_ERROR. Falling back to plaintext...");
           $sock->print("EHLO $helo\r\n");
-       }
-    }
+        }
+      } else {
+         md_syslog('debug',"md_check_against_smtp_server: STARTTLS not available");
+         $sock->print("RSET\r\n");
+         $sock->flush();
+         # Swallow return value
+         get_smtp_return_code($sock, $recip, $server); 
+         $sock->print("EHLO $helo\r\n");
+      }
   }
   # At this point we've either sent a fallback HELO, fallback EHLO, or internal EHLO.
   # so, get the code...
@@ -7704,7 +7765,7 @@ sub md_check_against_smtp_server {
     $sock->close();
     return ($retval, $text, $code, $dsn);
   }
-
+  md_syslog('debug',"md_check_against_smtp_server: Checking sender $sender");
   $sock->print("MAIL FROM:$sender\r\n");
   $sock->flush();
 
@@ -7718,6 +7779,7 @@ sub md_check_against_smtp_server {
     return ($retval, $text, $code, $dsn);
   }
 
+  md_syslog('debug',"md_check_against_smtp_server: Checking recipient $recip");
   $sock->print("RCPT TO:$recip\r\n");
   $sock->flush();
 
@@ -7730,6 +7792,103 @@ sub md_check_against_smtp_server {
   return ($retval, $text, $code, $dsn);
 }
 
+#***********************************************************************
+# %PROCEDURE: read_config
+# %ARGUMENTS:
+#  configuration file path
+# %RETURNS:
+#  return 1 if configuration file cannot be loaded; 0 otherwise
+# %DESCRIPTION:
+#  loads a configuration file to overwrite global variables values
+#***********************************************************************
+# Derivative work from amavisd-new read_config_file($$)
+# Copyright (C) 2002-2018 Mark Martinec
+sub read_config($) {
+  my($config_file) = @_;
+  my(@stat_list) = stat($config_file);  # symlinks-friendly
+  my $errn = @stat_list ? 0 : 0+$!;
+  my $owner_uid = $stat_list[4];
+  my $msg;
+
+  if ($errn == ENOENT) { $msg = "does not exist" }
+  elsif ($errn)        { $msg = "is inaccessible: $!" }
+  elsif (-d _)         { $msg = "is a directory" }
+  elsif (-S _ || -b _ || -c _) { $msg = "is not a regular file or pipe" }
+  elsif ($owner_uid) { $msg = "should be owned by root (uid 0)" }
+  if (defined $msg)    {
+    md_syslog("crit", "Config file \"$config_file\" $msg");
+    return 1;
+  }
+  if (defined(do $config_file)) {}
+  return 0;
+ 1;
+}
+
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+#***********************************************************************
+# %PROCEDURE: rspamd_check
+# %ARGUMENTS:
+#  config -- optional rspamd config file
+# %RETURNS:
+#  An array of four elements,
+#       Weight of message ('hits')
+#       Number of hits required before Rspamd conciders a message spam
+#       Comma separated list of symbolic test names that were triggered
+#       A 'report' string, detailing tests that failed and their weights
+# %DESCRIPTION:
+#  Scans message using Rspamd (http://rspamd.org)
+#***********************************************************************
+sub rspamd_check {
+    my $rp;
+    my ($hits, $req, $tests, $report, $action, $is_spam);
+
+    unless ($Features{"Path:RSPAMC"}) {
+        md_syslog('err', "Attempt to call Rspamd function, but Rspamd is not installed.");
+        return undef;
+    }
+
+    my @rs = ($Features{"Path:RSPAMC"}, "./INPUTMSG");
+
+    if ( -f $Features{"Path:RSPAMC"} ) {
+      open(RSPAMD_PIPE, "-|", @rs)
+                        || die "can't open rspamc: $!";
+      while(<RSPAMD_PIPE>) {
+        $rp = $_;
+        {
+          if($rp =~ /Action: (.*)/) {
+            $action = $1;
+          }
+        }
+        {
+          if($rp =~ /Spam: (.*)/) {
+            $is_spam = $1;
+          }
+        }
+        {
+          if($rp =~ /Score: (.*) \/ (.*)/) {
+            $hits = $1;
+            $req = $2;
+          }
+        }
+        {
+          if($rp =~ /Symbol: (.*)/) {
+            $tests .= $1 . ", ";
+          }
+        }
+        $report .= $rp . "\n";
+      }
+      $tests =~ s/\, $//;
+      close(RSPAMD_PIPE);
+    }
+
+    return ($hits, $req, $tests, $report, $action, $is_spam);
+}
+
+=======
+>>>>>>> b805b9a (sync with upstream)
 exit(&main) unless caller;
 #------------------------------------------------------------
 1;

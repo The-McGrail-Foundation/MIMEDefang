@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/perl
 #
 # GraphDefang -- a set of tools to create graphs of your mimedefang
 #                spam and virus logs.
@@ -24,6 +24,8 @@
 #=============================================================================
 
 use strict;
+use warnings;
+
 use CGI qw(:standard);
 use CGI::Carp qw(fatalsToBrowser);
 use Fcntl;

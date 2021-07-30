@@ -1389,7 +1389,7 @@ handleWorkerStderr(EventSelector *es,
 		  void *data)
 {
     Worker *s = (Worker *) data;
-    char buffer[512];
+    char buffer[64];
     int n;
     char const *qid;
 
@@ -1469,7 +1469,7 @@ handleWorkerStatusFD(EventSelector *es,
 		    void *data)
 {
     Worker *s = (Worker *) data;
-    char buffer[512];
+    char buffer[64];
     int n;
     int changed = 0;
 
@@ -3111,7 +3111,7 @@ reapTerminatedWorkers(int killed)
 static void
 shutDescriptors(Worker *s)
 {
-    char buffer[512];
+    char buffer[64];
     int n;
 
     if (s->workerStdin >= 0) {

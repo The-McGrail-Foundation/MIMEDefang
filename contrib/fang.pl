@@ -19,6 +19,9 @@
 #
 #	Copyright (C) 2002 Neil McKellar (mckellar@telusplanet.net)
 #
+# * This program may be distributed under the terms of the GNU General
+# * Public License, Version 2, or (at your option) any later version.
+#
 #  Notes:
 #  Modify the name of the mail server to use when sending the
 #  reconstructed mail messages.  Ideally this will be your own mail
@@ -39,6 +42,9 @@
 #  need root.
 #
 ######################################################################
+
+use strict;
+use warnings;
 
 use Net::SMTP;
 use MIME::Lite;
