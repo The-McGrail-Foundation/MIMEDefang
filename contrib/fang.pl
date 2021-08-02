@@ -20,7 +20,7 @@
 #	Copyright (C) 2002 Neil McKellar (mckellar@telusplanet.net)
 #
 # * This program may be distributed under the terms of the GNU General
-# * Public License, Version 2, or (at your option) any later version.
+# * Public License, Version 2.
 #
 #  Notes:
 #  Modify the name of the mail server to use when sending the

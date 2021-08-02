@@ -9,7 +9,7 @@
 * http://www.roaringpenguin.com
 *
 * This program may be distributed under the terms of the GNU General
-* Public License, Version 2, or (at your option) any later version.
+* Public License, Version 2.
 *
 * This program was derived from the sample mail filter included in
 * libmilter/README in the Sendmail 8.11 distribution.

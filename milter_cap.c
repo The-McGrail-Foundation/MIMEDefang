@@ -8,7 +8,7 @@
 * http://www.roaringpenguin.com
 *
 * This program may be distributed under the terms of the GNU General
-* Public License, Version 2, or (at your option) any later version.
+* Public License, Version 2.
 *
 ***********************************************************************/
 #include <stdio.h>
