@@ -1398,6 +1398,10 @@ handleWorkerStderr(EventSelector *es,
 	if (buffer[n-1] == '\n') {
 	    buffer[n-1] = 0;
 	}
+  if(s == NULL) {
+    syslog(LOG_ERR, "no data available for current worker");
+    return;
+  }
 	/* Heuristic... Perl spits this out, I think*/
 	if (strstr(buffer, "Out of memory!")) {
 	    s->oom = 1;
@@ -1442,10 +1446,12 @@ handleWorkerStderr(EventSelector *es,
 		}
 	    }
 	}
-	close(s->workerStderr);
-	Event_DelHandler(s->es, s->errHandler);
-	s->errHandler = NULL;
-	s->workerStderr = -1;
+  if(s) {
+	  close(s->workerStderr);
+	  Event_DelHandler(s->es, s->errHandler);
+    s->errHandler = NULL;
+    s->workerStderr = -1;
+  }
     }
 }
 
@@ -1493,13 +1499,17 @@ handleWorkerStatusFD(EventSelector *es,
 		}
 	    }
 	}
-	close(s->workerStatusFD);
-	Event_DelHandler(s->es, s->statusHandler);
-	s->statusHandler = NULL;
-	s->workerStatusFD = -1;
+  if(s) {
+	  close(s->workerStatusFD);
+	  Event_DelHandler(s->es, s->statusHandler);
+	  s->statusHandler = NULL;
+	  s->workerStatusFD = -1;
+  }
     }
     if (changed) {
-	notify_worker_status(s->es, WORKERNO(s), s->status_tag);
+      if(s) {
+	      notify_worker_status(s->es, WORKERNO(s), s->status_tag);
+      }
     }
 }
 
