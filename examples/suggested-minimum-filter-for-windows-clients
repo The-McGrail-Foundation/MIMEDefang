@@ -294,6 +294,22 @@ sub filter_end {
 	}
     }
 
+    if ($Features{"Path:RSPAMC"}) {
+    my ($hits, $req, $names, $report, $action, $is_spam);
+      if (-s "./INPUTMSG" < 100*1024) {
+        ($hits, $req, $names, $report, $action, $is_spam) = rspamd_check();
+        md_syslog("Warning", "Action: $action, Spam: $is_spam, Names: $names");
+        if ($is_spam eq "true") {
+          action_change_header("X-Spam-Score", "$hits/$req $names");
+          md_syslog("Warning", "Action: $action");
+          md_graphdefang_log('spam', $hits, $RelayAddr);
+        } else {
+          # Delete any existing X-Spam-Score header?
+          action_delete_header("X-Spam-Score");
+        }
+      }
+    }
+
     # I HATE HTML MAIL!  If there's a multipart/alternative with both
     # text/plain and text/html parts, nuke the text/html.  Thanks for
     # wasting our disk space and bandwidth...
