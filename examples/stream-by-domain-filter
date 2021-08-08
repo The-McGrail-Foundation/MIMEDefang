@@ -40,8 +40,8 @@ $Stupidity{"NoMultipleInlines"} = 0;
 #***********************************************************************
 sub filter_begin {
     if (stream_by_domain()) {
-	# More than one domain -- do nothing!
-	return;
+        # More than one domain -- do nothing!
+        return;
     }
 
     # Rest of filter-begin stuff goes here.  We are guaranteed that all
@@ -67,11 +67,11 @@ sub filter {
     my($entity, $fname, $ext, $type) = @_;
 
     if ($Domain eq "abc.com") {
-	# Filter actions for abc.com
+        # Filter actions for abc.com
     } elsif ($Domain eq "xyz.com") {
-	# Filter actions for xyz.com
+        # Filter actions for xyz.com
     } else {
-	# Default filter actions
+        # Default filter actions
     }
 }
 
@@ -89,10 +89,9 @@ sub filter {
 #***********************************************************************
 sub defang_warning {
     my($oldfname, $fname) = @_;
-    return
-	"An attachment named '$oldfname' was converted to '$fname'.\n" .
-	"To recover the file, right-click on the attachment and Save As\n" .
-	"'$oldfname'\n";
+    return "An attachment named '$oldfname' was converted to '$fname'.\n" .
+    "To recover the file, right-click on the attachment and Save As\n" .
+    "'$oldfname'\n";
 }
 
 # DO NOT delete the next line, or Perl will complain.
