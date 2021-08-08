@@ -178,7 +178,6 @@ Event_HandleEventUsingSelect(EventSelector *es)
     FD_ZERO(&readfds);
     FD_ZERO(&writefds);
 
-    eh = es->handlers;
     for (eh=es->handlers; eh; eh=eh->next) {
 	if (eh->flags & EVENT_FLAG_DELETED) continue;
 	if (eh->flags & EVENT_FLAG_READABLE) {
