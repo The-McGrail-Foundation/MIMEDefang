@@ -1328,7 +1328,8 @@ write_and_lock_pidfile(char const *pidfile, char *lockfile, int pidfile_fd)
 
     lockfile_fd = open(lockfile, O_RDWR|O_CREAT, 0666);
     if (lockfile_fd < 0) {
-	return -1;
+      free(lockfile);
+      return -1;
     }
 
     fl.l_type = F_WRLCK;
@@ -1337,8 +1338,9 @@ write_and_lock_pidfile(char const *pidfile, char *lockfile, int pidfile_fd)
     fl.l_len = 0;
 
     if (fcntl(lockfile_fd, F_SETLK, &fl) < 0) {
-	syslog(LOG_ERR, "Could not lock lockfile file %s: %m.  Is another copy running?", lockfile);
-	return -1;
+      syslog(LOG_ERR, "Could not lock lockfile file %s: %m.  Is another copy running?", lockfile);
+      free(lockfile);
+      return -1;
     }
     if (pidfile_fd >= 0) {
 	ftruncate(pidfile_fd, 0);
@@ -1347,9 +1349,11 @@ write_and_lock_pidfile(char const *pidfile, char *lockfile, int pidfile_fd)
 
 	/* Close the pidfile fd; no longer needed */
 	if (close(pidfile_fd) < 0) {
+      free(lockfile);
 	    return -1;
 	}
     }
+    free(lockfile);
 
     /* Do NOT close lockfile_fd... it will close and lock will be released
        when we exit */
