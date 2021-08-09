@@ -94,6 +94,7 @@ rm_r(char const *qid, char const *dir)
 	      retcode = -1;
 	    }
     }
+    closedir(d);
     if (rmdir(dir) < 0) {
       syslog(LOG_WARNING, "%s: rmdir(%s) failed: %m", qid, dir);
       return -1;
