@@ -2606,11 +2606,14 @@ main(int argc, char **argv)
     /* Read key file if present */
     fp = fopen(KEY_FILE, "r");
     if (fp) {
-	fgets(ValidateHeader, sizeof(ValidateHeader), fp);
-	fclose(fp);
-	chomp(ValidateHeader);
+      if(fgets(ValidateHeader, sizeof(ValidateHeader), fp) != NULL) {
+        fclose(fp);
+        chomp(ValidateHeader);
+      } else {
+        ValidateHeader[0] = 0;
+      }
     } else {
-	ValidateHeader[0] = 0;
+      ValidateHeader[0] = 0;
     }
     if (smfi_register(filterDescriptor) == MI_FAILURE) {
 	fprintf(stderr, "%s: smfi_register failed\n", argv[0]);
