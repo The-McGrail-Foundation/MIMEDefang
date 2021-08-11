@@ -1499,18 +1499,14 @@ handleWorkerStatusFD(EventSelector *es,
 		}
 	    }
 	}
-  if(s) {
-	  close(s->workerStatusFD);
-	  Event_DelHandler(s->es, s->statusHandler);
-	  s->statusHandler = NULL;
-	  s->workerStatusFD = -1;
+	close(s->workerStatusFD);
+	Event_DelHandler(s->es, s->statusHandler);
+	s->statusHandler = NULL;
+	s->workerStatusFD = -1;
   }
-    }
-    if (changed) {
-      if(s) {
-	      notify_worker_status(s->es, WORKERNO(s), s->status_tag);
-      }
-    }
+  if (changed) {
+	  notify_worker_status(s->es, WORKERNO(s), s->status_tag);
+  }
 }
 
 /**********************************************************************
