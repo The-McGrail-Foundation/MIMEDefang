@@ -1,5 +1,5 @@
-^.git/
+\.git/
 ^autom4te.cache/
-^*.o$
-^*.tar.gz$
-^*.tar.gz.sig$
+\.o$
+\.tar.gz$
+\.tar.gz.sig$
