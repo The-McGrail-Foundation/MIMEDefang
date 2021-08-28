@@ -39,6 +39,7 @@ EMBPERLLDFLAGS=@EMBPERLLDFLAGS@
 EMBPERLLIBS=@EMBPERLLIBS@
 LIBS_WITHOUT_PTHREAD=@LIBS_WITHOUT_PTHREAD@
 LIBS=@LIBS@
+PERLINSTALLSITELIB=@PERLINSTALLSITELIB@
 LDFLAGS=@LDFLAGS@
 IP_HEADER=@IP_HEADER@
 SPOOLDIR=@SPOOLDIR@
@@ -179,6 +180,7 @@ install: all
 	fi
 
 	$(INSTALL) -m 755 -d $(DESTDIR)$(prefix)/bin
+	$(INSTALL) -m 755 -d $(DESTDIR)$(PERLINSTALLSITELIB)/MIMEDefang
 	$(INSTALL) -m 755 -d $(DESTDIR)$(MANDIR)/man1
 	$(INSTALL) -m 755 -d $(DESTDIR)$(MANDIR)/man5
 	$(INSTALL) -m 755 -d $(DESTDIR)$(MANDIR)/man7
@@ -195,6 +197,8 @@ install: all
 	$(INSTALL) -m 755 $(INSTALL_STRIP_FLAG) mimedefang-multiplexor   $(DESTDIR)$(prefix)/bin/mimedefang-multiplexor
 	$(INSTALL) -m 755 $(INSTALL_STRIP_FLAG) md-mx-ctrl               $(DESTDIR)$(prefix)/bin/md-mx-ctrl
 	$(INSTALL) -m 755 $(INSTALL_STRIP_FLAG) mimedefang               $(DESTDIR)$(prefix)/bin/mimedefang
+
+	$(INSTALL) -m 644 lib/MIMEDefang/*.pm $(DESTDIR)$(PERLINSTALLSITELIB)/MIMEDefang/
 
 	$(INSTALL) -m 755 watch-mimedefang         $(DESTDIR)$(prefix)/bin/watch-mimedefang
 	$(INSTALL) -m 755 watch-multiple-mimedefangs.tcl $(DESTDIR)$(prefix)/bin/watch-multiple-mimedefangs.tcl
@@ -258,7 +262,7 @@ rc-check:
 	fi
 
 test:
-	prove -It/lib --recurse t/unit
+	prove -It/lib --recurse t
 
 manifest:
 	$(PERL) "-MExtUtils::Manifest=mkmanifest" -e mkmanifest

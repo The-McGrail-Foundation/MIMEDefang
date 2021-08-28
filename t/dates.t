@@ -1,7 +1,7 @@
 package MIMEDefang::Unit::dates;
 use strict;
 use warnings;
-use lib qw(t/lib);
+use lib qw(lib);
 use base qw(MIMEDefang::Unit);
 use Test::Most;
 use POSIX;

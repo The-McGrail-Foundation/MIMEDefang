@@ -25,41 +25,14 @@ use strict;
 # won't conflict with the built-in one on RPM-based platforms.
 use lib '@PERLINSTALLSITELIB@';
 
+use FindBin;
+use lib "$FindBin::Bin/lib";
+
 require 5.008;
 package main;
 
-# My deepest apologies for this mess of globals...
-use vars qw($AddWarningsInline @StatusTags
-	    $Action $Administrator $AdminName $AdminAddress $DoStatusTags
-	    $Changed $CSSHost $DaemonAddress $DaemonName
-	    $DefangCounter $Domain $EntireMessageQuarantined
-	    $MessageID $Rebuild $QuarantineCount
-	    $QuarantineSubdir $QueueID $MsgID $MIMEDefangID
-	    $RelayAddr $WasResent $RelayHostname
-	    $RealRelayAddr $RealRelayHostname
-	    $ReplacementEntity $Sender $ServerMode $Subject $SubjectCount
-	    $ClamdSock $SophieSock $TrophieSock
-	    $SuspiciousCharsInHeaders
-	    $SuspiciousCharsInBody $Helo @ESMTPArgs
-	    @SenderESMTPArgs %RecipientESMTPArgs
-	    $TerminateAndDiscard $URL $VirusName
-	    $CurrentVirusScannerMessage @AddedParts
-	    $VirusScannerMessages $WarningLocation $WasMultiPart
-	    $CWD $FprotdHost $Fprotd6Host
-	    $NotifySenderSubject $NotifyAdministratorSubject
-	    $ValidateIPHeader
-	    $QuarantineSubject $SALocalTestsOnly $NotifyNoPreamble
-	    %Actions %Stupidity @FlatParts @Recipients @Warnings %Features
-	    $SyslogFacility $GraphDefangSyslogFacility
-	    $MaxMIMEParts $InMessageContext $InFilterContext $PrivateMyHostName
-	    $EnumerateRecipients $InFilterEnd $FilterEndReplacementEntity
-	    $AddApparentlyToForSpamAssassin $WarningCounter
-	    @VirusScannerMessageRoutines @VirusScannerEntityRoutines
-	    $VirusScannerRoutinesInitialized
-	    %SendmailMacros %RecipientMailers $CachedTimezone $InFilterWrapUp );
-
-use vars qw($GeneralWarning);
-use vars qw($HTMLFoundEndBody $HTMLBoilerplate $SASpamTester);
+use MIMEDefang::Core;
+use MIMEDefang::RFC2822;
 
 use Socket;
 use IO::Socket;
@@ -359,7 +332,7 @@ sub md_copy_orig_msg_to_work_dir_as_mbox_file {
     $s =~ s/^<//;
     $s =~ s/>$//;
 
-    print OUT "From $s " . rfc2822_date() . "\n";
+    print OUT "From $s " . rfc2822_date($CachedTimezone) . "\n";
     my($n, $string);
     while (($n = read(IN, $string, 4096)) > 0) {
 	print OUT $string;
@@ -1867,44 +1840,18 @@ sub get_host_name {
 #  Generates RFC2822-compliant Date and Message-ID headers.
 #***********************************************************************
 sub gen_date_msgid_headers {
-    return "Date: " . rfc2822_date() . "\n" . gen_msgid_header();
+    return MIMEDefang::RFC2822::gen_date_msgid_headers(gen_msgid_header());
 }
 
 sub rfc2822_date
 {
-	my $now = time();
-	my ($ss, $mm, $hh, $mday, $mon, $year, $wday, $yday, $isdst) = localtime($now);
-	return sprintf("%s, %02d %s %04d %02d:%02d:%02d %s",
-		(qw( Sun Mon Tue Wed Thu Fri Sat ))[$wday],
-		$mday,
-		(qw( Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec ))[$mon],
-		$year + 1900,
-		$hh,
-		$mm,
-		$ss,
-		header_timezone($now)
-	);
+	return MIMEDefang::RFC2822::rfc2822_date($CachedTimezone);
 }
 
 sub header_timezone
 {
-    return $CachedTimezone if ($CachedTimezone ne "");
-
-    my($now) = @_;
-
-    my($sec, $min, $hr, $mday, $mon, $year, $wday, $yday, $isdst) = localtime($now);
-    my $a = timelocal($sec, $min, $hr, $mday, $mon, $year);
-    my $b = timegm($sec, $min, $hr, $mday, $mon, $year);
-    my $c = ($b - $a) / 60;
-    $hr = int(abs($c) / 60);
-    $min = abs($c) - 60 * $hr;
-
-    if ($c >= 0) {
-	$CachedTimezone = sprintf("+%02d%02d", $hr, $min);
-    } else {
-	$CachedTimezone = sprintf("-%02d%02d", $hr, $min);
-    }
-    return $CachedTimezone;
+	my($now) = @_;
+	return MIMEDefang::RFC2822::header_timezone($CachedTimezone, $now);
 }
 
 #***********************************************************************
@@ -1917,20 +1864,10 @@ sub header_timezone
 #  Generates RFC2822-compliant Message-ID headers.
 #***********************************************************************
 sub gen_msgid_header {
-	my ($ss, $mm, $hh, $mday, $mon, $year, $wday, $yday, $isdst) = localtime(time);
-
 	# Generate a "random" message ID that looks
 	# similar to sendmail's for SpamAssassin comparing
 	# Received / MessageID QueueID
-	return sprintf("Message-ID: <%04d%02d%02d%02d%02d.%s\@%s>\n",
-		$year + 1900,
-		$mon  + 1,
-		$mday,
-		$hh,
-		$mm,
-		($QueueID eq 'NOQUEUE' ? rand() : $QueueID),
-		get_host_name()
-	);
+	return MIMEDefang::RFC2822::gen_msgid_header($QueueID, get_host_name());
 }
 
 #***********************************************************************
@@ -5411,7 +5348,7 @@ sub main {
     $NotifyNoPreamble = 0;
 
     # Load the filter
-    init_globals();
+    MIMEDefang::Core::init_globals();
     if ($ValidateIPHeader ne "" and
 	$ValidateIPHeader !~ /^X-MIMEDefang-Relay/) {
 	md_syslog('err', "Invalid value for mimedefang-ip-key: $ValidateIPHeader");
@@ -5538,7 +5475,7 @@ sub main {
 	    filter_initialize();
 	}
 
-	init_globals();
+	MIMEDefang::Core::init_globals();
 	do_scan($workdir);
 	exit(0);
     }
@@ -5704,7 +5641,7 @@ sub do_main_loop
 		chomp $line;
 
 		# Clear out vars so they aren't used by filter_begin, etc.
-		init_globals();
+    MIMEDefang::Core::init_globals();
 
 		# Change to spool dir -- ignore error
 		chdir($Features{'Path:SPOOLDIR'});
@@ -5988,55 +5925,6 @@ sub print_and_flush
 {
 	local $| = 1;
 	print($_[0], "\n");
-}
-
-sub init_globals {
-    $CWD = $Features{'Path:SPOOLDIR'};
-    $InMessageContext = 0;
-    $InFilterEnd = 0;
-    $InFilterContext = 0;
-    $InFilterWrapUp = 0;
-    undef $FilterEndReplacementEntity;
-    $Action = "";
-    $Changed = 0;
-    $DefangCounter = 0;
-    $Domain = "";
-    $MIMEDefangID = "";
-    $MsgID = "NOQUEUE";
-    $MessageID = "NOQUEUE";
-    $Helo = "";
-    $QueueID = "NOQUEUE";
-    $QuarantineCount = 0;
-    $Rebuild = 0;
-    $EntireMessageQuarantined = 0;
-    $QuarantineSubdir = "";
-    $RelayAddr = "";
-    $RealRelayAddr = "";
-    $WasResent = 0;
-    $RelayHostname = "";
-    $RealRelayHostname = "";
-    $Sender = "";
-    $Subject = "";
-    $SubjectCount = 0;
-    $SuspiciousCharsInHeaders = 0;
-    $SuspiciousCharsInBody = 0;
-    $TerminateAndDiscard = 0;
-    $VirusScannerMessages = "";
-    $VirusName = "";
-    $WasMultiPart = 0;
-    $WarningCounter = 0;
-    undef %Actions;
-    undef %SendmailMacros;
-    undef %RecipientMailers;
-    undef %RecipientESMTPArgs;
-    undef @FlatParts;
-    undef @Recipients;
-    undef @Warnings;
-    undef @AddedParts;
-    undef @StatusTags;
-    undef @ESMTPArgs;
-    undef @SenderESMTPArgs;
-    undef $results_fh;
 }
 
 sub builtin_create_parser {
