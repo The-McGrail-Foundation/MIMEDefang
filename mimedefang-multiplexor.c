@@ -3833,7 +3833,7 @@ doHelp(EventSelector *es, int fd, int unpriv)
 	"workers           -- Display workers with process-IDs\n"
 	"busyworkers       -- Display busy workers with process-IDs\n"
         "workerinfo n      -- Display information about a particular worker\n"
-	"(Analagous hload commands provide hourly information)\n");
+	"(Analogous hload commands provide hourly information)\n");
     } else {
 	reply_to_mimedefang(es, fd,
 	"help             -- List available multiplexor commands\n"
@@ -3858,7 +3858,7 @@ doHelp(EventSelector *es, int fd, int unpriv)
 	"busyworkers       -- Display busy workers with process-IDs\n"
 	"workerinfo n      -- Display information about a particular worker\n"
 	"scan /path       -- Run a scan (do not invoke using md-mx-ctrl)\n"
-	"(Analagous hload commands provide hourly information)\n");
+	"(Analogous hload commands provide hourly information)\n");
     }
 }
 

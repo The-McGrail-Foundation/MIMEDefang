@@ -22,7 +22,7 @@
 # Revision History:
 #
 #    16-May-2002 15:44pm - Michael McLagan <Michael.McLagan@linux.org
-#       Updated executable extention list per David.  Removed suspicious
+#       Updated executable extension list per David.  Removed suspicious
 #       character checks ( \r may be illegal by RFC822 but they're
 #       harmless for our email programs )
 #
@@ -99,7 +99,7 @@ $SALocalTestsOnly               = 0;
 $Stupidity{"flatten"}           = 0;
 $Stupidity{"NoMultipleInlines"} = 0;
 
-# Check attachments for undesirable extentions.  We have no need of 
+# Check attachments for undesirable extensions.  We have no need of 
 # executable code -- binary or text. 
 sub executable ($$$)
 {
@@ -261,7 +261,7 @@ sub rejected ($$$)
    
          $msg .= "Your email has been sent to the intended recipient without this\n";
          $msg .= "file included.  A message detailing why it was dropped has been\n";
-         $msg .= "substitued in it's place.\n";
+         $msg .= "substituted in it's place.\n";
          $msg .= "\n";
    
          $msg .= "   Postmaster\n";
@@ -548,7 +548,7 @@ sub filter ($$$$)
    # No sense doing any extra work
    return if message_rejected();
 
-   # Local uses don't get exectable attachments
+   # Local uses don't get executable attachments
    return rejected($entity, $fname, $type) if (executable($entity, $type, 0));
 
    return action_accept();
@@ -565,7 +565,7 @@ sub filter_multipart ($$$$)
    # No sense doing any extra work
    return if message_rejected();
 
-   # Local uses don't get exectable attachments
+   # Local uses don't get executable attachments
    return rejected($entity, $fname, $type) if (executable($entity, $type, 1));
 
    return action_accept();

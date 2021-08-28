@@ -996,7 +996,7 @@ validate_smtp_code(char const *code,
 *  dsn -- an SMTP dsn reply (eg 4.7.1)
 *  first -- what the first char must be
 * %RETURNS:
-*  1 if it's a valid dsn; 0 otherwise.  A valid DSN consits of three
+*  1 if it's a valid dsn; 0 otherwise.  A valid DSN consists of three
 *  numerical fields separated by periods.  The first field must be a
 *  single digit that matches "first".  The second and
 *  third fields can be 1-3 digits long each.
@@ -1260,7 +1260,7 @@ do_delay(char const *sleepstr)
 * %ARGUMENTS:
 *  sa -- a socket address
 * %RETURNS:
-*  True if sa is the loobpack address; false otherwise.
+*  True if sa is the loopback address; false otherwise.
 ***********************************************************************/
 int
 is_localhost(struct sockaddr *sa)

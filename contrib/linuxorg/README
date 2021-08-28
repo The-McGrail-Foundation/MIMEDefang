@@ -1,6 +1,6 @@
 The files in this directory are installed in /etc/mail/mimedefang/ on 
 mail servers within the Linux Online and Linux Headquarters domains.  
-They are used to filter viruses and SPAM/UCE mail from being recevied
+They are used to filter viruses and SPAM/UCE mail from being received
 by our staff & users.
 
 In order to use the filter in the above directory, either the 

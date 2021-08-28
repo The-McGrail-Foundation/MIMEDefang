@@ -280,7 +280,7 @@ such as the graphdefang graphing package and a sample filter.
 - Put pid files and sockets in /var/spool/MIMEDefang so we can
   drop privileges early.
 * Wed May 15 2002 Dianne Skoll <dfs@roaringpenguin.com>
-- Change log directory to /var/log/mimedefang/ to more easily accomodate
+- Change log directory to /var/log/mimedefang/ to more easily accommodate
   -U flag.
 * Tue May 14 2002 Michael McLagan <Michael.McLagan@linux.org>
 - Fixed preinstall script

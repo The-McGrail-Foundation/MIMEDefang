@@ -1920,7 +1920,7 @@ sub gen_msgid_header {
 	my ($ss, $mm, $hh, $mday, $mon, $year, $wday, $yday, $isdst) = localtime(time);
 
 	# Generate a "random" message ID that looks
-	# similiar to sendmail's for SpamAssassin comparing
+	# similar to sendmail's for SpamAssassin comparing
 	# Received / MessageID QueueID
 	return sprintf("Message-ID: <%04d%02d%02d%02d%02d.%s\@%s>\n",
 		$year + 1900,
@@ -3369,7 +3369,7 @@ SEARCH_DEMON: foreach my $port ($baseport..($baseport+4)) {
 
 	# The arguments (following the '?' sign in the HTTP request)
 	# are the same as for the command line F-Prot, the additional
-	# -remote-dtd suppresses the unuseful XML DTD prefix
+	# -remote-dtd suppresses the useless XML DTD prefix
 	if (!$sock->print("GET $item?-dumb%20-archive%20-packed%20-remote-dtd HTTP/1.0\n\n")) {
 	    $sock->close;
 	    return (wantarray ? (999, 'swerr', 'tempfail') : 999);
@@ -3499,8 +3499,8 @@ SEARCH_DEMON: foreach my $port ($baseport..($baseport+4)) {
 #  7  X   The  object was identified as an "innocent" object.
 #  9  X   The object was successfully scanned and nothing was
 
-#	9 is trival; 7 is probably trival
-#	4 & 3 we can't do anything really, because if the attachement
+#	9 is trivial; 7 is probably trivial
+#	4 & 3 we can't do anything really, because if the attachment
 #	is some unknown archive format, the scanner wouldn't had known
 #	this issue anyway, hence, I consider it "clean"
 
@@ -3508,7 +3508,7 @@ SEARCH_DEMON: foreach my $port ($baseport..($baseport+4)) {
     }
 }
 
-    # Could not connect to daemon or some error occured during the
+    # Could not connect to daemon or some error occurred during the
     # communication with it
     $errmsg =~ s/\s*\.*\s*\n+\s*/\. /g;
     md_syslog('err', "$errmsg");
@@ -6506,7 +6506,7 @@ sub replace_entire_message {
 	return 0;
     }
     if (ref($e) ne "MIME::Entity") {
-	md_syslog('err', "Call to replace_entire_message with agument that is not of type MIME::Entity");
+	md_syslog('err', "Call to replace_entire_message with argument that is not of type MIME::Entity");
 	return 0;
     }
     $FilterEndReplacementEntity = $e;
@@ -6933,7 +6933,7 @@ sub spam_assassin_is_spam {
 # %RETURNS:
 #  An array of four elements,
 #       Weight of message ('hits')
-#       Number of hits required before SA conciders a message spam
+#       Number of hits required before SA considers a message spam
 #       Comma separated list of symbolic test names that were triggered
 #       A 'report' string, detailing tests that failed and their weights
 # %DESCRIPTION:
@@ -7789,7 +7789,7 @@ sub read_config($) {
 # %RETURNS:
 #  An array of four elements,
 #       Weight of message ('hits')
-#       Number of hits required before Rspamd conciders a message spam
+#       Number of hits required before Rspamd considers a message spam
 #       Comma separated list of symbolic test names that were triggered
 #       A 'report' string, detailing tests that failed and their weights
 # %DESCRIPTION:

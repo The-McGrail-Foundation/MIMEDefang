@@ -108,7 +108,7 @@ is to run these commands from the main Sendmail directory:
 	cp obj.Linux.2.2.14-5.0.i686/*/*.a /usr/local/lib
 
 NOTE: On the last "cp" command, replace "obj.Linux.2.2.14-5.0.i686" with
-the apropriate "obj.*" directory created by the Sendmail build script.
+the appropriate "obj.*" directory created by the Sendmail build script.
 
 2) Obtain and install the necessary Perl modules.  These generally build and
 install as follows:
