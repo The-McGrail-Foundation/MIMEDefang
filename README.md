@@ -63,7 +63,7 @@ MIMEDefang has the following software requirements:
 
 4) Sendmail 8.12.x, 8.13.x or Postfix.  Get the latest version.
 
-5. INSTALLATION
+4. INSTALLATION
 ---------------
 
 There's an excellent MIMEDefang-HOWTO contributed by Mickey Hill
@@ -72,8 +72,7 @@ everything in this README in much greater detail.  Anyway, on with it:
 
 1) Sendmail
 
-You must be using Sendmail 8.12.x or 8.13.x
--------------------------------------------
+**You must be using Sendmail 8.12.x or 8.13.x**
 
 Obtain the latest Sendmail 8.12.x or 8.13.x source release from
 http://www.sendmail.org.  Unpack it.  If you are building 8.12.x,
