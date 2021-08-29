@@ -16,7 +16,6 @@ sub init_globals1 : Test(1)
 sub init_globals2 : Test(2)
 {
   $::main::Changed = 1;
-  is($::main::Changed, 1);
   MIMEDefang::Core::init_globals();
   is($::main::Changed, 0);
 }

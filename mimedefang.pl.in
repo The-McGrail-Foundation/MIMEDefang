@@ -473,8 +473,6 @@ sub percent_decode {
     return $str;
 }
 
-my $results_fh;
-
 =pod
 
 =head2 write_result_line ( $cmd, @args )

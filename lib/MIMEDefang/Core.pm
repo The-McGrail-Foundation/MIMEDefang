@@ -41,6 +41,7 @@ our @EXPORT_OK;
       $SuspiciousCharsInBody
       $GeneralWarning
       $HTMLFoundEndBody $HTMLBoilerplate $SASpamTester
+      $results_fh
     };
 
 @EXPORT_OK = qw{
@@ -101,6 +102,7 @@ sub init_globals {
     undef @StatusTags;
     undef @ESMTPArgs;
     undef @SenderESMTPArgs;
+    undef $results_fh;
 }
 
 #***********************************************************************
