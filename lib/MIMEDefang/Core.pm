@@ -2,6 +2,9 @@ package MIMEDefang::Core;
 
 require Exporter;
 
+use Errno qw(ENOENT EACCES);
+use File::Spec;
+
 our @ISA = qw(Exporter);
 our @EXPORT;
 our @EXPORT_OK;
@@ -98,6 +101,39 @@ sub init_globals {
     undef @StatusTags;
     undef @ESMTPArgs;
     undef @SenderESMTPArgs;
+}
+
+#***********************************************************************
+# %PROCEDURE: read_config
+# %ARGUMENTS:
+#  configuration file path
+# %RETURNS:
+#  return 1 if configuration file cannot be loaded; 0 otherwise
+# %DESCRIPTION:
+#  loads a configuration file to overwrite global variables values
+#***********************************************************************
+# Derivative work from amavisd-new read_config_file($$)
+# Copyright (C) 2002-2018 Mark Martinec
+sub read_config($) {
+  my($config_file) = @_;
+
+  $config_file = File::Spec->rel2abs($config_file);
+
+  my(@stat_list) = stat($config_file);  # symlinks-friendly
+  my $errn = @stat_list ? 0 : 0+$!;
+  my $owner_uid = $stat_list[4];
+  my $msg;
+
+  if ($errn == ENOENT) { $msg = "does not exist" }
+  elsif ($errn)        { $msg = "is inaccessible: $!" }
+  elsif (-d _)         { $msg = "is a directory" }
+  elsif (-S _ || -b _ || -c _) { $msg = "is not a regular file or pipe" }
+  elsif ($owner_uid) { $msg = "should be owned by root (uid 0)" }
+  if (defined $msg)    {
+    return (1, $msg);
+  }
+  if (defined(do $config_file)) {}
+  return (0, undef);
 }
 
 1;
