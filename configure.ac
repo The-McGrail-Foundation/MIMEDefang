@@ -148,6 +148,7 @@ else
 	    AC_MSG_WARN([*** MIME::Tools version 5.410 or higher (5.411a recommended)])
 	    AC_MSG_WARN([*** MIME::WordDecoder])
 	    AC_MSG_WARN([*** Digest::SHA1])
+	    AC_MSG_WARN([*** IO::Socket::SSL])
 	    exit 1
 	fi
 	AC_MSG_RESULT(ok)

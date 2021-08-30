@@ -4077,6 +4077,8 @@ $as_echo "$as_me: WARNING: *** MIME::Tools version 5.410 or higher (5.411a recom
 $as_echo "$as_me: WARNING: *** MIME::WordDecoder" >&2;}
 	    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: *** Digest::SHA1" >&5
 $as_echo "$as_me: WARNING: *** Digest::SHA1" >&2;}
+	    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: *** IO::Socket::SSL" >&5
+$as_echo "$as_me: WARNING: *** IO::Socket::SSL" >&2;}
 	    exit 1
 	fi
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: ok" >&5
