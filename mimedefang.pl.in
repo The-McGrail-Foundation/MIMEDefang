@@ -4921,6 +4921,8 @@ sub message_contains_virus_sophie {
 sub entity_contains_virus_clamd {
     my ($entity) = shift;
     my ($clamd_sock) = $ClamdSock;
+    my $inet = 0;
+
     $clamd_sock = shift if (@_ > 0);
     $clamd_sock = '@SPOOLDIR@/clamd.sock' if (!defined($clamd_sock));
     if (!defined($entity->bodyhandle)) {
@@ -4929,7 +4931,12 @@ sub entity_contains_virus_clamd {
     if (!defined($entity->bodyhandle->path)) {
 	return (wantarray ? (999, 'swerr', 'tempfail') : 1);
     }
-    my $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    if($clamd_sock =~ /\:/) {
+      $sock = IO::Socket::INET->new($clamd_sock);
+      $inet = 1;
+    } else {
+      $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    }
     if (defined $sock) {
 	my $path = $entity->bodyhandle->path;
 	# If path is not absolute, add cwd
@@ -4960,7 +4967,7 @@ sub entity_contains_virus_clamd {
 	    # If it's a zip module failure, try falling back on clamscan.
 	    # This is despicable, but it might work
 	    if ($err_detail =~ /(?:zip module failure|not supported data format)/i &&
-		$Features{'Virus:CLAMAV'}) {
+		$Features{'Virus:CLAMAV'} && ($inet eq 0)) {
 		my ($code, $category, $action) =
 		run_virus_scanner($Features{'Virus:CLAMAV'} . " -r --unzip --unrar --stdout --no-summary --infected $CWD/Work 2>&1");
 		if ($action ne 'proceed') {
@@ -4993,9 +5000,15 @@ sub message_contains_virus_clamd {
     $clamd_sock = shift if (@_ > 0);
     $clamd_sock = '@SPOOLDIR@/clamd.sock' if (!defined($clamd_sock));
     my ($output,$sock);
+    my $inet = 0;
 
     # PING/PONG test to make sure clamd is alive
-    $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    if($clamd_sock =~ /\:/) {
+      $sock = IO::Socket::INET->new($clamd_sock);
+      $inet = 1;
+    } else {
+      $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    }
 
     if (!defined($sock)) {
 	md_syslog('err', "Could not connect to clamd daemon at $clamd_sock");
@@ -5031,7 +5044,11 @@ sub message_contains_virus_clamd {
     }
 
     # open up a socket and scan each file in ./Work
-    $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    if($clamd_sock =~ /\:/) {
+      $sock = IO::Socket::INET->new($clamd_sock);
+    } else {
+      $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    }
     if (defined $sock) {
 	if (!$sock->print("SCAN $CWD/Work\n")) {
 	    $sock->close;
@@ -5057,7 +5074,7 @@ sub message_contains_virus_clamd {
 	    # If it's a zip module failure, try falling back on clamscan.
 	    # This is despicable, but it might work
 	    if ($err_detail =~ /(?:zip module failure|not supported data format)/i &&
-		$Features{'Virus:CLAMAV'}) {
+		$Features{'Virus:CLAMAV'} && ($inet eq 0)) {
 		my ($code, $category, $action) =
 		    run_virus_scanner($Features{'Virus:CLAMAV'} . " -r --unzip --unrar --stdout --no-summary --infected $CWD/Work 2>&1");
 		if ($action ne 'proceed') {
@@ -7626,13 +7643,38 @@ sub md_check_against_smtp_server {
       $recip = "<$recip>";
     }
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+    my $sock = IO::Socket::INET->new(PeerAddr => $server,
+=======
+=======
+>>>>>>> e597774 (modify SSL parameters to make the check work with self-signed certificates)
+    # Set SSL_startHansshake to start in plain mode,
+=======
     # Set SSL_startHandshake to start in plain mode,
+>>>>>>> b805b9a (sync with upstream)
     # SSL_verify_mode to SSL_VERIFY_NONE to make the check work
     # with self-signed certificates and SSL_hostname for SNI
     my $sock = IO::Socket::SSL->new(PeerAddr => $server,
              SSL_startHandshake => 0,
              SSL_verify_mode => SSL_VERIFY_NONE,
              SSL_hostname => "$server",
+<<<<<<< HEAD
+<<<<<<< HEAD
+>>>>>>> 9eeb866 (modify SSL parameters to make the check work with self-signed certificates)
+=======
+    my $sock = IO::Socket::INET->new(PeerAddr => $server,
+>>>>>>> 762f0d5 (Revert "modify SSL parameters to make the check work with self-signed certificates")
+=======
+>>>>>>> e597774 (modify SSL parameters to make the check work with self-signed certificates)
+=======
+    my $sock = IO::Socket::INET->new(PeerAddr => $server,
+>>>>>>> 28091f5 (Revert "modify SSL parameters to make the check work with self-signed certificates")
+=======
+>>>>>>> b805b9a (sync with upstream)
 				     PeerPort => $port,
 				     Proto    => 'tcp',
 				     Timeout  => 25);
@@ -7782,6 +7824,10 @@ sub read_config($) {
  1;
 }
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
 #***********************************************************************
 # %PROCEDURE: rspamd_check
 # %ARGUMENTS:
@@ -7841,6 +7887,8 @@ sub rspamd_check {
     return ($hits, $req, $tests, $report, $action, $is_spam);
 }
 
+=======
+>>>>>>> b805b9a (sync with upstream)
 exit(&main) unless caller;
 #------------------------------------------------------------
 1;
