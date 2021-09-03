@@ -360,9 +360,6 @@ make_embedded_interpreter(char **env)
     if (my_perl != NULL) {
 	perl_destruct(my_perl);
 	perl_free(my_perl);
-#ifdef PERL_SYS_TERM
-    PERL_SYS_TERM();
-#endif
 	my_perl = NULL;
     }
     argv[0] = "";
@@ -397,9 +394,6 @@ main(int argc, char **argv, char **env)
 {
     make_embedded_interpreter(env);
     make_embedded_interpreter(env);
-#ifdef PERL_SYS_TERM
-    PERL_SYS_TERM();
-#endif
     return 0;
 }
 ], SAFE_EMBED_PERL=yes, SAFE_EMBED_PERL=no)

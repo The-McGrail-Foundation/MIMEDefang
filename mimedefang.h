@@ -76,6 +76,7 @@ extern int make_embedded_interpreter(char const *progPath,
 				     int wantStatusReports,
 				     char **env);
 extern void init_embedded_interpreter(int, char **, char **);
+extern void deinit_embedded_interpreter(void);
 extern void term_embedded_interpreter(void);
 extern void run_embedded_filter(void);
 extern void dump_milter_buildlib_info(void);
