@@ -37,6 +37,14 @@ init_embedded_interpreter(int argc, char **argv, char **env)
 }
 
 void
+deinit_embedded_interpreter(void)
+{
+#ifdef PERL_SYS_TERM
+    PERL_SYS_TERM();
+#endif
+
+}
+void
 term_embedded_interpreter(void)
 {
     if (my_perl != NULL) {
@@ -45,9 +53,6 @@ term_embedded_interpreter(void)
 	PL_perl_destruct_level = 1;
 	perl_destruct(my_perl);
 	perl_free(my_perl);
-#ifdef PERL_SYS_TERM
-	PERL_SYS_TERM();
-#endif
 	my_perl = NULL;
     }
 }

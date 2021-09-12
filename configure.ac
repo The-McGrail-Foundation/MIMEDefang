@@ -139,7 +139,7 @@ if test "$ac_cv_perlmodcheck" = "no" ; then
    dnl for installation of spamassassin.cf
    HAVE_SPAM_ASSASSIN=yes
 else
-    for module in 'IO::Socket' 'IO::Socket::SSL' 'MIME::Tools 5.410 ()' 'MIME::WordDecoder' 'Digest::SHA1' ; do
+    for module in 'IO::Socket' 'MIME::Tools 5.410 ()' 'MIME::WordDecoder' 'Digest::SHA1' ; do
 	AC_MSG_CHECKING([for Perl module $module])
 	(echo "use lib '$PERLINSTALLSITELIB'; use $module;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
 	if test $? != 0 ; then
@@ -180,6 +180,15 @@ else
 	HAVE_ARCHIVE_ZIP=yes
     fi
     AC_MSG_RESULT($HAVE_ARCHIVE_ZIP)
+
+    AC_MSG_CHECKING([for Perl module IO::Socket::SSL])
+    (echo "use IO::Socket::SSL;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_IO_SOCKET_SSL=no
+    else
+	HAVE_IO_SOCKET_SSL=yes
+    fi
+    AC_MSG_RESULT($HAVE_IO_SOCKET_SSL)
 
     dnl Check MIME::Tools version
     dirs=`echo 'print "@INC\n";' | $PERL`
@@ -359,9 +368,6 @@ make_embedded_interpreter(char **env)
     if (my_perl != NULL) {
 	perl_destruct(my_perl);
 	perl_free(my_perl);
-#ifdef PERL_SYS_TERM
-    PERL_SYS_TERM();
-#endif
 	my_perl = NULL;
     }
     argv[0] = "";
@@ -396,9 +402,6 @@ main(int argc, char **argv, char **env)
 {
     make_embedded_interpreter(env);
     make_embedded_interpreter(env);
-#ifdef PERL_SYS_TERM
-    PERL_SYS_TERM();
-#endif
     return 0;
 }
 ], SAFE_EMBED_PERL=yes, SAFE_EMBED_PERL=no)
@@ -1069,13 +1072,20 @@ if test "$ac_cv_perlmodcheck" = "yes" ; then
     else
 	echo "Did not find Mail::SpamAssassin.  Do not use spam_assassin_* functions"
     fi
+    echo ""
 
     if test "$HAVE_HTML_PARSER" = "yes" ; then
 	echo "Found HTML::Parser.  You may use append_html_boilerplate()"
     else
 	echo "Did not find HTML::Parser.  Do not use append_html_boilerplate()"
     fi
-    echo ""
+fi
+
+if test "$HAVE_IO_SOCKET_SSL" = "no" ; then
+   echo ""
+   echo "Could not find IO::Socket::SSL Perl module... do not use"
+   echo "md_check_against_smtp_server function in your filter."
+   echo ""
 fi
 
 echo "Note: SpamAssassin and HTML::Parser are"

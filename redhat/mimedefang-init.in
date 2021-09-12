@@ -145,6 +145,7 @@ start() {
 	   $([ -n "$MX_LOG_WORKER_STATUS_INTERVAL" ] && echo "-L $MX_LOG_WORKER_STATUS_INTERVAL") \
 	   $([ -n "$MX_MAX_RSS" ] && echo "-R $MX_MAX_RSS") \
 	   $([ -n "$MX_MAX_AS" ] && echo "-M $MX_MAX_AS") \
+	   $([ -n "$MX_MAX_LIFETIME" ] && echo "-V $MX_MAX_LIFETIME") \
 	   $([ "$MX_EMBED_PERL" = "yes" ] && (echo -n "-"; echo "E")) \
 	   $([ "$MX_LOG" = "yes" ] && echo "-l") \
 	   $([ "$MX_STATS" = "yes" ] && echo "-t /var/log/mimedefang/stats") \
@@ -172,7 +173,7 @@ start() {
 	   $([ -n "$LOOPBACK_RESERVED_CONNECTIONS" ] && echo "-R $LOOPBACK_RESERVED_CONNECTIONS") \
 	   $([ -n "$MX_USER" ] && echo "-U $MX_USER") \
 	   $([ -n "$SYSLOG_FACILITY" ] && echo "-S $SYSLOG_FACILITY") \
-     $([ "$USE_SETSYMLIST" = "yes" ] && echo "-y") \
+	   $([ "$USE_SETSYMLIST" = "yes" ] && echo "-y") \
 	   $([ "$LOG_FILTER_TIME" = "yes" ] && echo "-T") \
 	   $([ "$MX_RELAY_CHECK" = "yes" ] && echo "-r") \
 	   $([ "$MX_HELO_CHECK" = "yes" ] && echo "-H") \
@@ -180,6 +181,7 @@ start() {
 	   $([ "$MX_RECIPIENT_CHECK" = "yes" ] && echo "-t") \
 	   $([ "$KEEP_FAILED_DIRECTORIES" = "yes" ] && echo "-k") \
 	   $([ "$MD_ALLOW_GROUP_ACCESS" = "yes" ] && echo "-G") \
+	   $([ "$MD_SKIP_BAD_RCPTS" = "yes" ] && echo "-N") \
 	   $([ -n "$MD_EXTRA" ] && echo "$MD_EXTRA") \
 	   $([ "$ALLOW_NEW_CONNECTIONS_TO_QUEUE" = "yes" ] && echo "-q") \
 	   -p $SOCKET

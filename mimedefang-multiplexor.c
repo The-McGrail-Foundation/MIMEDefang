@@ -1296,7 +1296,10 @@ main(int argc, char *argv[], char **env)
     if (set_sigchld_handler() < 0) {
 	REPORT_FAILURE("sigaction failed - exiting.");
 #ifdef EMBED_PERL
-	if (Settings.useEmbeddedPerl) term_embedded_interpreter();
+	if (Settings.useEmbeddedPerl) {
+            term_embedded_interpreter();
+            deinit_embedded_interpreter();
+        }
 #endif
 	if (pidfile) unlink(pidfile);
 	if (lockfile) unlink(lockfile);
@@ -2729,6 +2732,7 @@ activateWorker(Worker *s, char const *reason)
     if (Settings.useEmbeddedPerl) {
 	run_embedded_filter();
 	term_embedded_interpreter();
+        deinit_embedded_interpreter();
 	exit(EXIT_SUCCESS);
     }
 #endif
@@ -3378,7 +3382,10 @@ sigterm(int sig)
 	}
 	if (!oneleft) {
 #ifdef EMBED_PERL
-	    if (Settings.useEmbeddedPerl) term_embedded_interpreter();
+  if (Settings.useEmbeddedPerl) {
+    term_embedded_interpreter();
+    deinit_embedded_interpreter();
+  }
 #endif
 	    exit(EXIT_SUCCESS);
 	}
@@ -3408,7 +3415,10 @@ sigterm(int sig)
 	}
 	if (!oneleft) {
 #ifdef EMBED_PERL
-	    if (Settings.useEmbeddedPerl) term_embedded_interpreter();
+	    if (Settings.useEmbeddedPerl) {
+                term_embedded_interpreter();
+                deinit_embedded_interpreter();
+            }
 #endif
 	    exit(EXIT_SUCCESS);
 	}
@@ -3426,7 +3436,10 @@ sigterm(int sig)
 	}
     }
 #ifdef EMBED_PERL
-    if (Settings.useEmbeddedPerl) term_embedded_interpreter();
+    if (Settings.useEmbeddedPerl) {
+        term_embedded_interpreter();
+        deinit_embedded_interpreter();
+    }
 #endif
     exit(EXIT_SUCCESS);
 }
