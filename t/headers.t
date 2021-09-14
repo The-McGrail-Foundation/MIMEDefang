@@ -1,8 +1,8 @@
-package MIMEDefang::Unit::headers;
+package Mail::MIMEDefang::Unit::headers;
 use strict;
 use warnings;
 use lib qw(lib);
-use base qw(MIMEDefang::Unit);
+use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
 sub delete_header_ok : Test(2)

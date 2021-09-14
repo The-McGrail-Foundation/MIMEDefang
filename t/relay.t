@@ -1,8 +1,8 @@
-package MIMEDefang::Unit::filter_relay;
+package Mail::MIMEDefang::Unit::filter_relay;
 use strict;
 use warnings;
 use lib qw(lib);
-use base qw(MIMEDefang::Unit);
+use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
 sub create_filter : Test(setup)

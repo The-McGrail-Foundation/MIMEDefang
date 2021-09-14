@@ -1,4 +1,4 @@
-package MIMEDefang::RFC2822;
+package Mail::MIMEDefang::RFC2822;
 
 use strict;
 use warnings;

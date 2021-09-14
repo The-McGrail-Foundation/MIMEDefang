@@ -31,8 +31,8 @@ use lib "$FindBin::Bin/lib";
 require 5.008;
 package main;
 
-use MIMEDefang::Core;
-use MIMEDefang::RFC2822;
+use Mail::MIMEDefang::Core;
+use Mail::MIMEDefang::RFC2822;
 
 use Socket;
 use IO::Socket;
@@ -1838,18 +1838,18 @@ sub get_host_name {
 #  Generates RFC2822-compliant Date and Message-ID headers.
 #***********************************************************************
 sub gen_date_msgid_headers {
-    return MIMEDefang::RFC2822::gen_date_msgid_headers(gen_msgid_header());
+    return Mail::MIMEDefang::RFC2822::gen_date_msgid_headers(gen_msgid_header());
 }
 
 sub rfc2822_date
 {
-	return MIMEDefang::RFC2822::rfc2822_date($CachedTimezone);
+	return Mail::MIMEDefang::RFC2822::rfc2822_date($CachedTimezone);
 }
 
 sub header_timezone
 {
 	my($now) = @_;
-	return MIMEDefang::RFC2822::header_timezone($CachedTimezone, $now);
+	return Mail::MIMEDefang::RFC2822::header_timezone($CachedTimezone, $now);
 }
 
 #***********************************************************************
@@ -1865,7 +1865,7 @@ sub gen_msgid_header {
 	# Generate a "random" message ID that looks
 	# similar to sendmail's for SpamAssassin comparing
 	# Received / MessageID QueueID
-	return MIMEDefang::RFC2822::gen_msgid_header($QueueID, get_host_name());
+	return Mail::MIMEDefang::RFC2822::gen_msgid_header($QueueID, get_host_name());
 }
 
 #***********************************************************************
@@ -5346,7 +5346,7 @@ sub main {
     $NotifyNoPreamble = 0;
 
     # Load the filter
-    MIMEDefang::Core::init_globals();
+    Mail::MIMEDefang::Core::init_globals();
     if ($ValidateIPHeader ne "" and
 	$ValidateIPHeader !~ /^X-MIMEDefang-Relay/) {
 	md_syslog('err', "Invalid value for mimedefang-ip-key: $ValidateIPHeader");
@@ -5473,7 +5473,7 @@ sub main {
 	    filter_initialize();
 	}
 
-	MIMEDefang::Core::init_globals();
+  Mail::MIMEDefang::Core::init_globals();
 	do_scan($workdir);
 	exit(0);
     }
@@ -5639,7 +5639,7 @@ sub do_main_loop
 		chomp $line;
 
 		# Clear out vars so they aren't used by filter_begin, etc.
-    MIMEDefang::Core::init_globals();
+    Mail::MIMEDefang::Core::init_globals();
 
 		# Change to spool dir -- ignore error
 		chdir($Features{'Path:SPOOLDIR'});
@@ -7649,7 +7649,7 @@ sub md_check_against_smtp_server {
 # Copyright (C) 2002-2018 Mark Martinec
 sub read_config($) {
   my($config_file) = @_;
-  my ($rv, $msg) = MIMEDefang::Core::read_config($config_file);
+  my ($rv, $msg) = Mail::MIMEDefang::Core::read_config($config_file);
   if(defined $msg) {
     md_syslog("crit", "Config file \"$config_file\" $msg");
   }

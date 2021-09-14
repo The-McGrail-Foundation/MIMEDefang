@@ -1,8 +1,8 @@
-package MIMEDefang::Unit::dates;
+package Mail::MIMEDefang::Unit::dates;
 use strict;
 use warnings;
 use lib qw(lib);
-use base qw(MIMEDefang::Unit);
+use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 use POSIX;
 

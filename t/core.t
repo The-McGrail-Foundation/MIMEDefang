@@ -1,11 +1,11 @@
-package MIMEDefang::Unit::core;
+package Mail::MIMEDefang::Unit::core;
 use strict;
 use warnings;
 use lib qw(lib);
-use base qw(MIMEDefang::Unit);
+use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
-use MIMEDefang::Core;
+use Mail::MIMEDefang::Core;
 
 sub init_globals1 : Test(1)
 {
@@ -16,7 +16,7 @@ sub init_globals1 : Test(1)
 sub init_globals2 : Test(2)
 {
   $::main::Changed = 1;
-  MIMEDefang::Core::init_globals();
+  Mail::MIMEDefang::Core::init_globals();
   is($::main::Changed, 0);
 }
 

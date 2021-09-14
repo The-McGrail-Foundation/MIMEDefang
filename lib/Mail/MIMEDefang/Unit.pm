@@ -1,4 +1,4 @@
-package MIMEDefang::Unit;
+package Mail::MIMEDefang::Unit;
 use strict;
 use warnings;
 use Test::Class;
