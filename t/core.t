@@ -29,4 +29,14 @@ sub read_config : Test(3)
   is($SALocalTestsOnly, 0);
 }
 
+sub detect_and_load_perl_modules : Test(4)
+{
+  my $dnsver;
+  my %Features;
+  $Features{"Net::DNS"} = 1;
+  Mail::MIMEDefang::Core::detect_and_load_perl_modules(%Features);
+  $dnsver = Net::DNS->version;
+  like($dnsver, qr/([0-9]+)\.([0-9]+)/, "Net::DNS correctly loaded, version is $dnsver");
+}
+
 __PACKAGE__->runtests();

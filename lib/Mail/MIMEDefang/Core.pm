@@ -105,6 +105,36 @@ sub init_globals {
     undef $results_fh;
 }
 
+# Detect these Perl modules at run-time.  Can explicitly prevent
+# loading of these modules by setting $Features{"xxx"} = 0;
+#
+# You can turn off ALL auto-detection by setting
+# $Features{"AutoDetectPerlModules"} = 0;
+
+sub detect_and_load_perl_modules($) {
+    my (%Features) = @_;
+
+    if (!defined($Features{"AutoDetectPerlModules"}) or
+      $Features{"AutoDetectPerlModules"}) {
+      if (!defined($Features{"SpamAssassin"}) or ($Features{"SpamAssassin"} eq 1)) {
+        (eval 'use Mail::SpamAssassin (); $Features{"SpamAssassin"} = 1;')
+        or $Features{"SpamAssassin"} = 0;
+      }
+      if (!defined($Features{"HTML::Parser"}) or ($Features{"HTML::Parser"} eq 1)) {
+        (eval 'use HTML::Parser; $Features{"HTML::Parser"} = 1;')
+        or $Features{"HTML::Parser"} = 0;
+      }
+      if (!defined($Features{"Archive::Zip"}) or ($Features{"Archive::Zip"} eq 1)) {
+        (eval 'use Archive::Zip qw(:ERROR_CODES); $Features{"Archive::Zip"} = 1;')
+        or $Features{"Archive::Zip"} = 0;
+      }
+      if (!defined($Features{"Net::DNS"}) or ($Features{"Net::DNS"} eq 1)) {
+        (eval 'use Net::DNS; $Features{"Net::DNS"} = 1;')
+        or $Features{"Net::DNS"} = 0;
+      }
+    }
+}
+
 #***********************************************************************
 # %PROCEDURE: read_config
 # %ARGUMENTS:
