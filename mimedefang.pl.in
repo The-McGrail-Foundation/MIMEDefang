@@ -1760,19 +1760,7 @@ sub signal_changed {
 #  Local host name, if it could be determined.
 #***********************************************************************
 sub get_host_name {
-    # Use cached value if we have it
-    return $PrivateMyHostName if defined($PrivateMyHostName);
-
-    # Otherwise execute "hostname"
-    $PrivateMyHostName = hostname;
-
-    $PrivateMyHostName = "localhost" unless defined($PrivateMyHostName);
-
-    # Now make it FQDN
-    my($fqdn) = gethostbyname($PrivateMyHostName);
-    $PrivateMyHostName = $fqdn if (defined $fqdn) and length($fqdn) > length($PrivateMyHostName);
-
-    return $PrivateMyHostName;
+  return Mail::MIMEDefang::Net::get_host_name($PrivateMyHostName);
 }
 
 #***********************************************************************

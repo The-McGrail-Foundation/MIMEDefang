@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use Net::DNS;
+use Sys::Hostname;
 
 #***********************************************************************
 # %PROCEDURE: expand_ipv6_address
@@ -73,6 +74,30 @@ sub relay_is_blacklisted {
 
   # Hostname is defined, but false -- return 1 instead.
   return 1;
+}
+
+#***********************************************************************
+# %PROCEDURE: get_host_name
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  Local host name, if it could be determined.
+#***********************************************************************
+sub get_host_name {
+  my ($PrivateMyHostName) = @_;
+  # Use cached value if we have it
+  return $PrivateMyHostName if defined($PrivateMyHostName);
+
+  # Otherwise execute "hostname"
+  $PrivateMyHostName = hostname;
+
+  $PrivateMyHostName = "localhost" unless defined($PrivateMyHostName);
+
+  # Now make it FQDN
+  my($fqdn) = gethostbyname($PrivateMyHostName);
+  $PrivateMyHostName = $fqdn if (defined $fqdn) and length($fqdn) > length($PrivateMyHostName);
+
+  return $PrivateMyHostName;
 }
 
 1;
