@@ -32,6 +32,7 @@ require 5.008;
 package main;
 
 use Mail::MIMEDefang::Core;
+use Mail::MIMEDefang::Net;
 use Mail::MIMEDefang::RFC2822;
 
 use Socket;
@@ -146,26 +147,7 @@ $TrophieSock = '@SPOOLDIR@/trophie';
 sub expand_ipv6_address
 {
     my ($addr) = @_;
-
-    return '0000:0000:0000:0000:0000:0000:0000:0000' if ($addr eq '::');
-    if ($addr =~ /::/) {
-	# Do nothing if more than one pair of colons
-	return $addr if ($addr =~ /::.*::/);
-
-	# Make sure we don't begin or end with ::
-	$addr = "0000$addr" if $addr =~ /^::/;
-	$addr .= '0000' if $addr =~ /::$/;
-
-	# Count number of colons
-	my $colons = ($addr =~ tr/:/:/);
-	if ($colons < 8) {
-	    my $missing = ':' . ('0000:' x (8 - $colons));
-	    $addr =~ s/::/$missing/;
-	}
-    }
-
-    # Pad short fields
-    return join(':', map { (length($_) < 4 ? ('0' x (4-length($_)) . $_) : $_) } (split(/:/, $addr)));
+    return Mail::MIMEDefang::Net::expand_ipv6_address($addr);
 }
 
 #***********************************************************************
@@ -177,16 +159,9 @@ sub expand_ipv6_address
 #***********************************************************************
 sub reverse_ip_address_for_rbl
 {
-    my ($addr) = @_;
-    if ($addr =~ /:/) {
-	$addr = expand_ipv6_address($addr);
-	$addr =~ s/://g;
-	return join('.', reverse(split(//, $addr)));
-    }
-
-    return join('.', reverse(split(/\./, $addr)));
+  my ($addr) = @_;
+  return Mail::MIMEDefang::Net::reverse_ip_address_for_rbl($addr);
 }
-
 
 #***********************************************************************
 # %PROCEDURE: in_message_context
@@ -1595,15 +1570,7 @@ sub action_notify_administrator {
 #***********************************************************************
 sub relay_is_blacklisted {
     my($addr, $domain) = @_;
-    $addr = reverse_ip_address_for_rbl($addr) . ".$domain";
-
-    my $hn;
-    $hn = gethostbyname($addr);
-    return 0 unless defined($hn);
-    return $hn if ($hn);
-
-    # Hostname is defined, but false -- return 1 instead.
-    return 1;
+    return Mail::MIMEDefang::Net::relay_is_blacklisted($addr, $domain);
 }
 
 #***********************************************************************
@@ -7576,7 +7543,7 @@ sub md_check_against_smtp_server {
          $sock->print("RSET\r\n");
          $sock->flush();
          # Swallow return value
-         get_smtp_return_code($sock, $recip, $server); 
+         get_smtp_return_code($sock, $recip, $server);
          $sock->print("EHLO $helo\r\n");
       }
   }
