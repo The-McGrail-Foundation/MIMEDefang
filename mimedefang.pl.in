@@ -34,6 +34,7 @@ package main;
 use Mail::MIMEDefang::Core;
 use Mail::MIMEDefang::Net;
 use Mail::MIMEDefang::RFC2822;
+use Mail::MIMEDefang::Utils;
 
 use Socket;
 use IO::Socket;
@@ -309,10 +310,9 @@ sub md_copy_orig_msg_to_work_dir_as_mbox_file {
 #  "foo\r\nbar\tbl%t" ==> "foo%0D%0Abar%09bl%25t"
 #***********************************************************************
 sub percent_encode {
-    my($str) = @_;
-    $str =~ s/([^\x21-\x7e]|[%\\'"])/sprintf("%%%02X", unpack("C", $1))/ge;
-    #" Fix emacs highlighting...
-    return $str;
+  my($str) = @_;
+
+  return Mail::MIMEDefang::Utils::percent_encode($str);
 }
 
 #***********************************************************************
@@ -327,10 +327,9 @@ sub percent_encode {
 # quotes or spaces, but we do encode commas.
 #***********************************************************************
 sub percent_encode_for_graphdefang {
-    my($str) = @_;
-    $str =~ s/([^\x20-\x7e]|[%\\,])/sprintf("%%%02X", unpack("C", $1))/ge;
-    #" Fix emacs highlighting...
-    return $str;
+  my($str) = @_;
+
+  return Mail::MIMEDefang::Utils::percent_encode_for_graphdefang($str);
 }
 
 #***********************************************************************
@@ -425,9 +424,8 @@ sub init_status_tag
 #  "foo%0D%0Abar%09bl%25t" ==> "foo\r\nbar\tbl%t"
 #***********************************************************************
 sub percent_decode {
-    my($str) = @_;
-    $str =~ s/%([0-9A-Fa-f]{2})/pack("C", hex($1))/ge;
-    return $str;
+  my($str) = @_;
+  return Mail::MIMEDefang::Utils::percent_decode($str);
 }
 
 =pod
@@ -1590,78 +1588,78 @@ sub relay_is_blacklisted {
 #  a list of IP addresses as a dotted-quad.
 #***********************************************************************
 sub relay_is_blacklisted_multi {
-    my($addr, $timeout, $answers_wanted, $domains, $res) = @_;
-    my($domain, $sock);
+  my($addr, $timeout, $answers_wanted, $domains, $res) = @_;
+  my($domain, $sock);
 
-    my $ans = {};
-    my $positive_answers = 0;
+  my $ans = {};
+  my $positive_answers = 0;
 
-    foreach $domain (@{$domains}) {
-	$ans->{$domain} = 'SERVFAIL';
-    }
-    unless ($Features{"Net::DNS"}) {
-	md_syslog('err', "Attempted to call relay_is_blacklisted_multi, but Perl module Net::DNS is not installed");
-	return $ans;
-    }
-
-    push_status_tag("Doing RBL Lookup");
-    my %sock_to_domain;
-
-    # Reverse the address
-    $addr = reverse_ip_address_for_rbl($addr);
-
-    # If user did not pass in a Net::DNS::Resolver object, generate one.
-    unless (defined($res and (UNIVERSAL::isa($res, "Net::DNS::Resolver")))) {
-	$res = Net::DNS::Resolver->new;
-	$res->defnames(0);
-    }
-
-    my $sel = IO::Select->new();
-
-    # Send out the queries
-    foreach $domain (@{$domains}) {
-	$sock = $res->bgsend("$addr.$domain", 'A');
-	$sock_to_domain{$sock} = $domain;
-	$sel->add($sock);
-    }
-
-    # Now wait for them to come back.
-    my $terminate = time() + $timeout;
-    while (time() <= $terminate) {
-	my $expire = $terminate - time();
-	# Avoid fractional wait for select which gets truncated.
-	# So we may end up timing out after 1 extra second... no big deal
-	$expire = 1 if ($expire < 1);
-	my @ready;
-	@ready = $sel->can_read($expire);
-	foreach $sock (@ready) {
-	    my $pack = $res->bgread($sock);
-	    $sel->remove($sock);
-	    $domain = $sock_to_domain{$sock};
-	    undef($sock);
-	    my($rr, $rcode);
-	    $rcode = $pack->header->rcode;
-	    if ($rcode eq "SERVFAIL" or $rcode eq "NXDOMAIN") {
-		$ans->{$domain} = $rcode;
-		next;
-	    }
-	    my $got_one = 0;
-	    foreach $rr ($pack->answer) {
-		if ($rr->type eq 'A') {
-		    $got_one = 1;
-		    if ($ans->{$domain} eq "SERVFAIL") {
-			$ans->{$domain} = ();
-		    }
-		    push(@{$ans->{$domain}}, $rr->address);
-		}
-	    }
-	    $positive_answers++ if ($got_one);
-	}
-	last if ($sel->count() == 0 or
-		 ($answers_wanted > 0 and $positive_answers >= $answers_wanted));
-    }
-    pop_status_tag();
+  foreach $domain (@{$domains}) {
+    $ans->{$domain} = 'SERVFAIL';
+  }
+  unless ($Features{"Net::DNS"}) {
+    md_syslog('err', "Attempted to call relay_is_blacklisted_multi, but Perl module Net::DNS is not installed");
     return $ans;
+  }
+
+  push_status_tag("Doing RBL Lookup");
+  my %sock_to_domain;
+
+  # Reverse the address
+  $addr = reverse_ip_address_for_rbl($addr);
+
+  # If user did not pass in a Net::DNS::Resolver object, generate one.
+  unless (defined($res and (UNIVERSAL::isa($res, "Net::DNS::Resolver")))) {
+    $res = Net::DNS::Resolver->new;
+    $res->defnames(0);
+  }
+
+  my $sel = IO::Select->new();
+
+  # Send out the queries
+  foreach $domain (@{$domains}) {
+    $sock = $res->bgsend("$addr.$domain", 'A');
+    $sock_to_domain{$sock} = $domain;
+    $sel->add($sock);
+  }
+
+  # Now wait for them to come back.
+  my $terminate = time() + $timeout;
+  while (time() <= $terminate) {
+    my $expire = $terminate - time();
+    # Avoid fractional wait for select which gets truncated.
+    # So we may end up timing out after 1 extra second... no big deal
+    $expire = 1 if ($expire < 1);
+    my @ready;
+    @ready = $sel->can_read($expire);
+    foreach $sock (@ready) {
+      my $pack = $res->bgread($sock);
+      $sel->remove($sock);
+      $domain = $sock_to_domain{$sock};
+      undef($sock);
+      my($rr, $rcode);
+      $rcode = $pack->header->rcode;
+      if ($rcode eq "SERVFAIL" or $rcode eq "NXDOMAIN") {
+        $ans->{$domain} = $rcode;
+        next;
+      }
+      my $got_one = 0;
+      foreach $rr ($pack->answer) {
+        if ($rr->type eq 'A') {
+          $got_one = 1;
+          if ($ans->{$domain} eq "SERVFAIL") {
+            $ans->{$domain} = ();
+          }
+          push(@{$ans->{$domain}}, $rr->address);
+        }
+      }
+      $positive_answers++ if ($got_one);
+    }
+    last if ($sel->count() == 0 or
+      ($answers_wanted > 0 and $positive_answers >= $answers_wanted));
+  }
+  pop_status_tag();
+  return $ans;
 }
 
 #***********************************************************************

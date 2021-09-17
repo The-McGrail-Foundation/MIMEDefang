@@ -3,6 +3,8 @@ package Mail::MIMEDefang::Net;
 use strict;
 use warnings;
 
+use Net::DNS;
+
 #***********************************************************************
 # %PROCEDURE: expand_ipv6_address
 # %ARGUMENTS:
