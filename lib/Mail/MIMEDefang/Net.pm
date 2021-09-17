@@ -100,4 +100,147 @@ sub get_host_name {
   return $PrivateMyHostName;
 }
 
+=item is_public_ip4_address $ip_addr
+
+Returns true if $ip_addr is a publicly-routable IPv4 address, false otherwise
+
+=cut
+sub is_public_ip4_address {
+	my ($addr) = @_;
+	my @octets = split(/\./, $addr);
+
+	# Sanity check: Return false if it's not an IPv4 address
+	return 0 unless (scalar(@octets) == 4);
+	foreach my $octet (@octets) {
+		return 0 if ($octet !~ /^\d+$/);
+		return 0 if ($octet > 255);
+	}
+
+	# 10.0.0.0 to 10.255.255.255
+	return 0 if ($octets[0] == 10);
+
+	# 172.16.0.0 to 172.31.255.255
+	return 0 if ($octets[0] == 172 && $octets[1] >= 16 && $octets[1] <= 31);
+
+	# 192.168.0.0 to 192.168.255.255
+	return 0 if ($octets[0] == 192 && $octets[1] == 168);
+
+	# Loopback
+	return 0 if ($octets[0] == 127);
+
+	# Local-link for auto-DHCP
+	return 0 if ($octets[0] == 169 && $octets[1] == 254);
+
+	# IPv4 multicast
+	return 0 if ($octets[0] >= 224 && $octets[0] <= 239);
+
+	# Class E ("Don't Use")
+	return 0 if ($octets[0] >= 240 && $octets[0] <= 247);
+
+	# 0.0.0.0 and 255.255.255.255 are bogus
+	return 0 if ($octets[0] == 0 &&
+		     $octets[1] == 0 &&
+		     $octets[2] == 0 &&
+		     $octets[3] == 0);
+
+	return 0 if ($octets[0] == 255 &&
+		     $octets[1] == 255 &&
+		     $octets[2] == 255 &&
+		     $octets[3] == 255);
+	return 1;
+}
+
+
+=item get_mx_ip_addresses $domain [$resolver_object]
+
+Get IP addresses of all MX hosts for given domain.  If there are
+no MX hosts, then return A records.
+
+=cut
+sub get_mx_ip_addresses {
+	my($domain, $res, %Features) = @_;
+	my @results;
+	unless ($Features{"Net::DNS"}) {
+		return(@results, 'err', "Attempted to call get_mx_ip_addresses, but Perl module Net::DNS is not installed");
+	}
+	if (!defined($res)) {
+		$res = Net::DNS::Resolver->new;
+		$res->defnames(0);
+	}
+
+	my $packet = $res->query($domain, 'MX');
+	if (!defined($packet) ||
+	    $packet->header->rcode eq 'SERVFAIL' ||
+	    $packet->header->rcode eq 'NXDOMAIN' ||
+	    !defined($packet->answer)) {
+		# No MX records; try A records
+		$packet = $res->query($domain, 'A');
+		if (!defined($packet) ||
+		    $packet->header->rcode eq 'SERVFAIL' ||
+		    $packet->header->rcode eq 'NXDOMAIN' ||
+		    !defined($packet->answer)) {
+			return (@results,undef,undef);
+		}
+	}
+	foreach my $item ($packet->answer) {
+		if ($item->type eq 'MX') {
+
+			# Weird MX record of "." or ""
+			# host -t mx yahoo.com.pk for example
+			if ($item->exchange eq '' ||
+			    $item->exchange eq '.' ||
+			    $item->exchange eq '0' ||
+			    $item->exchange eq '0 ' ||
+			    $item->exchange eq '0 .' ||
+			    $item->exchange eq '0.') {
+				push(@results, '0.0.0.0');
+				next;
+			}
+
+			# If it LOOKS like an IPv4 address, don't do
+			# an A lookup
+			if ($item->exchange =~ /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.?$/) {
+				my ($a, $b, $c, $d) = ($1, $2, $3, $4);
+				if ($a <= 255 && $b <= 255 && $c <= 255 && $d <= 255) {
+					push(@results, "$a.$b.$c.$d");
+					next;
+				}
+			}
+
+			my $packet2 = $res->query($item->exchange, 'A');
+			next unless defined($packet2);
+			next if $packet2->header->rcode eq 'SERVFAIL';
+			next if $packet2->header->rcode eq 'NXDOMAIN';
+			next unless defined($packet2->answer);
+			foreach my $item2 ($packet2->answer) {
+				if ($item2->type eq 'A') {
+					push(@results, $item2->address);
+				}
+			}
+		} elsif ($item->type eq 'A') {
+			push(@results, $item->address);
+		}
+	}
+	return (@results,undef,undef);
+}
+
+=item md_get_bogus_mx_hosts $domain
+
+Returns a list of "bogus" IP addresses that are in $domain's list of MX
+records.  A "bogus" IP address is loopback/private/multicast/etc.
+
+=cut
+
+sub md_get_bogus_mx_hosts {
+	my ($domain) = @_;
+	my @bogus_hosts = ();
+	my @mx = get_mx_ip_addresses($domain);
+	foreach my $mx (@mx) {
+		if (!is_public_ip4_address($mx)) {
+			push(@bogus_hosts, $mx);
+		}
+	}
+	return @bogus_hosts;
+}
+
 1;
