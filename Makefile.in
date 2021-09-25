@@ -198,7 +198,7 @@ install: all
 	$(INSTALL) -m 755 $(INSTALL_STRIP_FLAG) md-mx-ctrl               $(DESTDIR)$(prefix)/bin/md-mx-ctrl
 	$(INSTALL) -m 755 $(INSTALL_STRIP_FLAG) mimedefang               $(DESTDIR)$(prefix)/bin/mimedefang
 
-	$(INSTALL) -m 644 lib/MIMEDefang/*.pm $(DESTDIR)$(PERLINSTALLSITELIB)/Mail/MIMEDefang/
+	$(INSTALL) -m 644 lib/Mail/MIMEDefang/*.pm $(DESTDIR)$(PERLINSTALLSITELIB)/Mail/MIMEDefang/
 
 	$(INSTALL) -m 755 watch-mimedefang         $(DESTDIR)$(prefix)/bin/watch-mimedefang
 	$(INSTALL) -m 755 watch-multiple-mimedefangs.tcl $(DESTDIR)$(prefix)/bin/watch-multiple-mimedefangs.tcl
