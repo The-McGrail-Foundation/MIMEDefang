@@ -9,13 +9,13 @@ use Sys::Hostname;
 
 use Mail::MIMEDefang::Net;
 
-sub expand_ipv6_address : Test(1)
+sub t_expand_ipv6_address : Test(1)
 {
-  my $ipv6 = ::main::expand_ipv6_address('2a00:1450:4009:816::200e');
+  my $ipv6 = expand_ipv6_address('2a00:1450:4009:816::200e');
   is($ipv6, '2a00:1450:4009:0816:0000:0000:0000:200e');
 }
 
-sub get_host_name : Test(2)
+sub t_get_host_name : Test(2)
 {
   my $hostname = hostname;
   my $host = ::main::get_host_name($hostname);

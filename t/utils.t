@@ -8,15 +8,15 @@ use Test::Most;
 
 use Mail::MIMEDefang::Utils;
 
-sub percent_encode : Test(1)
+sub t_percent_encode : Test(1)
 {
-  my $pe = ::main::percent_encode("foo\r\nbar\tbl%t");
+  my $pe = percent_encode("foo\r\nbar\tbl%t");
   is($pe, "foo%0D%0Abar%09bl%25t");
 }
 
-sub percent_decode : Test(2)
+sub t_percent_decode : Test(2)
 {
-  my $pd = ::main::percent_decode("foo%0D%0Abar%09bl%25t");
+  my $pd = percent_decode("foo%0D%0Abar%09bl%25t");
   is($pd, "foo\r\nbar\tbl%t");
 }
 

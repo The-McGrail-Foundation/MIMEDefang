@@ -5,6 +5,11 @@ use warnings;
 
 use Time::Local;
 
+require Exporter;
+our @ISA = qw(Exporter);
+our @EXPORT = qw(gen_date_msgid_headers);
+our @EXPORT_OK = qw(header_timezone rfc2822_date gen_msgid_header);
+
 #***********************************************************************
 # %PROCEDURE: gen_date_msgid_headers
 # %ARGUMENTS:

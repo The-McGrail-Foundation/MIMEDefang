@@ -42,11 +42,10 @@ our @EXPORT_OK;
       $GeneralWarning
       $HTMLFoundEndBody $HTMLBoilerplate $SASpamTester
       $results_fh
+      init_globals detect_and_load_perl_modules
     };
 
-@EXPORT_OK = qw{
-      init_globals
-      };
+@EXPORT_OK = qw(read_config);
 
 sub new {
     my ($class, @params) = @_;
@@ -111,9 +110,7 @@ sub init_globals {
 # You can turn off ALL auto-detection by setting
 # $Features{"AutoDetectPerlModules"} = 0;
 
-sub detect_and_load_perl_modules($) {
-    my (%Features) = @_;
-
+sub detect_and_load_perl_modules() {
     if (!defined($Features{"AutoDetectPerlModules"}) or
       $Features{"AutoDetectPerlModules"}) {
       if (!defined($Features{"SpamAssassin"}) or ($Features{"SpamAssassin"} eq 1)) {

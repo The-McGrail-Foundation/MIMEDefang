@@ -6,6 +6,12 @@ use warnings;
 use Net::DNS;
 use Sys::Hostname;
 
+require Exporter;
+our @ISA = qw(Exporter);
+our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_black_listed
+                 is_public_ip4_address md_get_bogus_mx_hosts);
+our @EXPORT_OK = qw(get_host_name get_mx_ip_addresses);
+
 #***********************************************************************
 # %PROCEDURE: expand_ipv6_address
 # %ARGUMENTS:

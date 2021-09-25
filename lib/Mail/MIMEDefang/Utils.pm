@@ -3,6 +3,10 @@ package Mail::MIMEDefang::Utils;
 use strict;
 use warnings;
 
+require Exporter;
+our @ISA = qw(Exporter);
+our @EXPORT = qw(percent_encode percent_encode_for_graphdefang percent_decode);
+
 #***********************************************************************
 # %PROCEDURE: percent_encode
 # %ARGUMENTS:

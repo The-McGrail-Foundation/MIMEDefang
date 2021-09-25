@@ -51,16 +51,6 @@ use Sys::Hostname;
 use File::Spec qw ();
 use Errno qw(ENOENT EACCES);
 
-# Detect these Perl modules at run-time.  Can explicitly prevent
-# loading of these modules by setting $Features{"xxx"} = 0;
-#
-# You can turn off ALL auto-detection by setting
-# $Features{"AutoDetectPerlModules"} = 0;
-
-sub detect_and_load_perl_modules {
-  Mail::MIMEDefang::Core::detect_and_load_perl_modules(%Features);
-}
-
 undef $SASpamTester;
 undef $PrivateMyHostName;
 undef @VirusScannerMessageRoutines;
@@ -136,33 +126,6 @@ $Fprotd6Host = "127.0.0.1:10200";
 $SophieSock = '@SPOOLDIR@/sophie';
 $ClamdSock  = '@SPOOLDIR@/clamd.sock';
 $TrophieSock = '@SPOOLDIR@/trophie';
-
-#***********************************************************************
-# %PROCEDURE: expand_ipv6_address
-# %ARGUMENTS:
-#  addr -- an IPv6 address
-# %RETURNS:
-#  An IPv6 address with all zero fields explicitly expanded, and
-#  any field shorter than 4 hex digits padded out with zeros.
-#***********************************************************************
-sub expand_ipv6_address
-{
-    my ($addr) = @_;
-    return Mail::MIMEDefang::Net::expand_ipv6_address($addr);
-}
-
-#***********************************************************************
-# %PROCEDURE: reverse_ip_address_for_rbl
-# %ARGUMENTS:
-#  addr -- an IPv4 or IPv6 address
-# %RETURNS:
-#  The appropriately-reversed address for RBL lookups.
-#***********************************************************************
-sub reverse_ip_address_for_rbl
-{
-  my ($addr) = @_;
-  return Mail::MIMEDefang::Net::reverse_ip_address_for_rbl($addr);
-}
 
 #***********************************************************************
 # %PROCEDURE: in_message_context
@@ -301,38 +264,6 @@ sub md_copy_orig_msg_to_work_dir_as_mbox_file {
 }
 
 #***********************************************************************
-# %PROCEDURE: percent_encode
-# %ARGUMENTS:
-#  str -- a string, possibly with newlines and control characters
-# %RETURNS:
-#  A string with unsafe chars encoded as "%XY" where X and Y are hex
-#  digits.  For example:
-#  "foo\r\nbar\tbl%t" ==> "foo%0D%0Abar%09bl%25t"
-#***********************************************************************
-sub percent_encode {
-  my($str) = @_;
-
-  return Mail::MIMEDefang::Utils::percent_encode($str);
-}
-
-#***********************************************************************
-# %PROCEDURE: percent_encode_for_graphdefang
-# %ARGUMENTS:
-#  str -- a string, possibly with newlines and control characters
-# %RETURNS:
-#  A string with unsafe chars encoded as "%XY" where X and Y are hex
-#  digits.  For example:
-#  "foo\r\nbar\tbl%t" ==> "foo%0D%0Abar%09bl%25t"
-# This differs slightly from percent_encode because we don't encode
-# quotes or spaces, but we do encode commas.
-#***********************************************************************
-sub percent_encode_for_graphdefang {
-  my($str) = @_;
-
-  return Mail::MIMEDefang::Utils::percent_encode_for_graphdefang($str);
-}
-
-#***********************************************************************
 # %PROCEDURE: push_status_tag
 # %ARGUMENTS:
 #  tag -- tag describing current status
@@ -413,19 +344,6 @@ sub init_status_tag
 	} else {
 		$DoStatusTags = 0;
 	}
-}
-
-#***********************************************************************
-# %PROCEDURE: percent_decode
-# %ARGUMENTS:
-#  str -- a string encoded by percent_encode
-# %RETURNS:
-#  The decoded string.  For example:
-#  "foo%0D%0Abar%09bl%25t" ==> "foo\r\nbar\tbl%t"
-#***********************************************************************
-sub percent_decode {
-  my($str) = @_;
-  return Mail::MIMEDefang::Utils::percent_decode($str);
 }
 
 =pod
@@ -1559,19 +1477,6 @@ sub action_notify_administrator {
 }
 
 #***********************************************************************
-# %PROCEDURE: relay_is_blacklisted
-# %ARGUMENTS:
-#  addr -- IP address of relay host.
-#  domain -- domain of blacklist server (eg: inputs.orbz.org)
-# %RETURNS:
-#  The result of the lookup (eg 127.0.0.2)
-#***********************************************************************
-sub relay_is_blacklisted {
-    my($addr, $domain) = @_;
-    return Mail::MIMEDefang::Net::relay_is_blacklisted($addr, $domain);
-}
-
-#***********************************************************************
 # %PROCEDURE: relay_is_blacklisted_multi
 # %ARGUMENTS:
 #  addr -- IP address of relay host.
@@ -1761,19 +1666,6 @@ sub signal_changed {
 #***********************************************************************
 sub get_host_name {
   return Mail::MIMEDefang::Net::get_host_name($PrivateMyHostName);
-}
-
-#***********************************************************************
-# %PROCEDURE: gen_date_msgid_headers
-# %ARGUMENTS:
-#  None
-# %RETURNS:
-#  A string like this: "Date: <rfc2822-date>\nMessage-ID: <message@id.com>\n"
-# %DESCRIPTION:
-#  Generates RFC2822-compliant Date and Message-ID headers.
-#***********************************************************************
-sub gen_date_msgid_headers {
-    return Mail::MIMEDefang::RFC2822::gen_date_msgid_headers(gen_msgid_header());
 }
 
 sub rfc2822_date
@@ -5282,7 +5174,7 @@ sub main {
     $NotifyNoPreamble = 0;
 
     # Load the filter
-    Mail::MIMEDefang::Core::init_globals();
+    init_globals();
     if ($ValidateIPHeader ne "" and
 	$ValidateIPHeader !~ /^X-MIMEDefang-Relay/) {
 	md_syslog('err', "Invalid value for mimedefang-ip-key: $ValidateIPHeader");
@@ -5300,7 +5192,7 @@ sub main {
     }
 
     # In case it wasn't done in filter... won't hurt to do it again
-    detect_and_load_perl_modules(%Features);
+    detect_and_load_perl_modules();
 
     # Backward-compatibility
     if (defined($Administrator)) {
@@ -5409,22 +5301,12 @@ sub main {
 	    filter_initialize();
 	}
 
-  Mail::MIMEDefang::Core::init_globals();
+	init_globals();
 	do_scan($workdir);
 	exit(0);
     }
 
     do_main_loop() if $enter_main_loop;
-}
-
-=item is_public_ip4_address $ip_addr
-
-Returns true if $ip_addr is a publicly-routable IPv4 address, false otherwise
-
-=cut
-sub is_public_ip4_address {
-	my ($addr) = @_;
-  return Mail::MIMEDefang::Net::is_public_ip4_address($addr);
 }
 
 =item get_mx_ip_addresses $domain [$resolver_object]
@@ -5444,18 +5326,6 @@ sub get_mx_ip_addresses {
 	return @results;
 }
 
-=item md_get_bogus_mx_hosts $domain
-
-Returns a list of "bogus" IP addresses that are in $domain's list of MX
-records.  A "bogus" IP address is loopback/private/multicast/etc.
-
-=cut
-
-sub md_get_bogus_mx_hosts {
-	my ($domain) = @_;
-	return Mail::MIMEDefang::Net::md_get_bogus_mx_hosts($domain);
-}
-
 sub do_main_loop
 {
 	init_status_tag();
@@ -5471,7 +5341,7 @@ sub do_main_loop
 		chomp $line;
 
 		# Clear out vars so they aren't used by filter_begin, etc.
-    Mail::MIMEDefang::Core::init_globals();
+		init_globals();
 
 		# Change to spool dir -- ignore error
 		chdir($Features{'Path:SPOOLDIR'});
