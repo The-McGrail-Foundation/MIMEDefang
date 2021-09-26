@@ -5386,7 +5386,7 @@ sub main {
 	# And print Perl module versions
 	print("\n");
 	my($version);
-	foreach $thing (qw(Archive::Zip Digest::SHA1 HTML::Parser IO::Socket MIME::Base64 MIME::Tools MIME::Words Mail::Mailer Mail::SpamAssassin Net::DNS Unix::Syslog )) {
+	foreach $thing (qw(Archive::Zip Digest::SHA1 HTML::Parser IO::Socket MIME::Base64 MIME::Tools MIME::Words Mail::Mailer Mail::SpamAssassin Net::DNS Sys::Syslog )) {
 	    unless (eval "require $thing") {
 		printf("%-30s: missing\n", $thing);
 		next;
