@@ -1597,9 +1597,9 @@ is a literal string, and should be one of 'err', 'debug', 'warning',
 \'emerg', 'crit', 'notice' or 'info'.  (See syslog(3) for details.)
 
 Note that md_syslog does \fInot\fR perform %-subsitutions like
-syslog(3) does.  Depending on your Perl installation, md_syslog boils
-down to a call to Unix::Syslog::syslog or Sys::Syslog::syslog.  See the
-Unix::Syslog or Sys::Syslog man pages for more details.
+syslog(3) does, md_syslog boils
+down to a call to Sys::Syslog::syslog.  See the
+Sys::Syslog man pages for more details.
 
 .TP
 .B md_openlog($tag, $facility)
