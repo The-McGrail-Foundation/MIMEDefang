@@ -5,7 +5,12 @@ use warnings;
 
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = qw(percent_encode percent_encode_for_graphdefang percent_decode);
+our @EXPORT = qw(percent_encode percent_encode_for_graphdefang percent_decode md_syslog);
+
+use Mail::MIMEDefang::Core;
+use Sys::Syslog;
+
+my $_syslogopen = undef;
 
 #***********************************************************************
 # %PROCEDURE: percent_encode
@@ -54,6 +59,47 @@ sub percent_decode {
   my($str) = @_;
   $str =~ s/%([0-9A-Fa-f]{2})/pack("C", hex($1))/ge;
   return $str;
+}
+
+#***********************************************************************
+# %PROCEDURE: md_syslog
+# %ARGUMENTS:
+#  facility -- Syslog facility as a string
+#  msg -- message to log
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Calls syslog, using Sys::Syslog package
+#***********************************************************************
+sub md_syslog
+{
+  my ($facility, $msg) = @_;
+
+  if(!$_syslogopen) {
+    md_openlog('mimedefang.pl', $SyslogFacility);
+  }
+
+  if (defined $MsgID && $MsgID ne 'NOQUEUE') {
+    return Sys::Syslog::syslog($facility, '%s', $MsgID . ': ' . $msg);
+  } else {
+    return Sys::Syslog::syslog($facility, '%s', $msg);
+  }
+}
+
+#***********************************************************************
+# %PROCEDURE: md_openlog
+# %ARGUMENTS:
+#  tag -- syslog tag ("mimedefang.pl")
+#  facility -- Syslog facility as a string
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Opens a log using Sys::Syslog
+#***********************************************************************
+sub md_openlog
+{
+  my ($tag, $facility) = @_;
+  return Sys::Syslog::openlog($tag, 'pid,ndelay', $facility);
 }
 
 1;
