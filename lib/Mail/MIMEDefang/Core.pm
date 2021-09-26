@@ -43,9 +43,10 @@ our @EXPORT_OK;
       $HTMLFoundEndBody $HTMLBoilerplate $SASpamTester
       $results_fh
       init_globals detect_and_load_perl_modules
+      init_status_tag push_status_tag pop_status_tag
     };
 
-@EXPORT_OK = qw(read_config);
+@EXPORT_OK = qw(read_config set_status_tag );
 
 sub new {
     my ($class, @params) = @_;
@@ -163,6 +164,89 @@ sub read_config($) {
   }
   if (defined(do $config_file)) {}
   return (0, undef);
+}
+
+# Try to open the status descriptor
+sub init_status_tag
+{
+	return unless $DoStatusTags;
+
+	if(open(STATUS_HANDLE, ">&=3")) {
+		STATUS_HANDLE->autoflush(1);
+	} else {
+		$DoStatusTags = 0;
+	}
+}
+
+#***********************************************************************
+# %PROCEDURE: set_status_tag
+# %ARGUMENTS:
+#  nest_depth -- nesting depth
+#  tag -- status tag
+# %DESCRIPTION:
+#  Sets the status tag for this worker inside the multiplexor.
+# %RETURNS:
+#  Nothing
+#***********************************************************************
+sub set_status_tag
+{
+	return unless $DoStatusTags;
+
+	my ($depth, $tag) = @_;
+	$tag ||= '';
+
+	if($tag eq '') {
+		print STATUS_HANDLE "\n";
+		return;
+	}
+	$tag =~ s/[^[:graph:]]/ /g;
+
+	if(defined($MsgID) and ($MsgID ne "NOQUEUE")) {
+		print STATUS_HANDLE percent_encode("$depth: $tag $MsgID") . "\n";
+	} else {
+		print STATUS_HANDLE percent_encode("$depth: $tag") . "\n";
+	}
+}
+
+#***********************************************************************
+# %PROCEDURE: push_status_tag
+# %ARGUMENTS:
+#  tag -- tag describing current status
+# %DESCRIPTION:
+#  Updates status tag inside multiplexor and pushes onto stack.
+# %RETURNS:
+#  Nothing
+#***********************************************************************
+sub push_status_tag
+{
+	return unless $DoStatusTags;
+
+	my ($tag) = @_;
+	push(@StatusTags, $tag);
+	if($tag ne '') {
+		$tag = "> $tag";
+	}
+	set_status_tag(scalar(@StatusTags), $tag);
+}
+
+#***********************************************************************
+# %PROCEDURE: pop_status_tag
+# %ARGUMENTS:
+#  None
+# %DESCRIPTION:
+#  Pops previous status of stack and sets tag in multiplexor.
+# %RETURNS:
+#  Nothing
+#***********************************************************************
+sub pop_status_tag
+{
+	return unless $DoStatusTags;
+
+	pop @StatusTags;
+
+	my $tag = $StatusTags[0] || 'no_tag';
+
+	set_status_tag(scalar(@StatusTags), "< $tag");
 }
 
 1;
