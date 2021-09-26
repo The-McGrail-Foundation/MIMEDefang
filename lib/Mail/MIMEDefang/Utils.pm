@@ -5,7 +5,8 @@ use warnings;
 
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = qw(percent_encode percent_encode_for_graphdefang percent_decode md_syslog);
+our @EXPORT = qw(percent_encode percent_encode_for_graphdefang
+                 percent_decode md_syslog time_str date_str);
 
 use Mail::MIMEDefang::Core;
 use Sys::Syslog;
@@ -100,6 +101,37 @@ sub md_openlog
 {
   my ($tag, $facility) = @_;
   return Sys::Syslog::openlog($tag, 'pid,ndelay', $facility);
+}
+
+#***********************************************************************
+# %PROCEDURE: time_str
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  The current time in the form: "YYYY-MM-DD-HH:mm:ss"
+# %DESCRIPTION:
+#  Returns a string representing the current time.
+#***********************************************************************
+sub time_str {
+    my($sec, $min, $hour, $mday, $mon, $year, $junk);
+    ($sec, $min, $hour, $mday, $mon, $year, $junk) = localtime(time());
+    return sprintf("%04d-%02d-%02d-%02d.%02d.%02d",
+                   $year + 1900, $mon+1, $mday, $hour, $min, $sec);
+}
+
+#***********************************************************************
+# %PROCEDURE: hour_str
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  The current time in the form: "YYYY-MM-DD-HH"
+# %DESCRIPTION:
+#  Returns a string representing the current time.
+#***********************************************************************
+sub hour_str {
+    my($sec, $min, $hour, $mday, $mon, $year, $junk);
+    ($sec, $min, $hour, $mday, $mon, $year, $junk) = localtime(time());
+    return sprintf('%04d-%02d-%02d-%02d', $year+1900, $mon+1, $mday, $hour);
 }
 
 1;

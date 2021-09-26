@@ -394,37 +394,6 @@ sub write_result_line
 }
 
 #***********************************************************************
-# %PROCEDURE: time_str
-# %ARGUMENTS:
-#  None
-# %RETURNS:
-#  The current time in the form: "YYYY-MM-DD-HH:mm:ss"
-# %DESCRIPTION:
-#  Returns a string representing the current time.
-#***********************************************************************
-sub time_str {
-    my($sec, $min, $hour, $mday, $mon, $year, $junk);
-    ($sec, $min, $hour, $mday, $mon, $year, $junk) = localtime(time());
-    return sprintf("%04d-%02d-%02d-%02d.%02d.%02d",
-		   $year + 1900, $mon+1, $mday, $hour, $min, $sec);
-}
-
-#***********************************************************************
-# %PROCEDURE: hour_str
-# %ARGUMENTS:
-#  None
-# %RETURNS:
-#  The current time in the form: "YYYY-MM-DD-HH"
-# %DESCRIPTION:
-#  Returns a string representing the current time.
-#***********************************************************************
-sub hour_str {
-    my($sec, $min, $hour, $mday, $mon, $year, $junk);
-    ($sec, $min, $hour, $mday, $mon, $year, $junk) = localtime(time());
-    return sprintf('%04d-%02d-%02d-%02d', $year+1900, $mon+1, $mday, $hour);
-}
-
-#***********************************************************************
 # %PROCEDURE: fatal
 # %ARGUMENTS:
 #  msg -- message
