@@ -44,6 +44,7 @@ our @EXPORT_OK;
       $results_fh
       init_globals detect_and_load_perl_modules
       init_status_tag push_status_tag pop_status_tag
+      signal_changed signal_unchanged
     };
 
 @EXPORT_OK = qw(read_config set_status_tag write_result_line);
@@ -294,6 +295,31 @@ sub write_result_line
 	print $results_fh "$line\n" or return (0, "Could not write RESULTS line: $!");
 
 	return (1, $wmsg);
+}
+
+#***********************************************************************
+# %PROCEDURE: signal_unchanged
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Tells mimedefang C program message has not been altered (does nothing...)
+#***********************************************************************
+sub signal_unchanged {
+}
+
+#***********************************************************************
+# %PROCEDURE: signal_changed
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Tells mimedefang C program message has been altered.
+#***********************************************************************
+sub signal_changed {
+    write_result_line("C", "");
 }
 
 1;
