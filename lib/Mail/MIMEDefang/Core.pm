@@ -46,7 +46,7 @@ our @EXPORT_OK;
       init_status_tag push_status_tag pop_status_tag
     };
 
-@EXPORT_OK = qw(read_config set_status_tag );
+@EXPORT_OK = qw(read_config set_status_tag write_result_line);
 
 sub new {
     my ($class, @params) = @_;
@@ -247,6 +247,53 @@ sub pop_status_tag
 	my $tag = $StatusTags[0] || 'no_tag';
 
 	set_status_tag(scalar(@StatusTags), "< $tag");
+}
+
+=pod
+
+=head2 write_result_line ( $cmd, @args )
+
+Writes a result line to the RESULTS file.
+
+$cmd should be a one-letter command for the RESULTS file
+
+@args are the arguments for $cmd, if any.  They will be percent_encode()'ed
+before being written to the file.
+
+Returns 0 or 1 and an optional warning message.
+
+=cut
+
+sub write_result_line
+{
+	my $cmd = shift;
+  my $wmsg;
+
+	# Do nothing if we don't yet have a dedicated working directory
+	if ($CWD eq $Features{'Path:SPOOLDIR'}) {
+		return (0, "write_result_line called before working directory established");
+	}
+
+	my $line = $cmd . join ' ', map { percent_encode($_) } @_;
+
+	if (!$results_fh) {
+		$results_fh = IO::File->new('>>RESULTS');
+		if (!$results_fh) {
+			return (0, "Could not open RESULTS file: $!");
+		}
+	}
+
+	# We have a 16kb limit on the length of lines in RESULTS, including
+	# trailing newline and null used in the milter.  So, we limit $cmd +
+	# $args to 16382 bytes.
+	if( length $line > 16382 ) {
+		$wmsg = "Cannot write line over 16382 bytes long to RESULTS file; truncating.  Original line began with: " . substr $line, 0, 40;
+		$line = substr $line, 0, 16382;
+	}
+
+	print $results_fh "$line\n" or return (0, "Could not write RESULTS line: $!");
+
+	return (1, $wmsg);
 }
 
 1;

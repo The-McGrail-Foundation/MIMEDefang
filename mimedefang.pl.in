@@ -282,31 +282,13 @@ sub write_result_line
 {
 	my $cmd = shift;
 
-	# Do nothing if we don't yet have a dedicated working directory
-	if ($CWD eq $Features{'Path:SPOOLDIR'}) {
-		md_syslog('warning', "write_result_line called before working directory established");
-		return;
-	}
+  my ($status, $wmsg) = Mail::MIMEDefang::Core::write_result_line($cmd);
 
-	my $line = $cmd . join ' ', map { percent_encode($_) } @_;
-
-	if (!$results_fh) {
-		$results_fh = IO::File->new('>>RESULTS');
-		if (!$results_fh) {
-			die("Could not open RESULTS file: $!");
-		}
-	}
-
-	# We have a 16kb limit on the length of lines in RESULTS, including
-	# trailing newline and null used in the milter.  So, we limit $cmd +
-	# $args to 16382 bytes.
-	if( length $line > 16382 ) {
-		md_syslog( 'warning',  "Cannot write line over 16382 bytes long to RESULTS file; truncating.  Original line began with: " . substr $line, 0, 40);
-		$line = substr $line, 0, 16382;
-	}
-
-	print $results_fh "$line\n" or die "Could not write RESULTS line: $!";
-
+  if($status and defined($wmsg)) {
+    md_syslog('warning', $wmsg);
+  } elsif (!$status and defined($wmsg)) {
+    die($wmsg);
+  }
 	return;
 }
 
