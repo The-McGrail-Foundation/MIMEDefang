@@ -281,16 +281,17 @@ Returns nothing.
 
 sub write_result_line
 {
-	my $cmd = shift;
+  my $cmd = shift;
+  my @args = @_;
 
-  my ($status, $wmsg) = Mail::MIMEDefang::Core::write_result_line($cmd);
+  my ($status, $wmsg) = Mail::MIMEDefang::Core::write_result_line($cmd, @args);
 
   if($status and defined($wmsg)) {
     md_syslog('warning', $wmsg);
   } elsif (!$status and defined($wmsg)) {
     die($wmsg);
   }
-	return;
+  return;
 }
 
 #***********************************************************************

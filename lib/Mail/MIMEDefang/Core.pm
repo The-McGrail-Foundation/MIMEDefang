@@ -268,14 +268,15 @@ Returns 0 or 1 and an optional warning message.
 sub write_result_line
 {
 	my $cmd = shift;
-  my $wmsg;
+	my @args = @_;
+	my $wmsg;
 
 	# Do nothing if we don't yet have a dedicated working directory
 	if ($CWD eq $Features{'Path:SPOOLDIR'}) {
 		return (0, "write_result_line called before working directory established");
 	}
 
-	my $line = $cmd . join ' ', map { percent_encode($_) } @_;
+	my $line = $cmd . join ' ', map { percent_encode($_) } @args;
 
 	if (!$results_fh) {
 		$results_fh = IO::File->new('>>RESULTS');
