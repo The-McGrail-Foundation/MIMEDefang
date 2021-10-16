@@ -26,8 +26,11 @@ sub t_read_config : Test(3)
   no warnings qw(redefine once);
   local *::md_syslog = sub { note $_[1] };
   use warnings qw(redefine once);
-  Mail::MIMEDefang::Core::read_config("t/data/md.conf");
-  is($SALocalTestsOnly, 0);
+  SKIP: {
+    skip "read_config test must be run as root", 1 unless ($< eq 0);
+    Mail::MIMEDefang::Core::read_config("t/data/md.conf");
+    is($SALocalTestsOnly, 0);
+  };
 }
 
 sub t_detect_and_load_perl_modules : Test(4)
