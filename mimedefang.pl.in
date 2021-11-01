@@ -188,36 +188,6 @@ sub in_filter_end {
 }
 
 #***********************************************************************
-# %PROCEDURE: copy_or_link
-# %ARGUMENTS:
-#  src -- source filename
-#  dest -- destination filename
-# %RETURNS:
-#  1 on success; 0 on failure.
-# %DESCRIPTION:
-#  Copies a file: First, attempts to make a hard link.  If that fails,
-#  reads the file and copies the data.
-#***********************************************************************
-sub copy_or_link {
-    my($src, $dst) = @_;
-    return 1 if link($src, $dst);
-
-    # Link failed; do it the hard way
-    open(IN, "<$src") or return 0;
-    if (!open(OUT, ">$dst")) {
-	close(IN);
-	return 0;
-    }
-    my($n, $string);
-    while (($n = read(IN, $string, 4096)) > 0) {
-	print OUT $string;
-    }
-    close(IN);
-    close(OUT);
-    return 1;
-}
-
-#***********************************************************************
 # %PROCEDURE: md_copy_orig_msg_to_work_dir
 # %ARGUMENTS:
 #  None
@@ -311,44 +281,6 @@ sub fatal {
     } else {
 	print_and_flush("error: $msg");
     }
-}
-
-#***********************************************************************
-# %PROCEDURE: synthesize_received_header
-# %ARGUMENTS:
-#  None
-# %RETURNS:
-#  A "Received:" header for current message
-# %DESCRIPTION:
-#  Synthesizes a valid Received: header to reflect re-mailing.
-#***********************************************************************
-sub synthesize_received_header {
-    my($hdr);
-
-    my($hn) = $SendmailMacros{"if_name"};
-    my($auth) = $SendmailMacros{"auth_authen"};
-
-    my $strdate = rfc2822_date();
-
-    $hn = get_host_name() unless (defined($hn) and ($hn ne ""));
-    if ($RealRelayHostname ne "[$RealRelayAddr]") {
-      $hdr = "Received: from $Helo ($RealRelayHostname [$RealRelayAddr])\n";
-    } else {
-      $hdr = "Received: from $Helo ([$RealRelayAddr])\n";
-    }
-    if($auth) {
-      $hdr .= "\tby $hn (envelope-sender $Sender) (MIMEDefang) with ESMTPA id $MsgID";
-    } else {
-      $hdr .= "\tby $hn (envelope-sender $Sender) (MIMEDefang) with ESMTP id $MsgID";
-    }
-    if ($#Recipients != 0) {
-      $hdr .= "; ";
-    } else {
-      $hdr .= "\n\tfor " . $Recipients[0] . "; ";
-    }
-
-    $hdr .= $strdate . "\n";
-    return $hdr;
 }
 
 #***********************************************************************
