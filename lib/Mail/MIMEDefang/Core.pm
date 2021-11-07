@@ -47,7 +47,10 @@ our @EXPORT_OK;
       signal_changed signal_unchanged
     };
 
-@EXPORT_OK = qw(read_config set_status_tag write_result_line);
+@EXPORT_OK = qw{
+      read_config set_status_tag write_result_line
+      in_message_context, in_filter_context, in_filter_wrapup, in_filter_end
+    };
 
 sub new {
     my ($class, @params) = @_;
@@ -321,6 +324,61 @@ sub signal_unchanged {
 #***********************************************************************
 sub signal_changed {
     write_result_line("C", "");
+}
+
+#***********************************************************************
+# %PROCEDURE: in_message_context
+# %ARGUMENTS:
+#  name -- a string to syslog if we are not in a message context
+# %RETURNS:
+#  1 if we are processing a message; 0 otherwise.  Returns 0 if
+#  we're in filter_relay, filter_sender or filter_recipient
+#***********************************************************************
+sub in_message_context {
+    my($name, $context) = @_;
+    return (1, undef) if ($context);
+    return (0, "$name called outside of message context");
+}
+
+#***********************************************************************
+# %PROCEDURE: in_filter_wrapup
+# %ARGUMENTS:
+#  name -- a string to syslog if we are in filter wrapup
+# %RETURNS:
+#  1 if we are not in filter wrapup; 0 otherwise.
+#***********************************************************************
+sub in_filter_wrapup {
+    my($name, $context) = @_;
+    if ($context) {
+	    return (1, "$name called inside filter_wrapup context");
+    }
+    return (0, undef);
+}
+
+#***********************************************************************
+# %PROCEDURE: in_filter_context
+# %ARGUMENTS:
+#  name -- a string to syslog if we are not in a filter context
+# %RETURNS:
+#  1 if we are inside filter or filter_multipart, 0 otherwise.
+#***********************************************************************
+sub in_filter_context {
+    my($name, $context) = @_;
+    return (1, undef) if ($context);
+    return (0, "$name called outside of filter context");
+}
+
+#***********************************************************************
+# %PROCEDURE: in_filter_end
+# %ARGUMENTS:
+#  name -- a string to syslog if we are not in filter_end
+# %RETURNS:
+#  1 if we are inside filter_end 0 otherwise.
+#***********************************************************************
+sub in_filter_end {
+    my($name, $context) = @_;
+    return (1, undef) if ($context);
+    return (0, "$name called outside of filter_end");
 }
 
 1;

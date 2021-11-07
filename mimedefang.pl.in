@@ -138,9 +138,11 @@ $TrophieSock = '@SPOOLDIR@/trophie';
 #***********************************************************************
 sub in_message_context {
     my($name) = @_;
-    return 1 if ($InMessageContext);
-    md_syslog('warning', "$name called outside of message context");
-    return 0;
+    my ($ret, $wmsg) = Mail::MIMEDefang::Core::in_message_context($name, $InMessageContext);
+    if($ret eq 0) {
+      md_syslog('warning', $wmsg);
+    }
+    return $ret;
 }
 
 #***********************************************************************
@@ -152,11 +154,11 @@ sub in_message_context {
 #***********************************************************************
 sub in_filter_wrapup {
     my($name) = @_;
-    if ($InFilterWrapUp) {
-	    md_syslog('warning', "$name called inside filter_wrapup context");
-	    return 1;
+    my ($ret, $wmsg) = Mail::MIMEDefang::Core::in_filter_wrapup($name, $InFilterWrapUp);
+    if($ret eq 0) {
+      md_syslog('warning', $wmsg);
     }
-    return 0;
+    return $ret;
 }
 
 #***********************************************************************
@@ -168,9 +170,11 @@ sub in_filter_wrapup {
 #***********************************************************************
 sub in_filter_context {
     my($name) = @_;
-    return 1 if ($InFilterContext);
-    md_syslog('warning', "$name called outside of filter context");
-    return 0;
+    my ($ret, $wmsg) = Mail::MIMEDefang::Core::in_filter_context($name, $InFilterContext);
+    if($ret eq 0) {
+      md_syslog('warning', $wmsg);
+    }
+    return $ret;
 }
 
 #***********************************************************************
@@ -182,9 +186,11 @@ sub in_filter_context {
 #***********************************************************************
 sub in_filter_end {
     my($name) = @_;
-    return 1 if ($InFilterEnd);
-    md_syslog('warning', "$name called outside of filter_end");
-    return 0;
+    my ($ret, $wmsg) = Mail::MIMEDefang::Core::in_filter_end($name, $InFilterEnd);
+    if($ret eq 0) {
+      md_syslog('warning', $wmsg);
+    }
+    return $ret;
 }
 
 #***********************************************************************
