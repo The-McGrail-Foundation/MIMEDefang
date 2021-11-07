@@ -4,6 +4,9 @@ require Exporter;
 
 use Errno qw(ENOENT EACCES);
 use File::Spec;
+use Sys::Syslog;
+
+my $_syslogopen = undef;
 
 our @ISA = qw(Exporter);
 our @EXPORT;
@@ -44,12 +47,12 @@ our @EXPORT_OK;
       $results_fh
       init_globals detect_and_load_perl_modules
       init_status_tag push_status_tag pop_status_tag
-      signal_changed signal_unchanged
+      signal_changed signal_unchanged md_syslog
+      in_message_context in_filter_context in_filter_wrapup in_filter_end
     };
 
 @EXPORT_OK = qw{
       read_config set_status_tag write_result_line
-      in_message_context, in_filter_context, in_filter_wrapup, in_filter_end
     };
 
 sub new {
@@ -107,6 +110,47 @@ sub init_globals {
     undef @ESMTPArgs;
     undef @SenderESMTPArgs;
     undef $results_fh;
+}
+
+#***********************************************************************
+# %PROCEDURE: md_syslog
+# %ARGUMENTS:
+#  facility -- Syslog facility as a string
+#  msg -- message to log
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Calls syslog, using Sys::Syslog package
+#***********************************************************************
+sub md_syslog
+{
+  my ($facility, $msg) = @_;
+
+  if(!$_syslogopen) {
+    md_openlog('mimedefang.pl', $SyslogFacility);
+  }
+
+  if (defined $MsgID && $MsgID ne 'NOQUEUE') {
+    return Sys::Syslog::syslog($facility, '%s', $MsgID . ': ' . $msg);
+  } else {
+    return Sys::Syslog::syslog($facility, '%s', $msg);
+  }
+}
+
+#***********************************************************************
+# %PROCEDURE: md_openlog
+# %ARGUMENTS:
+#  tag -- syslog tag ("mimedefang.pl")
+#  facility -- Syslog facility as a string
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Opens a log using Sys::Syslog
+#***********************************************************************
+sub md_openlog
+{
+  my ($tag, $facility) = @_;
+  return Sys::Syslog::openlog($tag, 'pid,ndelay', $facility);
 }
 
 # Detect these Perl modules at run-time.  Can explicitly prevent
@@ -206,9 +250,9 @@ sub set_status_tag
 	$tag =~ s/[^[:graph:]]/ /g;
 
 	if(defined($MsgID) and ($MsgID ne "NOQUEUE")) {
-		print STATUS_HANDLE percent_encode("$depth: $tag $MsgID") . "\n";
+		print STATUS_HANDLE Mail::MIMEDefang::Utils::percent_encode("$depth: $tag $MsgID") . "\n";
 	} else {
-		print STATUS_HANDLE percent_encode("$depth: $tag") . "\n";
+		print STATUS_HANDLE Mail::MIMEDefang::Utils::percent_encode("$depth: $tag") . "\n";
 	}
 }
 
@@ -279,7 +323,7 @@ sub write_result_line
 		return (0, "write_result_line called before working directory established");
 	}
 
-	my $line = $cmd . join ' ', map { percent_encode($_) } @args;
+	my $line = $cmd . join ' ', map { Mail::MIMEDefang::Utils::percent_encode($_) } @args;
 
 	if (!$results_fh) {
 		$results_fh = IO::File->new('>>RESULTS');
@@ -335,9 +379,10 @@ sub signal_changed {
 #  we're in filter_relay, filter_sender or filter_recipient
 #***********************************************************************
 sub in_message_context {
-    my($name, $context) = @_;
-    return (1, undef) if ($context);
-    return (0, "$name called outside of message context");
+    my($name) = @_;
+    return 1 if ($InMessageContext);
+    md_syslog('warning', "$name called outside of message context");
+    return 0;
 }
 
 #***********************************************************************
@@ -348,11 +393,12 @@ sub in_message_context {
 #  1 if we are not in filter wrapup; 0 otherwise.
 #***********************************************************************
 sub in_filter_wrapup {
-    my($name, $context) = @_;
-    if ($context) {
-	    return (1, "$name called inside filter_wrapup context");
+    my($name) = @_;
+    if ($InFilterWrapUp) {
+	    md_syslog('warning', "$name called inside filter_wrapup context");
+	    return 1;
     }
-    return (0, undef);
+    return 0;
 }
 
 #***********************************************************************
@@ -363,9 +409,10 @@ sub in_filter_wrapup {
 #  1 if we are inside filter or filter_multipart, 0 otherwise.
 #***********************************************************************
 sub in_filter_context {
-    my($name, $context) = @_;
-    return (1, undef) if ($context);
-    return (0, "$name called outside of filter context");
+    my($name) = @_;
+    return 1 if ($InFilterContext);
+    md_syslog('warning', "$name called outside of filter context");
+    return 0;
 }
 
 #***********************************************************************
@@ -376,9 +423,10 @@ sub in_filter_context {
 #  1 if we are inside filter_end 0 otherwise.
 #***********************************************************************
 sub in_filter_end {
-    my($name, $context) = @_;
-    return (1, undef) if ($context);
-    return (0, "$name called outside of filter_end");
+    my($name) = @_;
+    return 1 if ($InFilterEnd);
+    md_syslog('warning', "$name called outside of filter_end");
+    return 0;
 }
 
 1;

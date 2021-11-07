@@ -5,6 +5,8 @@ use lib qw(lib);
 use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
+use Mail::MIMEDefang::Core;
+
 sub delete_header_ok : Test(2)
 {
 	my @results;
@@ -13,7 +15,7 @@ sub delete_header_ok : Test(2)
 	local *::main::write_result_line = sub { push @results, [ @_ ] };
 
 	# Lie about being in message context so these tests can work
-	local $::main::InMessageContext = 1;
+	$InMessageContext = 1;
 	use warnings qw(redefine once );
 
 	::main::action_delete_header('X-Header');
@@ -32,7 +34,7 @@ sub add_header_ok : Test(2)
 	local *::main::write_result_line = sub { push @results, [ @_ ] };
 
 	# Lie about being in message context so these tests can work
-	local $::main::InMessageContext = 1;
+	$InMessageContext = 1;
 	use warnings qw(redefine once );
 
 	::main::action_add_header('X-Header', 'some content');
@@ -50,7 +52,7 @@ sub change_header_ok : Test(2)
 	local *::main::write_result_line = sub { push @results, [ @_ ] };
 
 	# Lie about being in message context so these tests can work
-	local $::main::InMessageContext = 1;
+	$InMessageContext = 1;
 	use warnings qw(redefine once );
 
 	::main::action_change_header('X-Header', 'some content');

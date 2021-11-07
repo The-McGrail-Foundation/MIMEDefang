@@ -129,71 +129,6 @@ $ClamdSock  = '@SPOOLDIR@/clamd.sock';
 $TrophieSock = '@SPOOLDIR@/trophie';
 
 #***********************************************************************
-# %PROCEDURE: in_message_context
-# %ARGUMENTS:
-#  name -- a string to syslog if we are not in a message context
-# %RETURNS:
-#  1 if we are processing a message; 0 otherwise.  Returns 0 if
-#  we're in filter_relay, filter_sender or filter_recipient
-#***********************************************************************
-sub in_message_context {
-    my($name) = @_;
-    my ($ret, $wmsg) = Mail::MIMEDefang::Core::in_message_context($name, $InMessageContext);
-    if($ret eq 0) {
-      md_syslog('warning', $wmsg);
-    }
-    return $ret;
-}
-
-#***********************************************************************
-# %PROCEDURE: in_filter_wrapup
-# %ARGUMENTS:
-#  name -- a string to syslog if we are in filter wrapup
-# %RETURNS:
-#  1 if we are not in filter wrapup; 0 otherwise.
-#***********************************************************************
-sub in_filter_wrapup {
-    my($name) = @_;
-    my ($ret, $wmsg) = Mail::MIMEDefang::Core::in_filter_wrapup($name, $InFilterWrapUp);
-    if($ret eq 0) {
-      md_syslog('warning', $wmsg);
-    }
-    return $ret;
-}
-
-#***********************************************************************
-# %PROCEDURE: in_filter_context
-# %ARGUMENTS:
-#  name -- a string to syslog if we are not in a filter context
-# %RETURNS:
-#  1 if we are inside filter or filter_multipart, 0 otherwise.
-#***********************************************************************
-sub in_filter_context {
-    my($name) = @_;
-    my ($ret, $wmsg) = Mail::MIMEDefang::Core::in_filter_context($name, $InFilterContext);
-    if($ret eq 0) {
-      md_syslog('warning', $wmsg);
-    }
-    return $ret;
-}
-
-#***********************************************************************
-# %PROCEDURE: in_filter_end
-# %ARGUMENTS:
-#  name -- a string to syslog if we are not in filter_end
-# %RETURNS:
-#  1 if we are inside filter_end 0 otherwise.
-#***********************************************************************
-sub in_filter_end {
-    my($name) = @_;
-    my ($ret, $wmsg) = Mail::MIMEDefang::Core::in_filter_end($name, $InFilterEnd);
-    if($ret eq 0) {
-      md_syslog('warning', $wmsg);
-    }
-    return $ret;
-}
-
-#***********************************************************************
 # %PROCEDURE: md_copy_orig_msg_to_work_dir
 # %ARGUMENTS:
 #  None
@@ -287,18 +222,6 @@ sub fatal {
     } else {
 	print_and_flush("error: $msg");
     }
-}
-
-#***********************************************************************
-# %PROCEDURE: make_defanged_name
-# %ARGUMENTS:
-#  None
-# %RETURNS:
-#  A unique name of the form "defang-$n.binary"
-#***********************************************************************
-sub make_defanged_name {
-    $DefangCounter++;
-    return "defang-$DefangCounter.binary";
 }
 
 #***********************************************************************
