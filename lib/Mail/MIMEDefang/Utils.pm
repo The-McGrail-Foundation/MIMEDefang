@@ -7,58 +7,9 @@ use Mail::MIMEDefang::Core;
 
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = qw(percent_encode percent_encode_for_graphdefang
-                 percent_decode time_str date_str
+our @EXPORT = qw(time_str date_str
                  synthesize_received_header copy_or_link);
-
-#***********************************************************************
-# %PROCEDURE: percent_encode
-# %ARGUMENTS:
-#  str -- a string, possibly with newlines and control characters
-# %RETURNS:
-#  A string with unsafe chars encoded as "%XY" where X and Y are hex
-#  digits.  For example:
-#  "foo\r\nbar\tbl%t" ==> "foo%0D%0Abar%09bl%25t"
-#***********************************************************************
-sub percent_encode {
-  my($str) = @_;
-
-  $str =~ s/([^\x21-\x7e]|[%\\'"])/sprintf("%%%02X", unpack("C", $1))/ge;
-  #" Fix emacs highlighting...
-  return $str;
-}
-
-#***********************************************************************
-# %PROCEDURE: percent_encode_for_graphdefang
-# %ARGUMENTS:
-#  str -- a string, possibly with newlines and control characters
-# %RETURNS:
-#  A string with unsafe chars encoded as "%XY" where X and Y are hex
-#  digits.  For example:
-#  "foo\r\nbar\tbl%t" ==> "foo%0D%0Abar%09bl%25t"
-# This differs slightly from percent_encode because we don't encode
-# quotes or spaces, but we do encode commas.
-#***********************************************************************
-sub percent_encode_for_graphdefang {
-  my($str) = @_;
-  $str =~ s/([^\x20-\x7e]|[%\\,])/sprintf("%%%02X", unpack("C", $1))/ge;
-  #" Fix emacs highlighting...
-  return $str;
-}
-
-#***********************************************************************
-# %PROCEDURE: percent_decode
-# %ARGUMENTS:
-#  str -- a string encoded by percent_encode
-# %RETURNS:
-#  The decoded string.  For example:
-#  "foo%0D%0Abar%09bl%25t" ==> "foo\r\nbar\tbl%t"
-#***********************************************************************
-sub percent_decode {
-  my($str) = @_;
-  $str =~ s/%([0-9A-Fa-f]{2})/pack("C", hex($1))/ge;
-  return $str;
-}
+our @EXPORT_OK = qw(read_results);
 
 #***********************************************************************
 # %PROCEDURE: time_str
@@ -157,6 +108,30 @@ sub copy_or_link {
     close(IN);
     close(OUT);
     return 1;
+}
+
+#***********************************************************************
+# %PROCEDURE: read_results
+# %ARGUMENTS:
+# %RETURNS:
+#  array of extracted from RESULTS file.
+# %DESCRIPTION:
+#  Extracts an array of command, key, values from RESULTS file,
+#  needed for regression tests
+#***********************************************************************
+sub read_results
+{
+  my ($line, @res);
+  my $fh = IO::File->new('./RESULTS', "r");
+  while($line = <$fh>) {
+    if($line =~ /([A-Z]{1})([A-Z-]+)\s([^\s]+)\s(.+)/i) {
+        push(@res, [$1, $2, percent_decode($3), percent_decode($4)]);
+    } elsif($line =~ /([A-Z]{1})([A-Z-]+)\s(.+)/i) {
+        push(@res, [$1, $2, percent_decode($3)]);
+    }
+  }
+  undef $fh;
+  return @res;
 }
 
 1;

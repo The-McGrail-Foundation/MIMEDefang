@@ -15,4 +15,5 @@ sub include_mimedefang : Test(startup)
 	do './mimedefang.pl.in';
 	use warnings 'redefine';
 }
+
 1;

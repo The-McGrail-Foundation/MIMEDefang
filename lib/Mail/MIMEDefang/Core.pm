@@ -47,12 +47,13 @@ our @EXPORT_OK;
       $results_fh
       init_globals detect_and_load_perl_modules
       init_status_tag push_status_tag pop_status_tag
-      signal_changed signal_unchanged md_syslog
+      signal_changed signal_unchanged md_syslog write_result_line
       in_message_context in_filter_context in_filter_wrapup in_filter_end
+      percent_decode percent_encode percent_encode_for_graphdefang
     };
 
 @EXPORT_OK = qw{
-      read_config set_status_tag write_result_line
+      read_config set_status_tag
     };
 
 sub new {
@@ -250,9 +251,9 @@ sub set_status_tag
 	$tag =~ s/[^[:graph:]]/ /g;
 
 	if(defined($MsgID) and ($MsgID ne "NOQUEUE")) {
-		print STATUS_HANDLE Mail::MIMEDefang::Utils::percent_encode("$depth: $tag $MsgID") . "\n";
+		print STATUS_HANDLE percent_encode("$depth: $tag $MsgID") . "\n";
 	} else {
-		print STATUS_HANDLE Mail::MIMEDefang::Utils::percent_encode("$depth: $tag") . "\n";
+		print STATUS_HANDLE percent_encode("$depth: $tag") . "\n";
 	}
 }
 
@@ -297,6 +298,55 @@ sub pop_status_tag
 	set_status_tag(scalar(@StatusTags), "< $tag");
 }
 
+#***********************************************************************
+# %PROCEDURE: percent_encode
+# %ARGUMENTS:
+#  str -- a string, possibly with newlines and control characters
+# %RETURNS:
+#  A string with unsafe chars encoded as "%XY" where X and Y are hex
+#  digits.  For example:
+#  "foo\r\nbar\tbl%t" ==> "foo%0D%0Abar%09bl%25t"
+#***********************************************************************
+sub percent_encode {
+  my($str) = @_;
+
+  $str =~ s/([^\x21-\x7e]|[%\\'"])/sprintf("%%%02X", unpack("C", $1))/ge;
+  #" Fix emacs highlighting...
+  return $str;
+}
+
+#***********************************************************************
+# %PROCEDURE: percent_encode_for_graphdefang
+# %ARGUMENTS:
+#  str -- a string, possibly with newlines and control characters
+# %RETURNS:
+#  A string with unsafe chars encoded as "%XY" where X and Y are hex
+#  digits.  For example:
+#  "foo\r\nbar\tbl%t" ==> "foo%0D%0Abar%09bl%25t"
+# This differs slightly from percent_encode because we don't encode
+# quotes or spaces, but we do encode commas.
+#***********************************************************************
+sub percent_encode_for_graphdefang {
+  my($str) = @_;
+  $str =~ s/([^\x20-\x7e]|[%\\,])/sprintf("%%%02X", unpack("C", $1))/ge;
+  #" Fix emacs highlighting...
+  return $str;
+}
+
+#***********************************************************************
+# %PROCEDURE: percent_decode
+# %ARGUMENTS:
+#  str -- a string encoded by percent_encode
+# %RETURNS:
+#  The decoded string.  For example:
+#  "foo%0D%0Abar%09bl%25t" ==> "foo\r\nbar\tbl%t"
+#***********************************************************************
+sub percent_decode {
+  my($str) = @_;
+  $str =~ s/%([0-9A-Fa-f]{2})/pack("C", hex($1))/ge;
+  return $str;
+}
+
 =pod
 
 =head2 write_result_line ( $cmd, @args )
@@ -314,35 +364,34 @@ Returns 0 or 1 and an optional warning message.
 
 sub write_result_line
 {
-	my $cmd = shift;
-	my @args = @_;
-	my $wmsg;
+        my $cmd = shift;
 
-	# Do nothing if we don't yet have a dedicated working directory
-	if ($CWD eq $Features{'Path:SPOOLDIR'}) {
-		return (0, "write_result_line called before working directory established");
-	}
+        # Do nothing if we don't yet have a dedicated working directory
+        if ($CWD eq $Features{'Path:SPOOLDIR'}) {
+                md_syslog('warning', "write_result_line called before working directory established");
+                return;
+        }
 
-	my $line = $cmd . join ' ', map { Mail::MIMEDefang::Utils::percent_encode($_) } @args;
+        my $line = $cmd . join ' ', map { percent_encode($_) } @_;
 
-	if (!$results_fh) {
-		$results_fh = IO::File->new('>>RESULTS');
-		if (!$results_fh) {
-			return (0, "Could not open RESULTS file: $!");
-		}
-	}
+        if (!$results_fh) {
+                $results_fh = IO::File->new('>>RESULTS');
+                if (!$results_fh) {
+                        die("Could not open RESULTS file: $!");
+                }
+        }
 
-	# We have a 16kb limit on the length of lines in RESULTS, including
-	# trailing newline and null used in the milter.  So, we limit $cmd +
-	# $args to 16382 bytes.
-	if( length $line > 16382 ) {
-		$wmsg = "Cannot write line over 16382 bytes long to RESULTS file; truncating.  Original line began with: " . substr $line, 0, 40;
-		$line = substr $line, 0, 16382;
-	}
+        # We have a 16kb limit on the length of lines in RESULTS, including
+        # trailing newline and null used in the milter.  So, we limit $cmd +
+        # $args to 16382 bytes.
+        if( length $line > 16382 ) {
+                md_syslog( 'warning',  "Cannot write line over 16382 bytes long to RESULTS file; truncating.  Original line began with: " . substr $line, 0, 40);
+                $line = substr $line, 0, 16382;
+        }
 
-	print $results_fh "$line\n" or return (0, "Could not write RESULTS line: $!");
+        print $results_fh "$line\n" or die "Could not write RESULTS line: $!";
 
-	return (1, $wmsg);
+        return;
 }
 
 #***********************************************************************
