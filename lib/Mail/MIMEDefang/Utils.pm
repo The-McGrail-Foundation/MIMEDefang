@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use Mail::MIMEDefang::Core;
+use Mail::MIMEDefang::RFC2822;
 
 require Exporter;
 our @ISA = qw(Exporter);
