@@ -3,13 +3,16 @@ package Mail::MIMEDefang::Utils;
 use strict;
 use warnings;
 
+use MIME::Words qw(:all);
+
 use Mail::MIMEDefang::Core;
 use Mail::MIMEDefang::RFC2822;
 
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(time_str date_str
-                 synthesize_received_header copy_or_link);
+                 synthesize_received_header copy_or_link
+                 re_match re_match_ext re_match_in_rar_directory re_match_in_zip_directory);
 our @EXPORT_OK = qw(read_results);
 
 #***********************************************************************
@@ -134,5 +137,144 @@ sub read_results
   undef $fh;
   return @res;
 }
+
+#***********************************************************************
+# %PROCEDURE: re_match
+# %ARGUMENTS:
+#  entity -- a MIME entity
+#  regexp -- a regular expression
+# %RETURNS:
+#  1 if either of Content-Disposition.filename or Content-Type.name
+#  matches regexp; 0 otherwise.  Matching is
+#  case-insensitive
+# %DESCRIPTION:
+#  A helper function for filter.
+#***********************************************************************
+sub re_match {
+  my($entity, $regexp) = @_;
+  my($head) = $entity->head;
+
+  my($guess) = $head->mime_attr("Content-Disposition.filename");
+  if (defined($guess)) {
+	  $guess = decode_mimewords($guess);
+	  return 1 if $guess =~ /$regexp/i;
+  }
+
+  $guess = $head->mime_attr("Content-Type.name");
+  if (defined($guess)) {
+	  $guess = decode_mimewords($guess);
+	  return 1 if $guess =~ /$regexp/i;
+  }
+
+  return 0;
+}
+
+#***********************************************************************
+# %PROCEDURE: re_match_ext
+# %ARGUMENTS:
+#  entity -- a MIME entity
+#  regexp -- a regular expression
+# %RETURNS:
+#  1 if the EXTENSION part of either of Content-Disposition.filename or
+#  Content-Type.name matches regexp; 0 otherwise.
+#  Matching is case-insensitive.
+# %DESCRIPTION:
+#  A helper function for filter.
+#***********************************************************************
+sub re_match_ext {
+  my($entity, $regexp) = @_;
+  my($ext);
+  my($head) = $entity->head;
+
+  my($guess) = $head->mime_attr("Content-Disposition.filename");
+  if (defined($guess)) {
+	  $guess = decode_mimewords($guess);
+	  return 1 if (($guess =~ /(\.[^.]*)$/) && ($1 =~ /$regexp/i));
+  }
+
+  $guess = $head->mime_attr("Content-Type.name");
+  if (defined($guess)) {
+	  $guess = decode_mimewords($guess);
+	  return 1 if (($guess =~ /(\.[^.]*)$/) && ($1 =~ /$regexp/i));
+  }
+
+  return 0;
+}
+
+#***********************************************************************
+# %PROCEDURE: re_match_in_rar_directory
+# %ARGUMENTS:
+#  fname -- name of RAR file
+#  regexp -- a regular expression
+# %RETURNS:
+#  1 if the EXTENSION part of any file in the zip archive matches regexp
+#  Matching is case-insensitive.
+# %DESCRIPTION:
+#  A helper function for filter.
+#***********************************************************************
+sub re_match_in_rar_directory {
+  my($rarname, $regexp) = @_;
+  my ($rf, $beginmark, $file);
+
+  my @unrar_args = ("unrar", "l", "-c-", "-p-", "-idcdp", $rarname);
+
+  unless ($Features{"unrar"}) {
+	  md_syslog('err', "Attempted to use re_match_in_rar_directory, but unrar binary is not installed.");
+	  return 0;
+  }
+
+  if ( -f $rarname ) {
+    open(UNRAR_PIPE, "-|", @unrar_args)
+                        || die "can't open @unrar_args|: $!";
+    while(<UNRAR_PIPE>) {
+      $rf = $_;
+      if ( $beginmark and ( $rf !~ /^\-\-\-/ ) ) {
+        $rf =~ /([12]\d{3}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]))\s(\d+\:\d+)\s+(.*)/;
+        $file = $5;
+	      return 1 if ((defined $file) and ($file =~ /$regexp/i));
+      }
+      last if ( $beginmark and ( $rf !~ /^\-\-\-/ ) );
+      $beginmark = 1 if ( $rf =~ /^\-\-\-/ );
+    }
+    close(UNRAR_PIPE);
+  }
+
+  return 0;
+}
+
+#***********************************************************************
+# %PROCEDURE: re_match_in_zip_directory
+# %ARGUMENTS:
+#  fname -- name of ZIP file
+#  regexp -- a regular expression
+# %RETURNS:
+#  1 if the EXTENSION part of any file in the zip archive matches regexp
+#  Matching is case-insensitive.
+# %DESCRIPTION:
+#  A helper function for filter.
+#***********************************************************************
+no strict 'subs';
+sub dummy_zip_error_handler {} ;
+
+sub re_match_in_zip_directory {
+  my($zipname, $regexp) = @_;
+  unless ($Features{"Archive::Zip"}) {
+	  md_syslog('err', "Attempted to use re_match_in_zip_directory, but Perl module Archive::Zip is not installed.");
+	  return 0;
+  }
+  my $zip = Archive::Zip->new();
+
+  # Prevent carping about errors
+  Archive::Zip::setErrorHandler(\&dummy_zip_error_handler);
+  if ($zip->read($zipname) == AZ_OK()) {
+	  foreach my $member ($zip->members()) {
+	    my $file = $member->fileName();
+	    return 1 if ($file =~ /$regexp/i);
+	  }
+  }
+
+  return 0;
+}
+use strict 'subs';
 
 1;

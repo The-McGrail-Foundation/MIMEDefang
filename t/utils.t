@@ -6,6 +6,8 @@ use lib qw(lib);
 use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
+use MIME::Parser;
+
 use Mail::MIMEDefang::Core;
 use Mail::MIMEDefang::Utils;
 
@@ -31,6 +33,42 @@ sub t_synthetize : Test(3)
   $Sender = 'me@example.com';
   my $header = synthesize_received_header();
   like($header, qr/Received\: from $Helo \( \[$RealRelayAddr\]\)\n\tby $hn \(envelope-sender $Sender\) \(MIMEDefang\) with ESMTP id NOQUEUE/);
+}
+
+sub t_re_match : Test(4)
+{
+  my ($done, @parts);
+
+  my $parser = new MIME::Parser;
+  $parser->output_to_core(1);
+  my $entity = $parser->parse_open("t/data/multipart.eml");
+  @parts = $entity->parts();
+  foreach my $part (@parts) {
+    if($part->head->mime_encoding eq "base64") {
+      $done = re_match($part, "wow\.bin");
+      is($done, 1);
+      $done = re_match($part, "test\.bin");
+      is($done, 0);
+    }
+  }
+}
+
+sub t_re_match_ext : Test(5)
+{
+  my ($done, @parts);
+
+  my $parser = new MIME::Parser;
+  $parser->output_to_core(1);
+  my $entity = $parser->parse_open("t/data/multipart.eml");
+  @parts = $entity->parts();
+  foreach my $part (@parts) {
+    if($part->head->mime_encoding eq "base64") {
+      $done = re_match_ext($part, "\.bin");
+      is($done, 1);
+      $done = re_match_ext($part, "\.txt");
+      is($done, 0);
+    }
+  }
 }
 
 __PACKAGE__->runtests();

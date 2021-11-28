@@ -1,0 +1,36 @@
+From: Foo <foo@example.org>
+To: Bar <bar@example.com>
+Subject: multipart email
+Content-Type: multipart/mixed; boundary="foo"
+MIME-Version: 1.0
+
+--foo
+Content-Type: multipart/alternative; boundary="bar"
+
+--bar
+Content-Type: text/plain; charset="UTF-8"
+
+plaintext part
+
+--bar
+Content-Type: text/html; charset="UTF-8"
+
+<html>
+  <head>
+     <title>Foo</title>
+  </head>
+  <body>
+    <p>HTML part</p>
+  </body>
+</html>
+
+--bar--
+
+--foo
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="wow.bin"
+Content-Transfer-Encoding: base64
+
+d293Cg==
+
+--foo-
