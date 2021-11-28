@@ -6,9 +6,12 @@ use warnings;
 use Net::DNS;
 use Sys::Hostname;
 
+use Mail::MIMEDefang::Core;
+
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_black_listed
+                 relay_is_blacklisted_multi relay_is_blacklisted_multi_count relay_is_blacklisted_multi_list
                  is_public_ip4_address md_get_bogus_mx_hosts);
 our @EXPORT_OK = qw(get_host_name get_mx_ip_addresses);
 
@@ -247,6 +250,162 @@ sub md_get_bogus_mx_hosts {
 		}
 	}
 	return @bogus_hosts;
+}
+
+#***********************************************************************
+# %PROCEDURE: relay_is_blacklisted_multi
+# %ARGUMENTS:
+#  addr -- IP address of relay host.
+#  timeout -- number of seconds after which to time out
+#  answers_wanted -- if positive, return as soon as this many positive answers
+#                    have been received.
+#  domains -- an array of domains to check
+#  res (optional) -- A Net::DNS::Resolver object.  If you don't pass
+#                    one in, we'll generate one and use it.
+# %RETURNS:
+#  A hash table with one entry per original domain.  Entries in hash
+#  will be:
+#  { $domain => $return }, where $return is one of SERVFAIL, NXDOMAIN or
+#  a list of IP addresses as a dotted-quad.
+#***********************************************************************
+sub relay_is_blacklisted_multi {
+  my($addr, $timeout, $answers_wanted, $domains, $res) = @_;
+  my($domain, $sock);
+
+  my $ans = {};
+  my $positive_answers = 0;
+
+  foreach $domain (@{$domains}) {
+    $ans->{$domain} = 'SERVFAIL';
+  }
+  unless ($Features{"Net::DNS"}) {
+    md_syslog('err', "Attempted to call relay_is_blacklisted_multi, but Perl module Net::DNS is not installed");
+    return $ans;
+  }
+
+  push_status_tag("Doing RBL Lookup");
+  my %sock_to_domain;
+
+  # Reverse the address
+  $addr = reverse_ip_address_for_rbl($addr);
+
+  # If user did not pass in a Net::DNS::Resolver object, generate one.
+  unless (defined($res and (UNIVERSAL::isa($res, "Net::DNS::Resolver")))) {
+    $res = Net::DNS::Resolver->new;
+    $res->defnames(0);
+  }
+
+  my $sel = IO::Select->new();
+
+  # Send out the queries
+  foreach $domain (@{$domains}) {
+    $sock = $res->bgsend("$addr.$domain", 'A');
+    $sock_to_domain{$sock} = $domain;
+    $sel->add($sock);
+  }
+
+  # Now wait for them to come back.
+  my $terminate = time() + $timeout;
+  while (time() <= $terminate) {
+    my $expire = $terminate - time();
+    # Avoid fractional wait for select which gets truncated.
+    # So we may end up timing out after 1 extra second... no big deal
+    $expire = 1 if ($expire < 1);
+    my @ready;
+    @ready = $sel->can_read($expire);
+    foreach $sock (@ready) {
+      my $pack = $res->bgread($sock);
+      $sel->remove($sock);
+      $domain = $sock_to_domain{$sock};
+      undef($sock);
+      my($rr, $rcode);
+      $rcode = $pack->header->rcode;
+      if ($rcode eq "SERVFAIL" or $rcode eq "NXDOMAIN") {
+        $ans->{$domain} = $rcode;
+        next;
+      }
+      my $got_one = 0;
+      foreach $rr ($pack->answer) {
+        if ($rr->type eq 'A') {
+          $got_one = 1;
+          if ($ans->{$domain} eq "SERVFAIL") {
+            $ans->{$domain} = ();
+          }
+          push(@{$ans->{$domain}}, $rr->address);
+        }
+      }
+      $positive_answers++ if ($got_one);
+    }
+    last if ($sel->count() == 0 or
+      ($answers_wanted > 0 and $positive_answers >= $answers_wanted));
+  }
+  pop_status_tag();
+  return $ans;
+}
+
+#***********************************************************************
+# %PROCEDURE: relay_is_blacklisted_multi_count
+# %ARGUMENTS:
+#  addr -- IP address of relay host.
+#  timeout -- number of seconds after which to time out
+#  answers_wanted -- if positive, return as soon as this many positive answers
+#                    have been received.
+#  domains -- an array of domains to check
+#  res (optional) -- A Net::DNS::Resolver object.  If you don't pass
+#                    one in, we'll generate one and use it.
+# %RETURNS:
+#  A number indicating how many RBLs the host was blacklisted in.
+#***********************************************************************
+sub relay_is_blacklisted_multi_count {
+  my($addr, $timeout, $answers_wanted, $domains, $res) = @_;
+  my $ans = relay_is_blacklisted_multi($addr,
+					 $timeout,
+					 $answers_wanted,
+					 $domains,
+					 $res);
+  my $count = 0;
+  my $domain;
+  foreach $domain (keys(%$ans)) {
+	  my $r = $ans->{$domain};
+	  if (ref($r) eq "ARRAY" and $#{$r} >= 0) {
+	    $count++;
+	  }
+  }
+  return $count;
+}
+
+#***********************************************************************
+# %PROCEDURE: relay_is_blacklisted_multi_list
+# %ARGUMENTS:
+#  addr -- IP address of relay host.
+#  timeout -- number of seconds after which to time out
+#  answers_wanted -- if positive, return as soon as this many positive answers
+#                    have been received.
+#  domains -- an array of domains to check
+#  res (optional) -- A Net::DNS::Resolver object.  If you don't pass
+#                    one in, we'll generate one and use it.
+# %RETURNS:
+#  An array indicating the domains in which the relay is blacklisted.
+#***********************************************************************
+sub relay_is_blacklisted_multi_list {
+  my($addr, $timeout, $answers_wanted, $domains, $res) = @_;
+  my $ans = relay_is_blacklisted_multi($addr,
+					 $timeout,
+					 $answers_wanted,
+					 $domains,
+					 $res);
+  my $result = [];
+  my $domain;
+  foreach $domain (keys(%$ans)) {
+	  my $r = $ans->{$domain};
+	  if (ref($r) eq "ARRAY" and $#{$r} >= 0) {
+	    push @$result, $domain;
+	  }
+  }
+
+  # If in list context, return the array.  Otherwise, return
+  # array reference.
+  return (wantarray ? @$result : $result);
 }
 
 1;
