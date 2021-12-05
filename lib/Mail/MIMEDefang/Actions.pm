@@ -17,7 +17,7 @@ our @EXPORT_OK;
   action_tempfail action_add_header action_add_entity action_quarantine
   action_change_header action_delete_header action_insert_header action_external_filter
   action_replace_with_url action_drop_with_warning action_delete_all_headers
-  message_rejected
+  message_rejected process_added_parts
 };
 
 #***********************************************************************

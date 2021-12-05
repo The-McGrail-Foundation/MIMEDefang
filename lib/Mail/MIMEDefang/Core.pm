@@ -45,11 +45,12 @@ our @EXPORT_OK;
       $GeneralWarning
       $HTMLFoundEndBody $HTMLBoilerplate $SASpamTester
       $results_fh
-      init_globals detect_and_load_perl_modules
+      init_globals print_and_flush detect_and_load_perl_modules
       init_status_tag push_status_tag pop_status_tag
       signal_changed signal_unchanged md_syslog write_result_line
       in_message_context in_filter_context in_filter_wrapup in_filter_end
       percent_decode percent_encode percent_encode_for_graphdefang
+      send_mail send_quarantine_notifications signal_complete send_admin_mail
     };
 
 @EXPORT_OK = qw{
@@ -111,6 +112,12 @@ sub init_globals {
     undef @ESMTPArgs;
     undef @SenderESMTPArgs;
     undef $results_fh;
+}
+
+sub print_and_flush
+{
+	local $| = 1;
+	print($_[0], "\n");
 }
 
 #***********************************************************************
@@ -476,6 +483,260 @@ sub in_filter_end {
     return 1 if ($InFilterEnd);
     md_syslog('warning', "$name called outside of filter_end");
     return 0;
+}
+
+#***********************************************************************
+# %PROCEDURE: send_quarantine_notifications
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Sends quarantine notification message, if anything was quarantined
+#***********************************************************************
+sub send_quarantine_notifications {
+  # If there are quarantined parts, e-mail a report
+  if ($QuarantineCount > 0 || $EntireMessageQuarantined) {
+	  my($body);
+	  $body = "From: $DaemonName <$DaemonAddress>\n";
+	  $body .= "To: \"$AdminName\" <$AdminAddress>\n";
+	  $body .= gen_date_msgid_headers();
+	  $body .= "Auto-Submitted: auto-generated\n";
+	  $body .= "MIME-Version: 1.0\nContent-Type: text/plain\n";
+	  $body .= "Precedence: bulk\n";
+	  $body .= "Subject: $QuarantineSubject\n\n";
+	  if ($QuarantineCount >= 1) {
+	    $body .= "An e-mail had $QuarantineCount part";
+	    $body .= "s" if ($QuarantineCount != 1);
+	  } else {
+	    $body .= "An e-mail message was";
+	  }
+
+	  $body .= " quarantined in the directory\n";
+	  $body .= "$QuarantineSubdir on " . get_host_name() . ".\n\n";
+	  $body .= "The sender was '$Sender'.\n\n" if defined($Sender);
+	  $body .= "The Sendmail queue identifier was $QueueID.\n\n" if ($QueueID ne "NOQUEUE");
+	  $body .= "The relay machine was $RelayHostname ($RelayAddr).\n\n";
+	  if ($EntireMessageQuarantined) {
+	    $body .= "The entire message was quarantined in $QuarantineSubdir/ENTIRE_MESSAGE\n\n";
+	  }
+
+	  my($recip);
+	  foreach $recip (@Recipients) {
+	    $body .= "Recipient: $recip\n";
+	  }
+ 	  my $donemsg = 0;
+	  my $i;
+	  for ($i=0; $i<=$QuarantineCount; $i++) {
+	    if (open(IN, "<$QuarantineSubdir/MSG.$i")) {
+		    if (!$donemsg) {
+		      $body .= "Quarantine Messages:\n";
+		      $donemsg = 1;
+	 	    }
+		    while(<IN>) {
+		      $body .= $_;
+		    }
+		    close(IN);
+	    }
+	  }
+	  if ($donemsg) {
+	    $body .= "\n";
+	  }
+
+	  if (open(IN, "<$QuarantineSubdir/HEADERS")) {
+	    $body .= "\n----------\nHere are the message headers:\n";
+	    while(<IN>) {
+		    $body .= $_;
+	    }
+	    close(IN);
+	  }
+	  for ($i=1; $i<=$QuarantineCount; $i++) {
+	    if (open(IN, "<$QuarantineSubdir/PART.$i.HEADERS")) {
+		    $body .= "\n----------\nHere are the headers for quarantined part $i:\n";
+		    while(<IN>) {
+		      $body .= $_;
+		    }
+		    close(IN);
+	    }
+	  }
+	  if ($#Warnings >= 0) {
+	    $body .= "\n----------\nHere are the warning details:\n\n";
+	    $body .= "@Warnings";
+	  }
+	  send_mail($DaemonAddress, $DaemonName, $AdminAddress, $body);
+  }
+}
+
+#***********************************************************************
+# %PROCEDURE: signal_complete
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Tells mimedefang C program Perl filter has finished successfully.
+#  Also mails any quarantine notifications and sender notifications.
+#***********************************************************************
+sub signal_complete {
+  # Send notification to sender, if required
+  if ($Sender ne '<>' && -r "NOTIFICATION") {
+	  my($body);
+	  $body = "From: $DaemonName <$DaemonAddress>\n";
+	  $body .= "To: $Sender\n";
+	  $body .= gen_date_msgid_headers();
+	  $body .= "Auto-Submitted: auto-generated\n";
+	  $body .= "MIME-Version: 1.0\nContent-Type: text/plain\n";
+	  $body .= "Precedence: bulk\n";
+	  $body .= "Subject: $NotifySenderSubject\n\n";
+	  unless($NotifyNoPreamble) {
+	    $body .= "An e-mail you sent with message-id $MessageID\n";
+	    $body .= "was modified by our mail scanning software.\n\n";
+	    $body .= "The recipients were:";
+	    my($recip);
+	    foreach $recip (@Recipients) {
+		    $body .= " $recip";
+	    }
+	    $body .= "\n\n";
+	  }
+	  if (open(FILE, "<NOTIFICATION")) {
+	    unless($NotifyNoPreamble) {
+		    $body .= "Here are the details of the modification:\n\n";
+	    }
+	    while(<FILE>) {
+		    $body .= $_;
+	    }
+	    close(FILE);
+	  }
+	  send_mail($DaemonAddress, $DaemonName, $Sender, $body);
+  }
+
+  # Send notification to administrator, if required
+  if (-r "ADMIN_NOTIFICATION") {
+	my $body = "";
+	  if (open(FILE, "<ADMIN_NOTIFICATION")) {
+	    $body .= join('', <FILE>);
+	    close(FILE);
+	    send_admin_mail($NotifyAdministratorSubject, $body);
+	  }
+  }
+
+  # Syslog some info if any actions were taken
+  my($msg) = "";
+  my($key, $num);
+  foreach $key (sort keys(%Actions)) {
+	  $num = $Actions{$key};
+	  $msg .= " $key=$num";
+  }
+  if ($msg ne "") {
+	  md_syslog('debug', "filter: $msg");
+  }
+  write_result_line("F", "");
+  if ($results_fh) {
+	  $results_fh->close() or die("Could not close RESULTS file: $!");
+	  undef $results_fh;
+  }
+
+  if ($ServerMode) {
+	  print_and_flush('ok');
+  }
+}
+
+#***********************************************************************
+# %PROCEDURE: send_mail
+# %ARGUMENTS:
+#  fromAddr -- address of sender
+#  fromFull -- full name of sender
+#  recipient -- address of recipient
+#  body -- mail message (including headers) newline-terminated
+#  deliverymode -- optional sendmail delivery mode arg (default "-odd")
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Sends a mail message using Sendmail.  Invokes Sendmail without involving
+#  the shell, so that shell metacharacters won't cause security problems.
+#***********************************************************************
+sub send_mail {
+  my($fromAddr, $fromFull, $recipient, $body, $deliverymode) = @_;
+
+  $deliverymode = "-odd" unless defined($deliverymode);
+  if ($deliverymode ne "-odb" &&
+	  $deliverymode ne "-odq" &&
+	  $deliverymode ne "-odd" &&
+	  $deliverymode ne "-odi") {
+	  $deliverymode = "-odd";
+  }
+
+  my($pid);
+
+  # Fork and exec for safety instead of involving shell
+  $pid = open(CHILD, "|-");
+  if (!defined($pid)) {
+	  md_syslog('err', "Cannot fork to run sendmail");
+	  return;
+  }
+
+  if ($pid) {   # In the parent -- pipe mail message to the child
+	  print CHILD $body;
+	  close(CHILD);
+	  return;
+  }
+
+  # In the child -- invoke Sendmail
+
+  # Direct stdout to stderr, or we will screw up communication with
+  # the multiplexor..
+  open(STDOUT, ">&STDERR");
+
+  my(@cmd);
+  if ($fromAddr ne "") {
+	  push(@cmd, "-f$fromAddr");
+  } else {
+	  push(@cmd, "-f<>");
+  }
+  if ($fromFull ne "") {
+	  push(@cmd, "-F$fromFull");
+  }
+  push(@cmd, $deliverymode);
+  push(@cmd, "-Ac");
+  push(@cmd, "-oi");
+  push(@cmd, "--");
+  push(@cmd, $recipient);
+
+  # In curlies to silence Perl warning...
+  my $sm;
+  $sm = $Features{'Path:SENDMAIL'};
+  { exec($sm, @cmd); }
+
+  # exec failed!
+  md_syslog('err', "Could not exec $sm: $!");
+  exit(1);
+  # NOTREACHED
+}
+
+#***********************************************************************
+# %PROCEDURE: send_admin_mail
+# %ARGUMENTS:
+#  subject -- mail subject
+#  body -- mail message (without headers) newline-terminated
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Sends a mail message to the administrator
+#***********************************************************************
+sub send_admin_mail {
+  my ($subject, $body) = @_;
+
+  my $mail;
+  $mail = "From: $DaemonName <$DaemonAddress>\n";
+  $mail .= "To: \"$AdminName\" <$AdminAddress>\n";
+  $mail .= gen_date_msgid_headers();
+  $mail .= "Auto-Submitted: auto-generated\n";
+  $mail .= "MIME-Version: 1.0\nContent-Type: text/plain\n";
+  $mail .= "Precedence: bulk\n";
+  $mail .= "Subject: $subject\n\n";
+  $mail .= $body;
+
+  send_mail($DaemonAddress, $DaemonName, $AdminAddress, $mail);
 }
 
 1;
