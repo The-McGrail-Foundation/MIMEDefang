@@ -180,6 +180,7 @@ install: all
 	fi
 
 	$(INSTALL) -m 755 -d $(DESTDIR)$(prefix)/bin
+	$(INSTALL) -m 755 -d $(DESTDIR)$(PERLINSTALLSITELIB)/Mail
 	$(INSTALL) -m 755 -d $(DESTDIR)$(PERLINSTALLSITELIB)/Mail/MIMEDefang
 	$(INSTALL) -m 755 -d $(DESTDIR)$(MANDIR)/man1
 	$(INSTALL) -m 755 -d $(DESTDIR)$(MANDIR)/man5
