@@ -144,39 +144,6 @@ sub md_copy_orig_msg_to_work_dir {
 }
 
 #***********************************************************************
-# %PROCEDURE: md_copy_orig_msg_to_work_dir_as_mbox_file
-# %ARGUMENTS:
-#  None
-# %DESCRIPTION:
-#  Copies original INPUTMSG file into work directory for virus-scanning
-#  as a valid mbox file (adds the "From $Sender mumble..." stuff.)
-# %RETURNS:
-#  1 on success, 0 on failure.
-#***********************************************************************
-sub md_copy_orig_msg_to_work_dir_as_mbox_file {
-    return if (!in_message_context("md_copy_orig_msg_to_work_dir_as_mbox_file"));
-    open(IN, "<INPUTMSG") or return 0;
-    unless (open(OUT, ">Work/INPUTMBOX")) {
-	close(IN);
-	return 0;
-    }
-
-    # Remove angle-brackets for From_ line
-    my $s = $Sender;
-    $s =~ s/^<//;
-    $s =~ s/>$//;
-
-    print OUT "From $s " . rfc2822_date($CachedTimezone) . "\n";
-    my($n, $string);
-    while (($n = read(IN, $string, 4096)) > 0) {
-	print OUT $string;
-    }
-    close(IN);
-    close(OUT);
-    return 1;
-}
-
-#***********************************************************************
 # %PROCEDURE: fatal
 # %ARGUMENTS:
 #  msg -- message

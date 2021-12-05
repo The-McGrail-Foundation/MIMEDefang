@@ -12,7 +12,8 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(time_str date_str
                  synthesize_received_header copy_or_link
-                 re_match re_match_ext re_match_in_rar_directory re_match_in_zip_directory);
+                 re_match re_match_ext re_match_in_rar_directory re_match_in_zip_directory
+                 md_copy_orig_msg_to_work_dir_as_mbox_file);
 our @EXPORT_OK = qw(read_results);
 
 #***********************************************************************
@@ -276,5 +277,38 @@ sub re_match_in_zip_directory {
   return 0;
 }
 use strict 'subs';
+
+#***********************************************************************
+# %PROCEDURE: md_copy_orig_msg_to_work_dir_as_mbox_file
+# %ARGUMENTS:
+#  None
+# %DESCRIPTION:
+#  Copies original INPUTMSG file into work directory for virus-scanning
+#  as a valid mbox file (adds the "From $Sender mumble..." stuff.)
+# %RETURNS:
+#  1 on success, 0 on failure.
+#***********************************************************************
+sub md_copy_orig_msg_to_work_dir_as_mbox_file {
+  return if (!in_message_context("md_copy_orig_msg_to_work_dir_as_mbox_file"));
+  open(IN, "<INPUTMSG") or return 0;
+  unless (open(OUT, ">Work/INPUTMBOX")) {
+	  close(IN);
+	  return 0;
+  }
+
+  # Remove angle-brackets for From_ line
+  my $s = $Sender;
+  $s =~ s/^<//;
+  $s =~ s/>$//;
+
+  print OUT "From $s " . Mail::MIMEDefang::RFC2822::rfc2822_date($CachedTimezone) . "\n";
+  my($n, $string);
+  while (($n = read(IN, $string, 4096)) > 0) {
+	  print OUT $string;
+  }
+  close(IN);
+  close(OUT);
+  return 1;
+}
 
 1;
