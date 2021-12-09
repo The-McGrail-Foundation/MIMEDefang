@@ -2,6 +2,11 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2021-12-09 Giovanni Bechis <g.bechis@snb.it>
+
+	* fallback to plaintext when md_check_against_smtp_server
+	fails SSL connection for unknown reasons
+
 2021-09-26 Giovanni Bechis <g.bechis@snb.it>
 
 	* remove support for Unix::Syslog
