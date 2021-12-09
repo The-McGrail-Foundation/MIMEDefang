@@ -73,6 +73,7 @@ use Digest::SHA1;
 use Time::Local;
 use MIME::Parser;
 use Sys::Hostname;
+use Sys::Syslog;
 use File::Spec qw ();
 use Errno qw(ENOENT EACCES);
 
