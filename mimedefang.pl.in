@@ -7520,9 +7520,11 @@ sub md_check_against_smtp_server {
              SSL_startHandshake => 0,
              SSL_verify_mode => SSL_VERIFY_NONE,
              SSL_hostname => "$server",
-				     PeerPort => $port,
-				     Proto    => 'tcp',
-				     Timeout  => 25);
+             SSL_version => 'SSLv23',
+             SSL_cipher_list => 'ALL',
+             PeerPort => $port,
+             Proto    => 'tcp',
+             Timeout  => 25);
 
     if (!defined($sock)) {
       # fallback to plaintext if SSL connection doesn't succeed
