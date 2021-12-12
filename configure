@@ -4127,6 +4127,28 @@ $as_echo_n "checking for Perl module IO::Socket::SSL... " >&6; }
     { $as_echo "$as_me:${as_lineno-$LINENO}: result: $HAVE_IO_SOCKET_SSL" >&5
 $as_echo "$HAVE_IO_SOCKET_SSL" >&6; }
 
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for Perl module JSON" >&5
+$as_echo_n "checking for Perl module JSON... " >&6; }
+    (echo "use JSON;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_JSON=no
+    else
+	HAVE_JSON=yes
+    fi
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: $HAVE_JSON" >&5
+$as_echo "$HAVE_JSON" >&6; }
+
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for Perl module LWP::UserAgent" >&5
+$as_echo_n "checking for Perl module LWP::UserAgent... " >&6; }
+    (echo "use LWP::UserAgent;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_LWP=no
+    else
+	HAVE_LWP=yes
+    fi
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: $HAVE_LWP" >&5
+$as_echo "$HAVE_LWP" >&6; }
+
         dirs=`echo 'print "@INC\n";' | $PERL`
     foundit=""
     for i in $dirs ; do
@@ -7957,7 +7979,6 @@ if test "$CLAMD" != "/bin/false" -o "$SOPHIE" != "/bin/false" -o "$TROPHIE" != "
    echo ""
    if test "$CLAMD" != "/bin/false" ; then
         echo "Make sure clamd runs as the $DEFANGUSER user!"
-        echo "  ...and make sure you use clamd version 0.67 or higher."
    fi
    if test "$SOPHIE" != "/bin/false" ; then
         echo "See README.SOPHIE for more information about running Sophie."
@@ -7989,6 +8010,17 @@ if test "$HAVE_IO_SOCKET_SSL" = "no" ; then
    echo "md_check_against_smtp_server function in your filter."
    echo ""
 fi
+
+if test "$HAVE_LWP" = "no" ; then
+   if test "$HAVE_JSON" = "no" ; then
+     echo ""
+     echo "Could not find LWP::UserAgent and JSON Perl modules..."
+     echo "it's not possible to check your emails with rspamd(8) "
+     echo "using rspamd_check function in your filter."
+     echo ""
+   fi
+fi
+
 
 echo "Note: SpamAssassin and HTML::Parser are"
 echo "detected at run-time, so if you install or remove any of those modules, you"

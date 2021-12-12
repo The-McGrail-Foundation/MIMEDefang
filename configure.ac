@@ -190,6 +190,24 @@ else
     fi
     AC_MSG_RESULT($HAVE_IO_SOCKET_SSL)
 
+    AC_MSG_CHECKING([for Perl module JSON])
+    (echo "use JSON;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_JSON=no
+    else
+	HAVE_JSON=yes
+    fi
+    AC_MSG_RESULT($HAVE_JSON)
+
+    AC_MSG_CHECKING([for Perl module LWP::UserAgent])
+    (echo "use LWP::UserAgent;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_LWP=no
+    else
+	HAVE_LWP=yes
+    fi
+    AC_MSG_RESULT($HAVE_LWP)
+
     dnl Check MIME::Tools version
     dirs=`echo 'print "@INC\n";' | $PERL`
     foundit=""
@@ -1055,7 +1073,6 @@ if test "$CLAMD" != "/bin/false" -o "$SOPHIE" != "/bin/false" -o "$TROPHIE" != "
    echo ""
    if test "$CLAMD" != "/bin/false" ; then
         echo "Make sure clamd runs as the $DEFANGUSER user!"
-        echo "  ...and make sure you use clamd version 0.67 or higher."
    fi
    if test "$SOPHIE" != "/bin/false" ; then
         echo "See README.SOPHIE for more information about running Sophie."
@@ -1087,6 +1104,17 @@ if test "$HAVE_IO_SOCKET_SSL" = "no" ; then
    echo "md_check_against_smtp_server function in your filter."
    echo ""
 fi
+
+if test "$HAVE_LWP" = "no" ; then
+   if test "$HAVE_JSON" = "no" ; then
+     echo ""
+     echo "Could not find LWP::UserAgent and JSON Perl modules..."
+     echo "it's not possible to check your emails with rspamd(8) "
+     echo "using rspamd_check function in your filter."
+     echo ""
+   fi
+fi
+
 
 echo "Note: SpamAssassin and HTML::Parser are"
 echo "detected at run-time, so if you install or remove any of those modules, you"

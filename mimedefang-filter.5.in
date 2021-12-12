@@ -827,7 +827,7 @@ $Features{"Virus:TROPHIE"} is the full path to Trophie if it is installed;
 $Features{"Virus:NOD32"} is the full path to ESET NOD32 nod32cli if it is installed;
 0 if it is not.
 
-$Features{"Path:RSPAMC"} is the full path to rspamc(1) if it is installed;
+$Features{"Path:RSPAMC"} is the full path to rspamc(1) if it is installed (deprecated);
 0 if it is not.
 
 \fBNOTE:\fR Perl-module based features such as SpamAssassin are determined at
@@ -1821,7 +1821,7 @@ current email message contained in it.  It may be used to perform other
 SpamAssassin related functions.
 
 .TP
-.B rspamd_check([ $config_file ]) *experimental*
+.B rspamd_check([ $uri ]) *experimental*
 This function returns a six-element list of the form ($hits, $required, 
 $tests, $report, $action, $is_spam).
 $hits is the "score" given to the message by Rspamd
@@ -1829,8 +1829,9 @@ $hits is the "score" given to the message by Rspamd
 required before Rspamd concludes that the message is SPAM.  $tests
 is a list of Rspamd test names, and $report is text
 detailing which tests triggered and their point score.
+If JSON and LWP modules are present $report will be a json string;
 $action is the action that rspamd(8) wants to apply and $is_spam is a boolean
-value that determines if the message is spam or not.
+value (true/false) that determines if the message is spam or not.
 This gives you insight into why Rspamd concluded that the message is SPAM. 
  
 .TP
