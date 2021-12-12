@@ -1073,7 +1073,6 @@ if test "$CLAMD" != "/bin/false" -o "$SOPHIE" != "/bin/false" -o "$TROPHIE" != "
    echo ""
    if test "$CLAMD" != "/bin/false" ; then
         echo "Make sure clamd runs as the $DEFANGUSER user!"
-        echo "  ...and make sure you use clamd version 0.67 or higher."
    fi
    if test "$SOPHIE" != "/bin/false" ; then
         echo "See README.SOPHIE for more information about running Sophie."
