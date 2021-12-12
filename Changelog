@@ -2,6 +2,12 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2021-12-12 Giovanni Bechis <g.bechis@snb.it>
+
+        * Rspamd support by forking rspamc(1) binary
+        is now deprecated, added Rspamd support by implementing
+        its protocol
+
 2021-12-09 Giovanni Bechis <g.bechis@snb.it>
 
 	* fallback to plaintext when md_check_against_smtp_server

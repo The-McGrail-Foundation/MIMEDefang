@@ -7685,57 +7685,108 @@ sub read_config($) {
 #***********************************************************************
 # %PROCEDURE: rspamd_check
 # %ARGUMENTS:
-#  config -- optional rspamd config file
+#  an Rspamd url -- defaults to http://127.0.0.1:11333
 # %RETURNS:
-#  An array of four elements,
+#  An array of six elements,
 #       Weight of message ('hits')
 #       Number of hits required before Rspamd considers a message spam
 #       Comma separated list of symbolic test names that were triggered
 #       A 'report' string, detailing tests that failed and their weights
+#       or a Json report if JSON and LWP modules are present
+#       An action that should be applied to the email
+#       A flag is_spam true/false
 # %DESCRIPTION:
 #  Scans message using Rspamd (http://rspamd.org)
 #***********************************************************************
 sub rspamd_check {
+    my ($uri) = @_;
     my $rp;
     my ($hits, $req, $tests, $report, $action, $is_spam);
 
-    unless ($Features{"Path:RSPAMC"}) {
-        md_syslog('err', "Attempt to call Rspamd function, but Rspamd is not installed.");
+    $uri = 'http://127.0.0.1:11333' if not defined $uri;
+
+    # Check if required modules are available
+    my $rspamc;
+    (eval 'use JSON (); use LWP::UserAgent (); $rspamc = 1;') or $rspamc = 0;
+
+    unless ($Features{"Path:RSPAMC"} or $rspamc = 1) {
+        md_syslog('err', "Attempt to call Rspamd function, but Rspamd is not installed or JSON and LWP modules not available.");
         return undef;
     }
+    # forking method is deprecated
+    if(defined $Features{"Path:RSPAMC"}) {
+      md_syslog("Warning", "Using fork method to check Rspamd server (deprecated)");
+      $rspamc = 0;
+    }
 
-    my @rs = ($Features{"Path:RSPAMC"}, "./INPUTMSG");
+    if($rspamc eq 1) {
+      my $ua = LWP::UserAgent->new;
+      $ua->agent("MIMEDefang/" . md_version() . " ");
 
-    if ( -f $Features{"Path:RSPAMC"} ) {
-      open(RSPAMD_PIPE, "-|", @rs)
-                        || die "can't open rspamc: $!";
-      while(<RSPAMD_PIPE>) {
-        $rp = $_;
-        {
-          if($rp =~ /Action: (.*)/) {
-            $action = $1;
-          }
+      # slurp the mail message
+      open my $fh, '<', "./INPUTMSG" or return undef;
+      $/ = undef;
+      my $mail = <$fh>;
+      close $fh;
+      my $req = HTTP::Request->new(POST => "$uri/checkv2");
+      $req->content("$mail");
+
+      my $res = $ua->request($req);
+      if ($res->is_success) {
+	my $json = JSON->new->allow_nonref;
+        my $rspamd_res = $json->decode( $res->content );
+        $hits = $rspamd_res->{score};
+        $req = $rspamd_res->{required_score};
+        $action = $rspamd_res->{action};
+	my %sym = %{$rspamd_res->{symbols}};
+        foreach my $test ( keys %sym ) {
+          $tests .= $sym{$test}->{name} . " (" . $sym{$test}->{score} . "), ";
         }
-        {
-          if($rp =~ /Spam: (.*)/) {
-            $is_spam = $1;
-          }
-        }
-        {
-          if($rp =~ /Score: (.*) \/ (.*)/) {
-            $hits = $1;
-            $req = $2;
-          }
-        }
-        {
-          if($rp =~ /Symbol: (.*)/) {
-            $tests .= $1 . ", ";
-          }
-        }
-        $report .= $rp . "\n";
+	$tests =~ s/, $//;
+        if($hits >= $req) {
+	  $is_spam = "true";
+	} else {
+	  $is_spam = "false";
+	}
+	$report = $res->content;
+        return ($hits, $req, $tests, $report, $action, $is_spam);
+      } else {
+        return undef;
       }
-      $tests =~ s/\, $//;
-      close(RSPAMD_PIPE);
+    } else {
+      my @rs = ($Features{"Path:RSPAMC"}, "./INPUTMSG");
+
+      if ( -f $Features{"Path:RSPAMC"} ) {
+        open(RSPAMD_PIPE, "-|", @rs)
+                        || die "can't open rspamc: $!";
+        while(<RSPAMD_PIPE>) {
+          $rp = $_;
+          {
+            if($rp =~ /Action: (.*)/) {
+              $action = $1;
+            }
+          }
+          {
+            if($rp =~ /Spam: (.*)/) {
+              $is_spam = $1;
+            }
+          }
+          {
+            if($rp =~ /Score: (.*) \/ (.*)/) {
+              $hits = $1;
+              $req = $2;
+            }
+          }
+          {
+            if($rp =~ /Symbol: (.*)/) {
+              $tests .= $1 . ", ";
+            }
+          }
+          $report .= $rp . "\n";
+        }
+        $tests =~ s/\, $//;
+        close(RSPAMD_PIPE);
+      }
     }
 
     return ($hits, $req, $tests, $report, $action, $is_spam);
