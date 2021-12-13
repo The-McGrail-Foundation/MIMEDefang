@@ -68,7 +68,7 @@ MIMEDefang has the following software requirements:
 ---------------
 
 There's an excellent MIMEDefang-HOWTO contributed by Mickey Hill
-at http://www.rudolphtire.com/mimedefang-howto/.  It explains
+at http://www.mickeyhill.com/mimedefang-howto/.  It explains
 everything in this README in much greater detail.  Anyway, on with it:
 
 1) Sendmail
