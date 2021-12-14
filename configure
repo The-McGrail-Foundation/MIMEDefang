@@ -4175,7 +4175,7 @@ $as_echo "$mt_actual_version" >&6; }
 fi
 
 HAVE_A_SYSLOG=0
-for module in 'Sys::Syslog' ; do
+for module in 'Sys::Syslog' 'Unix::Syslog' ; do
     { $as_echo "$as_me:${as_lineno-$LINENO}: checking for Perl module $module" >&5
 $as_echo_n "checking for Perl module $module... " >&6; }
     (echo "use $module;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
@@ -4191,10 +4191,10 @@ done
 
 if test $HAVE_A_SYSLOG = 0 ; then
     if test "$ac_cv_perlmodcheck" = "yes" ; then
-    	{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: *** Error: Could not find Sys::Syslog" >&5
-$as_echo "$as_me: WARNING: *** Error: Could not find Sys::Syslog" >&2;}
-	{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: *** This module is required." >&5
-$as_echo "$as_me: WARNING: *** This module is required." >&2;};
+    	{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: *** Error: Could not find Sys::Syslog or Unix::Syslog" >&5
+$as_echo "$as_me: WARNING: *** Error: Could not find Sys::Syslog or Unix::Syslog" >&2;}
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: *** One of those Perl modules is required." >&5
+$as_echo "$as_me: WARNING: *** One of those Perl modules is required." >&2;};
 	exit 1
     fi
 fi

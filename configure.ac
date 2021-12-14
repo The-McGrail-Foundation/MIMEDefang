@@ -232,9 +232,9 @@ else
     fi
 fi
 
-dnl We need Sys::Syslog
+dnl We need at least *one* of Sys::Syslog or Unix::Syslog
 HAVE_A_SYSLOG=0
-for module in 'Sys::Syslog' ; do
+for module in 'Sys::Syslog' 'Unix::Syslog' ; do
     AC_MSG_CHECKING([for Perl module $module])
     (echo "use $module;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
     if test $? = 0 ; then
@@ -247,8 +247,8 @@ done
 
 if test $HAVE_A_SYSLOG = 0 ; then
     if test "$ac_cv_perlmodcheck" = "yes" ; then
-    	AC_MSG_WARN([*** Error: Could not find Sys::Syslog])
-	AC_MSG_WARN([*** This module is required.]);
+    	AC_MSG_WARN([*** Error: Could not find Sys::Syslog or Unix::Syslog])
+	AC_MSG_WARN([*** One of those Perl modules is required.]);
 	exit 1
     fi
 fi
