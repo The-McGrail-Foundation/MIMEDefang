@@ -715,7 +715,7 @@ fi
 
 AC_SUBST(ENABLE_DEBUGGING)
 AC_SUBST(PTHREAD_FLAG)
-VERSION=2.85
+VERSION=2.86
 AC_SUBST(VERSION)
 
 dnl Jigger for machines without snprintf

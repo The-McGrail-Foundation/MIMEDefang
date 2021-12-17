@@ -6118,7 +6118,7 @@ fi
 
 
 
-VERSION=2.85
+VERSION=2.86
 
 
 if test "$ac_cv_func_snprintf" != "yes" -o "$ac_cv_func_vsnprintf" != "yes" ; then

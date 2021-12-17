@@ -2,6 +2,10 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2021-12-17 Giovanni Bechis <g.bechis@snb.it>
+
+	* MIMEDefang 2.86 RELEASED
+
 2021-12-12 Giovanni Bechis <g.bechis@snb.it>
 
         * Rspamd support by forking rspamc(1) binary
