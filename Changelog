@@ -2,11 +2,9 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
-2021-12-14 Giovanni Bechis <g.bechis@snb.it>
+2021-12-17 Giovanni Bechis <g.bechis@snb.it>
 
-        * re-add support for Unix::Syslog
-	there are some utf-8 related issues on
-	old Perl versions
+	* MIMEDefang 2.86 RELEASED
 
 2021-12-12 Giovanni Bechis <g.bechis@snb.it>
 
