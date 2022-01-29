@@ -11,7 +11,8 @@ our @EXPORT;
 our @EXPORT_OK;
 
 @EXPORT = qw(builtin_create_parser rebuild_entity find_part append_to_part
-             remove_redundant_html_parts);
+             remove_redundant_html_parts append_to_html_part append_html_boilerplate
+             append_text_boilerplate);
 @EXPORT_OK = qw(collect_parts);
 
 sub builtin_create_parser {
@@ -276,6 +277,162 @@ sub remove_redundant_html_parts {
 	  }
   }
   return $didsomething;
+}
+
+# HTML parser callbacks
+sub html_echo {
+  my($text) = @_;
+  print OUT $text;
+}
+
+sub html_end {
+  my($text) = @_;
+  if (!$HTMLFoundEndBody) {
+  	if ($text =~ m+<\s*/body+i) {
+	    print OUT "$HTMLBoilerplate\n";
+	    $HTMLFoundEndBody = 1;
+	  }
+  }
+  if (!$HTMLFoundEndBody) {
+	  if ($text =~ m+<\s*/html+i) {
+	    print OUT "$HTMLBoilerplate\n";
+	    $HTMLFoundEndBody = 1;
+	  }
+  }
+
+  print OUT $text;
+}
+
+#***********************************************************************
+# %PROCEDURE: append_to_html_part
+# %ARGUMENTS:
+#  part -- a mime entity (of type text/html)
+#  msg -- text to append to the entity
+# %RETURNS:
+#  1 on success; 0 on failure.
+# %DESCRIPTION:
+#  Appends text to $part, but does so by parsing HTML and adding the
+#  text before </body> or </html>
+#***********************************************************************
+sub append_to_html_part {
+  my($part, $boilerplate) = @_;
+
+  if (!$Features{"HTML::Parser"}) {
+	  md_syslog('warning', "Attempt to call append_to_html_part, but HTML::Parser Perl module not installed");
+	  return 0;
+  }
+  return 0 unless defined($part->bodyhandle);
+  my($path) = $part->bodyhandle->path;
+  return 0 unless (defined($path));
+  return 0 unless (open(IN, "<$path"));
+  if (!open(OUT, ">$path.tmp")) {
+	  close(IN);
+	  return(0);
+  }
+
+  $HTMLFoundEndBody = 0;
+  $HTMLBoilerplate = $boilerplate;
+  my($p);
+  $p = HTML::Parser->new(api_version => 3,
+		   default_h   => [\&html_echo, "text"],
+		   end_h       => [\&html_end,  "text"]);
+  $p->unbroken_text(1);
+  $p->parse_file(*IN);
+  if (!$HTMLFoundEndBody) {
+	  print OUT "\n$boilerplate\n";
+  }
+  close(IN);
+  close(OUT);
+
+  # Rename the path
+  return 0 unless rename($path, "$path.old");
+  unless (rename("$path.tmp", $path)) {
+	  rename ("$path.old", $path);
+	  return 0;
+  }
+  unlink "$path.old";
+  $Changed = 1;
+  return 1;
+}
+
+#***********************************************************************
+# %PROCEDURE: append_text_boilerplate
+# %ARGUMENTS:
+#  msg -- root MIME entity.
+#  boilerplate -- boilerplate text to append
+#  all -- if 1, append to ALL text/plain parts.  If 0, append only to
+#         FIRST text/plain part.
+# %RETURNS:
+#  1 if text was appended to at least one part; 0 otherwise.
+# %DESCRIPTION:
+#  Appends text to text/plain part or parts.
+#***********************************************************************
+sub append_text_boilerplate {
+  my($msg, $boilerplate, $all) = @_;
+  my($part);
+  if (!$all) {
+	  $part = find_part($msg, "text/plain", 1);
+	  if (defined($part)) {
+	    if (append_to_part($part, $boilerplate)) {
+		    $Actions{'append_text_boilerplate'}++;
+		    return 1;
+	    }
+	  }
+	  return 0;
+  }
+  @FlatParts = ();
+  my($ok) = 0;
+  collect_parts($msg, 1);
+  foreach $part (@FlatParts) {
+	  if (lc($part->head->mime_type) eq "text/plain") {
+	    if (append_to_part($part, $boilerplate)) {
+		    $ok = 1;
+		    $Actions{'append_text_boilerplate'}++;
+	    }
+	  }
+  }
+  return $ok;
+}
+
+#***********************************************************************
+# %PROCEDURE: append_html_boilerplate
+# %ARGUMENTS:
+#  msg -- root MIME entity.
+#  boilerplate -- boilerplate text to append
+#  all -- if 1, append to ALL text/html parts.  If 0, append only to
+#         FIRST text/html part.
+# %RETURNS:
+#  1 if text was appended to at least one part; 0 otherwise.
+# %DESCRIPTION:
+#  Appends text to text/html part or parts.  Tries to be clever and
+#  insert the text before the </body> tag so it has a hope in hell of
+#  being seen.
+#***********************************************************************
+sub append_html_boilerplate {
+  my($msg, $boilerplate, $all) = @_;
+  my($part);
+  if (!$all) {
+	  $part = find_part($msg, "text/html", 1);
+	  if (defined($part)) {
+	    if (append_to_html_part($part, $boilerplate)) {
+		    $Actions{'append_html_boilerplate'}++;
+		    return 1;
+	    }
+	  }
+	  return 0;
+  }
+  @FlatParts = ();
+  my($ok) = 0;
+  collect_parts($msg, 1);
+  foreach $part (@FlatParts) {
+	  if (lc($part->head->mime_type) eq "text/html") {
+	    if (append_to_html_part($part, $boilerplate)) {
+		    $ok = 1;
+		    $Actions{'append_html_boilerplate'}++;
+	    }
+	  }
+  }
+  return $ok;
 }
 
 1;
