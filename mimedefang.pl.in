@@ -39,7 +39,6 @@ use Mail::MIMEDefang::RFC2822;
 use Mail::MIMEDefang::Utils;
 use Mail::MIMEDefang::Actions;
 use Mail::MIMEDefang::Antispam;
-use Mail::MIMEDefang::Antivirus;
 
 use Socket;
 use IO::Socket;
@@ -367,6 +366,10 @@ sub main {
 
     # In case it wasn't done in filter... won't hurt to do it again
     detect_and_load_perl_modules();
+    # Load Antivirus code only if needed
+    if (Mail::MIMEDefang::Core::detect_antivirus_support()) {
+      use Mail::MIMEDefang::Antivirus;
+    }
 
     # Backward-compatibility
     if (defined($Administrator)) {

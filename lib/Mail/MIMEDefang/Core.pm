@@ -54,7 +54,7 @@ our @EXPORT_OK;
     };
 
 @EXPORT_OK = qw{
-      read_config set_status_tag
+      read_config set_status_tag detect_antivirus_support
     };
 
 sub new {
@@ -307,6 +307,19 @@ sub detect_and_load_perl_modules() {
         or $Features{"Net::DNS"} = 0;
       }
     }
+}
+
+# Detect if antivirus support should be enabled
+sub detect_antivirus_support() {
+  return 1 if (!defined $Features{"AutoDetectPerlModules"});
+  foreach my $k ( keys %Features ) {
+    if($k =~ /^Virus\:/) {
+      if($Features{$k} ne 0) {
+        return 1;
+      }
+    }
+  }
+  return 0;
 }
 
 #***********************************************************************
