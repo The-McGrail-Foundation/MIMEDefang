@@ -484,23 +484,6 @@ sub main {
     do_main_loop() if $enter_main_loop;
 }
 
-=item get_mx_ip_addresses $domain [$resolver_object]
-
-Get IP addresses of all MX hosts for given domain.  If there are
-no MX hosts, then return A records.
-
-=cut
-sub get_mx_ip_addresses {
-	my($domain, $res) = @_;
-
-  my (@results, $err, $errmsg) = Mail::MIMEDefang::Net::get_mx_ip_addresses($domain, $res, %Features);
-	if($err eq 'err') {
-		md_syslog($err, $errmsg);
-    return @results;
-	}
-	return @results;
-}
-
 sub do_main_loop
 {
 	init_status_tag();

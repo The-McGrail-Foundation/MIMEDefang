@@ -12,8 +12,8 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_black_listed
                  relay_is_blacklisted_multi relay_is_blacklisted_multi_count relay_is_blacklisted_multi_list
-                 is_public_ip4_address md_get_bogus_mx_hosts);
-our @EXPORT_OK = qw(get_host_name get_mx_ip_addresses);
+                 is_public_ip4_address md_get_bogus_mx_hosts get_mx_ip_addresses);
+our @EXPORT_OK = qw(get_host_name);
 
 #***********************************************************************
 # %PROCEDURE: expand_ipv6_address
@@ -167,10 +167,11 @@ no MX hosts, then return A records.
 
 =cut
 sub get_mx_ip_addresses {
-	my($domain, $res, %Features) = @_;
+	my($domain, $res) = @_;
 	my @results;
 	unless ($Features{"Net::DNS"}) {
-		return(@results, 'err', "Attempted to call get_mx_ip_addresses, but Perl module Net::DNS is not installed");
+    md_syslog('err', "Attempted to call get_mx_ip_addresses, but Perl module Net::DNS is not installed");
+		return(@results);
 	}
 	if (!defined($res)) {
 		$res = Net::DNS::Resolver->new;
@@ -188,7 +189,7 @@ sub get_mx_ip_addresses {
 		    $packet->header->rcode eq 'SERVFAIL' ||
 		    $packet->header->rcode eq 'NXDOMAIN' ||
 		    !defined($packet->answer)) {
-			return (@results,undef,undef);
+			return (@results);
 		}
 	}
 	foreach my $item ($packet->answer) {
@@ -230,7 +231,7 @@ sub get_mx_ip_addresses {
 			push(@results, $item->address);
 		}
 	}
-	return (@results,undef,undef);
+	return (@results);
 }
 
 =item md_get_bogus_mx_hosts $domain
