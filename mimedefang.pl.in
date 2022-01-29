@@ -293,53 +293,6 @@ sub stream_by_domain {
 }
 
 #***********************************************************************
-# %PROCEDURE: pretty_print_mail
-# %ARGUMENTS:
-#  e -- a MIME::Entity object
-#  size -- maximum size of value to return in characters
-#  chunk -- optional; used in recursive calls only.  Do not supply as arg.
-#  depth -- used in recursive calls only.  Do not supply as arg.
-# %RETURNS:
-#  A "pretty-printed" version of the e-mail body
-# %DESCRIPTION:
-#  Makes a pretty-printed version of the e-mail body no longer than size
-#  characters.  This odd-looking function is used by CanIt...
-#***********************************************************************
-
-sub pretty_print_mail {
-    my($e, $size, $chunk, $depth) = @_;
-    $chunk = "" unless defined($chunk);
-    $depth = 0 unless defined($depth);
-
-    my(@parts) = $e->parts;
-    my($type) = $e->mime_type;
-    my($fname) = takeStabAtFilename($e);
-    $fname = "; filename=$fname" if ($fname ne "");
-    my($spaces) = "  " x $depth;
-    $chunk .= "\n$spaces" . "[Part: ${type}${fname}]\n\n";
-    if ($#parts >= 0) {
-	my($part);
-	foreach $part (@parts) {
-	    $chunk = pretty_print_mail($part, $size, $chunk, $depth+1);
-	    last if (length($chunk) >= $size);
-	}
-    } else {
-	return $chunk unless ($type =~ m+^text/+);
-	my($body) = $e->bodyhandle;
-	return $chunk unless (defined($body));
-	my($path) = $body->path;
-	return $chunk unless (defined($path));
-	return $chunk unless (open(IN, "<$path"));
-	while (<IN>) {
-	    $chunk .= $_;
-	    last if (length($chunk) >= $size);
-	}
-	close(IN);
-    }
-    return $chunk;
-}
-
-#***********************************************************************
 # %PROCEDURE: md_version
 # %ARGUMENTS:
 #  None
