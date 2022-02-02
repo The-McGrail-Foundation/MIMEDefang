@@ -244,6 +244,48 @@ sub re_match_in_rar_directory {
 }
 
 #***********************************************************************
+# %PROCEDURE: re_match_in_7zip_directory
+# %ARGUMENTS:
+#  fname -- name of 7zip file
+#  regexp -- a regular expression
+# %RETURNS:
+#  1 if the EXTENSION part of any file in the zip archive matches regexp
+#  Matching is case-insensitive.
+# %DESCRIPTION:
+#  A helper function for filter.
+#***********************************************************************
+sub re_match_in_7zip_directory {
+  my($zname, $regexp) = @_;
+  my ($rf, $beginmark, $file);
+
+  my @unz_args = ("7z", "l", $zname);
+
+  unless ($Features{"7zip"}) {
+          md_syslog('err', "Attempted to use re_match_in_7zip_directory, but 7zip binary is not installed.");
+          return 0;
+  }
+
+  if ( -f $zname ) {
+    open(UNZ_PIPE, "-|", @unz_args)
+                        || die "can't open @unz_args|: $!";
+    while(<UNZ_PIPE>) {
+      $rf = $_;
+      if ( $beginmark and ( $rf !~ /^\-\-\-/ ) ) {
+        $rf =~ /([0-9-]+)\s+([0-9\:]+)\s+([\.[A-Za-z]+)\s+([0-9]+)\s+([0-9]+)\s+(.*)/;
+        $file = $6;
+        print $file;
+              return 1 if ((defined $file) and ($file =~ /$regexp/i));
+      }
+      last if ( $beginmark and ( $rf !~ /^\-\-\-/ ) );
+      $beginmark = 1 if ( $rf =~ /^\-\-\-/ );
+    }
+    close(UNZ_PIPE);
+  }
+
+  return 0;
+}
+
+#***********************************************************************
 # %PROCEDURE: re_match_in_zip_directory
 # %ARGUMENTS:
 #  fname -- name of ZIP file

@@ -2,6 +2,11 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2022-02-02 Giovanni Bechis <g.bechis@snb.it>
+
+        * add re_match_in_7zip_directory to check for files
+	  inside 7zip archives
+
 2021-12-17 Giovanni Bechis <g.bechis@snb.it>
 
 	* MIMEDefang 2.86 RELEASED

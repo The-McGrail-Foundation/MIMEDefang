@@ -738,7 +738,14 @@ Another function called \fBre_match_in_rar_directory\fR will look inside
 rar files and return true if any of the file names inside the rar archive
 match the regular expression.
 The function is very similar to \fBre_match_in_zip_directory\fR but the unrar
-binary is required.
+binary is required and must be specified in \fB$Features{"unrar"}\fR.
+
+.PP
+Another function called \fBre_match_in_7z_directory\fR will look inside
+7zip files and return true if any of the file names inside the 7zip archive
+match the regular expression.
+The function is very similar to \fBre_match_in_zip_directory\fR but the 7z
+binary is required and must be specified in \fB$Features{"7zip"}\fR.
 
 .SH GLOBAL VARIABLES SET BY MIMEDEFANG.PL
 
