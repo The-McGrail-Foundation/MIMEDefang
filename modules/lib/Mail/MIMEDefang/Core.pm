@@ -12,6 +12,8 @@ our @ISA = qw(Exporter);
 our @EXPORT;
 our @EXPORT_OK;
 
+our $VERSION = '2.86';
+
 @EXPORT = qw{
       $AddWarningsInline @StatusTags
       $Action $Administrator $AdminName $AdminAddress $DoStatusTags
@@ -45,7 +47,7 @@ our @EXPORT_OK;
       $GeneralWarning
       $HTMLFoundEndBody $HTMLBoilerplate $SASpamTester
       $results_fh
-      init_globals print_and_flush detect_and_load_perl_modules
+      version init_globals print_and_flush detect_and_load_perl_modules
       init_status_tag push_status_tag pop_status_tag
       signal_changed signal_unchanged md_syslog write_result_line
       in_message_context in_filter_context in_filter_wrapup in_filter_end
@@ -61,6 +63,10 @@ sub new {
     my ($class, @params) = @_;
     my $self = {};
     return bless $self, $class;
+}
+
+sub version {
+    return $VERSION;
 }
 
 sub init_globals {

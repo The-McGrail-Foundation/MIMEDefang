@@ -1,7 +1,7 @@
 package Mail::MIMEDefang::Unit::core;
 use strict;
 use warnings;
-use lib qw(lib);
+use lib qw(modules/lib);
 use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
