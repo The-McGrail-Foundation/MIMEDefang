@@ -6118,7 +6118,7 @@ fi
 
 
 
-VERSION=`$PERL -I modules/lib -e 'use Mail::MIMEDefang::Core; print Mail::MIMEDefang::Core->version'`
+VERSION=`$PERL -I modules/lib -e 'use Mail::MIMEDefang; print Mail::MIMEDefang->version'`
 
 
 if test "$ac_cv_func_snprintf" != "yes" -o "$ac_cv_func_vsnprintf" != "yes" ; then

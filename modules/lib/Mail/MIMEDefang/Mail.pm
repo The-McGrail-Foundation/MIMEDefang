@@ -5,7 +5,7 @@ use warnings;
 
 use IO::Socket::SSL;
 
-use Mail::MIMEDefang::Core;
+use Mail::MIMEDefang;
 use Mail::MIMEDefang::MIME;
 
 require Exporter;

@@ -3,7 +3,7 @@ package Mail::MIMEDefang::Antispam;
 use strict;
 use warnings;
 
-use Mail::MIMEDefang::Core;
+use Mail::MIMEDefang;
 use Mail::MIMEDefang::Utils;
 
 require Exporter;

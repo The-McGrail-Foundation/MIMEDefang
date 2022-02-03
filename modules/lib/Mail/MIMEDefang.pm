@@ -1,4 +1,4 @@
-package Mail::MIMEDefang::Core;
+package Mail::MIMEDefang;
 
 require Exporter;
 

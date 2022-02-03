@@ -715,7 +715,7 @@ fi
 
 AC_SUBST(ENABLE_DEBUGGING)
 AC_SUBST(PTHREAD_FLAG)
-VERSION=`$PERL -I modules/lib -e 'use Mail::MIMEDefang::Core; print Mail::MIMEDefang::Core->version'`
+VERSION=`$PERL -I modules/lib -e 'use Mail::MIMEDefang; print Mail::MIMEDefang->version'`
 AC_SUBST(VERSION)
 
 dnl Jigger for machines without snprintf

@@ -8,7 +8,7 @@ use Test::Most;
 
 use MIME::Parser;
 
-use Mail::MIMEDefang::Core;
+use Mail::MIMEDefang;
 use Mail::MIMEDefang::Utils;
 
 sub t_percent_encode : Test(1)

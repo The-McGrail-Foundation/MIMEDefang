@@ -3,7 +3,7 @@ package Mail::MIMEDefang::Antivirus;
 use strict;
 use warnings;
 
-use Mail::MIMEDefang::Core;
+use Mail::MIMEDefang;
 
 require Exporter;
 

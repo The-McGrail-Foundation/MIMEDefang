@@ -31,7 +31,7 @@ use lib "$FindBin::Bin/modules/lib";
 require 5.008;
 package main;
 
-use Mail::MIMEDefang::Core;
+use Mail::MIMEDefang;
 use Mail::MIMEDefang::MIME;
 use Mail::MIMEDefang::Net;
 use Mail::MIMEDefang::Mail;
@@ -367,7 +367,7 @@ sub main {
     # In case it wasn't done in filter... won't hurt to do it again
     detect_and_load_perl_modules();
     # Load Antivirus code only if needed
-    if (Mail::MIMEDefang::Core::detect_antivirus_support()) {
+    if (Mail::MIMEDefang::detect_antivirus_support()) {
       use Mail::MIMEDefang::Antivirus;
     }
 
@@ -1505,7 +1505,7 @@ sub md_graphdefang_log
 # Copyright (C) 2002-2018 Mark Martinec
 sub read_config($) {
   my($config_file) = @_;
-  my ($rv, $msg) = Mail::MIMEDefang::Core::read_config($config_file);
+  my ($rv, $msg) = Mail::MIMEDefang::read_config($config_file);
   if(defined $msg) {
     md_syslog("crit", "Config file \"$config_file\" $msg");
   }

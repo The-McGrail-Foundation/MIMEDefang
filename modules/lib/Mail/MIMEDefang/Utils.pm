@@ -5,7 +5,7 @@ use warnings;
 
 use MIME::Words qw(:all);
 
-use Mail::MIMEDefang::Core;
+use Mail::MIMEDefang;
 use Mail::MIMEDefang::RFC2822;
 
 require Exporter;

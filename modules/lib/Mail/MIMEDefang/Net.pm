@@ -6,7 +6,7 @@ use warnings;
 use Net::DNS;
 use Sys::Hostname;
 
-use Mail::MIMEDefang::Core;
+use Mail::MIMEDefang;
 
 require Exporter;
 our @ISA = qw(Exporter);

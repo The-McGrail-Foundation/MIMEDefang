@@ -4,7 +4,8 @@ require Exporter;
 
 use MIME::Parser;
 use MIME::Words qw(:all);
-use Mail::MIMEDefang::Core;
+
+use Mail::MIMEDefang;
 
 our @ISA = qw(Exporter);
 our @EXPORT;

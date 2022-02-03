@@ -5,7 +5,7 @@ use lib qw(modules/lib);
 use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
-use Mail::MIMEDefang::Core;
+use Mail::MIMEDefang;
 
 sub t_init_globals1 : Test(1)
 {
