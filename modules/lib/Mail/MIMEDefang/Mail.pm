@@ -7,6 +7,7 @@ use IO::Socket::SSL;
 
 use Mail::MIMEDefang;
 use Mail::MIMEDefang::MIME;
+use Mail::MIMEDefang::Utils;
 
 require Exporter;
 our @ISA = qw(Exporter);
