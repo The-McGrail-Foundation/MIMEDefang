@@ -1,3 +1,30 @@
+=head1 NAME
+
+Mail::MIMEDefang - email filtering milter
+
+=head1 DESCRIPTION
+
+Mail::MIMEDefang is a framework for filtering e-mail.
+It uses Sendmail's "Milter" API, some C glue code, and some Perl code to let you write high-performance mail filters in Perl.
+
+People use MIMEDefang to:
+
+    Block viruses
+    Block or tag spam
+    Remove HTML mail parts
+    Add boilerplate disclaimers to outgoing mail
+    Remove or alter attachments
+    Replace attachments with URL’s
+    Implement sophisticated access controls.
+
+You're limited only by your imagination. If you can think of it and code it in Perl, you can do it with MIMEDefang.
+
+=head1 METHODS
+
+=over 4
+
+=cut
+
 package Mail::MIMEDefang;
 
 require Exporter;
@@ -65,9 +92,22 @@ sub new {
     return bless $self, $class;
 }
 
+=item version
+
+Returns current MIMEDefang version.
+
+=cut
+
 sub version {
     return $VERSION;
 }
+
+=item init_globals
+
+Initialize global variables used across MIMEDefang instance
+and filter.
+
+=cut
 
 sub init_globals {
     my ($self, @params) = @_;
@@ -120,11 +160,28 @@ sub init_globals {
     undef $results_fh;
 }
 
+=item print_and_flush(text)
+
+Prints to stdout and flush buffer.
+
+=cut
+
 sub print_and_flush
 {
 	local $| = 1;
 	print($_[0], "\n");
 }
+
+=item md_openlog(tag, facility)
+
+Initialize e syslog object using Sys::Syslog or Unix::Syslog as
+appropriate.
+
+=item md_syslog(facility, msg)
+
+Prints a message to syslog(3) using the specified facility
+
+=cut
 
 {
 	# Reworked detection/usage of Sys::Syslog or Unix::Syslog as
@@ -287,6 +344,13 @@ sub print_and_flush
 	}
 }
 
+=item detect_and_load_perl_modules
+
+Automatically detect and load Perl modules needed for some features
+like SpamAssassin, rbl checks, zip file listing and HTML parsing.
+
+=cut
+
 # Detect these Perl modules at run-time.  Can explicitly prevent
 # loading of these modules by setting $Features{"xxx"} = 0;
 #
@@ -315,6 +379,12 @@ sub detect_and_load_perl_modules() {
     }
 }
 
+=item detect_antivirus_support
+
+Check if antivirus support should be loaded by looking at %Features
+
+=cut
+
 # Detect if antivirus support should be enabled
 sub detect_antivirus_support() {
   return 1 if (!defined $Features{"AutoDetectPerlModules"});
@@ -327,6 +397,12 @@ sub detect_antivirus_support() {
   }
   return 0;
 }
+
+=item read_config(file_path)
+
+Loads a config file where global variables can be stored.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: read_config
@@ -361,6 +437,12 @@ sub read_config($) {
   return (0, undef);
 }
 
+=item init_status_tag
+
+Open the status file descriptor
+
+=cut
+
 # Try to open the status descriptor
 sub init_status_tag
 {
@@ -372,6 +454,12 @@ sub init_status_tag
 		$DoStatusTags = 0;
 	}
 }
+
+=item set_status_tag(depth, tag)
+
+Sets the status tag for this worker inside the multiplexor.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: set_status_tag
@@ -403,6 +491,12 @@ sub set_status_tag
 	}
 }
 
+=item push_status_tag(tag)
+
+Updates status tag inside multiplexor and pushes onto stack.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: push_status_tag
 # %ARGUMENTS:
@@ -424,6 +518,12 @@ sub push_status_tag
 	set_status_tag(scalar(@StatusTags), $tag);
 }
 
+=item pop_status_tag
+
+Pops previous status of stack and sets tag in multiplexor.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: pop_status_tag
 # %ARGUMENTS:
@@ -444,6 +544,12 @@ sub pop_status_tag
 	set_status_tag(scalar(@StatusTags), "< $tag");
 }
 
+=item percent_encode(str)
+
+Encode a string with unsafe chars as "%XY" where X and Y are hex digits.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: percent_encode
 # %ARGUMENTS:
@@ -460,6 +566,14 @@ sub percent_encode {
   #" Fix emacs highlighting...
   return $str;
 }
+
+=item percent_encode_for_graphdefang(str)
+
+Encode a string with unsafe chars as "%XY" where X and Y are hex digits.
+
+Quotes or spaces are not encoded but commas are encoded.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: percent_encode_for_graphdefang
@@ -479,6 +593,12 @@ sub percent_encode_for_graphdefang {
   return $str;
 }
 
+=item percent_decode(str)
+
+Decode a string previously encoded by percent_encode().
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: percent_decode
 # %ARGUMENTS:
@@ -493,9 +613,7 @@ sub percent_decode {
   return $str;
 }
 
-=pod
-
-=head2 write_result_line ( $cmd, @args )
+=item write_result_line ( $cmd, @args )
 
 Writes a result line to the RESULTS file.
 
@@ -540,6 +658,12 @@ sub write_result_line
         return;
 }
 
+=item signal_unchanged
+
+Tells mimedefang C program message has not been altered.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: signal_unchanged
 # %ARGUMENTS:
@@ -551,6 +675,12 @@ sub write_result_line
 #***********************************************************************
 sub signal_unchanged {
 }
+
+=item signal_changed
+
+Tells mimedefang C program message has been altered.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: signal_changed
@@ -564,6 +694,12 @@ sub signal_unchanged {
 sub signal_changed {
     write_result_line("C", "");
 }
+
+=item in_message_context(name)
+
+Returns 1 if we are processing a message; 0 otherwise.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: in_message_context
@@ -579,6 +715,12 @@ sub in_message_context {
     md_syslog('warning', "$name called outside of message context");
     return 0;
 }
+
+=item in_filter_wrapup(name)
+
+Returns 1 if we are not in filter wrapup; 0 otherwise.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: in_filter_wrapup
@@ -596,6 +738,12 @@ sub in_filter_wrapup {
     return 0;
 }
 
+=item in_filter_context
+
+Returns 1 if we are inside filter or filter_multipart, 0 otherwise.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: in_filter_context
 # %ARGUMENTS:
@@ -610,6 +758,12 @@ sub in_filter_context {
     return 0;
 }
 
+=item in_filter_end(name)
+
+Returns 1 if we are inside filter_end 0 otherwise.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: in_filter_end
 # %ARGUMENTS:
@@ -623,6 +777,12 @@ sub in_filter_end {
     md_syslog('warning', "$name called outside of filter_end");
     return 0;
 }
+
+=item send_quarantine_notifications
+
+Sends quarantine notification message, if anything was quarantined.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: send_quarantine_notifications
@@ -706,6 +866,14 @@ sub send_quarantine_notifications {
   }
 }
 
+=item signal_complete
+
+Tells mimedefang C program Perl filter has finished successfully.
+
+Also mails any quarantine notifications and sender notifications.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: signal_complete
 # %ARGUMENTS:
@@ -780,6 +948,16 @@ sub signal_complete {
   }
 }
 
+=item send_mail(fromAddr, fromFull, recipient, body, deliverymode)
+
+Sends a mail message using Sendmail.
+
+Invokes Sendmail without involving the shell, so that shell metacharacters won't cause security problems.
+
+Deliverimode parameter is the optional sendmail delivery mode arg (default "-odd").
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: send_mail
 # %ARGUMENTS:
@@ -851,6 +1029,12 @@ sub send_mail {
   exit(1);
   # NOTREACHED
 }
+
+=item send_admin_mail(subject, body)
+
+Sends a mail message to the administrator
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: send_admin_mail
