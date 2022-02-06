@@ -1,4 +1,10 @@
+#
+# This program may be distributed under the terms of the GNU General
+# Public License, Version 2.
+#
+
 package Mail::MIMEDefang::Unit;
+
 use strict;
 use warnings;
 use Test::Class;
