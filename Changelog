@@ -2,6 +2,14 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2022-02-10 Giovanni Bechis <g.bechis@snb.it>
+
+        * switch to Digest::SHA
+
+2022-02-04 Giovanni Bechis <g.bechis@snb.it>
+
+        * split mimedefang.pl code in Perl modules
+
 2022-02-02 Giovanni Bechis <g.bechis@snb.it>
 
         * add re_match_in_7zip_directory to check for files
