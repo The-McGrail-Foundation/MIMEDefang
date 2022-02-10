@@ -50,7 +50,7 @@ MIMEDefang has the following software requirements:
 	MIME::tools 5.413 or higher
 	MIME::Base64 3.03 or higher
 	MailTools 1.1401  or higher
-	Digest::SHA1 2.00 or higher
+	Digest::SHA
 	IO::Socket::SSL
 
 	These modules are available from http://www.cpan.org

@@ -20,7 +20,7 @@ BEGIN
   };
 }
 
-use Digest::SHA1;
+use Digest::SHA;
 
 sub read_urandom($) {
   my $len = shift;
@@ -50,7 +50,7 @@ if(HAS_OPENSSL_RANDOM) {
   $data = read_urandom(256);
 }
 
-my $ctx = Digest::SHA1->new;
+my $ctx = Digest::SHA->new;
 $ctx->add($data);
 my $rnd = $ctx->hexdigest;
 print "X-MIMEDefang-Relay-$rnd\n";

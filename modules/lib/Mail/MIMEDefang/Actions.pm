@@ -8,6 +8,8 @@ package Mail::MIMEDefang::Actions;
 use strict;
 use warnings;
 
+use Digest::SHA;
+
 use Mail::MIMEDefang;
 
 require Exporter;
@@ -791,7 +793,7 @@ sub action_replace_with_url {
     return 0 unless defined($path);
     open(IN, "<$path") or return 0;
 
-    $ctx = Digest::SHA1->new;
+    $ctx = Digest::SHA->new;
     $ctx->addfile(*IN);
     $ctx->add($salt) if defined($salt);
     close(IN);

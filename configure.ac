@@ -139,7 +139,7 @@ if test "$ac_cv_perlmodcheck" = "no" ; then
    dnl for installation of spamassassin.cf
    HAVE_SPAM_ASSASSIN=yes
 else
-    for module in 'IO::Socket' 'MIME::Tools 5.410 ()' 'MIME::WordDecoder' 'Digest::SHA1' ; do
+    for module in 'IO::Socket' 'MIME::Tools 5.410 ()' 'MIME::WordDecoder' 'Digest::SHA' ; do
 	AC_MSG_CHECKING([for Perl module $module])
 	(echo "use lib '$PERLINSTALLSITELIB'; use $module;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
 	if test $? != 0 ; then
@@ -147,7 +147,7 @@ else
 	    AC_MSG_WARN([*** Make sure the following Perl modules are installed:])
 	    AC_MSG_WARN([*** MIME::Tools version 5.410 or higher (5.411a recommended)])
 	    AC_MSG_WARN([*** MIME::WordDecoder])
-	    AC_MSG_WARN([*** Digest::SHA1])
+	    AC_MSG_WARN([*** Digest::SHA])
 	    exit 1
 	fi
 	AC_MSG_RESULT(ok)

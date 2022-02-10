@@ -47,7 +47,7 @@ use IO::Handle;
 use IO::File;
 use MIME::Tools 5.410 ();
 use MIME::Words qw(:all);
-use Digest::SHA1;
+use Digest::SHA;
 use Time::Local;
 use MIME::Parser;
 use Sys::Hostname;
@@ -441,7 +441,7 @@ sub main {
 	# And print Perl module versions
 	print("\n");
 	my($version);
-	foreach $thing (qw(Archive::Zip Digest::SHA1 HTML::Parser IO::Socket MIME::Base64 MIME::Tools MIME::Words Mail::Mailer Mail::SpamAssassin Net::DNS Unix::Syslog )) {
+	foreach $thing (qw(Archive::Zip Digest::SHA HTML::Parser IO::Socket MIME::Base64 MIME::Tools MIME::Words Mail::Mailer Mail::SpamAssassin Net::DNS Unix::Syslog )) {
 	    unless (eval "require $thing") {
 		printf("%-30s: missing\n", $thing);
 		next;
