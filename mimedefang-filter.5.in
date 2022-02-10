@@ -2470,7 +2470,7 @@ ESET NOD32 (http://www.eset.com/)
 The \fBmimedefang\fR home page is \fIhttp://www.mimedefang.org/\fR.
 
 .SH SEE ALSO
-mimedefang(8), mimedefang.pl(8)
+mimedefang(8), mimedefang.pl(8), Mail::MIMEDefang(3)
 
 
 
