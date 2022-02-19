@@ -28,7 +28,7 @@ sub t_read_config : Test(3)
   use warnings qw(redefine once);
   SKIP: {
     skip "read_config test must be run as root", 1 unless ($< eq 0);
-    Mail::MIMEDefang::Core::read_config("t/data/md.conf");
+    Mail::MIMEDefang::read_config("t/data/md.conf");
     is($SALocalTestsOnly, 0);
   };
 }
