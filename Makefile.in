@@ -127,9 +127,9 @@ pod2man:: script/mimedefang-util.1
 
 
 libs::
-	cd modules && $(PERL) Makefile.PL PREFIX=$(PERLVENDORPREFIX) \
-	INST_MAN1DIR=$(DESTDIR)$(MANDIR)/man1 \
-	INST_MAN3DIR=$(DESTDIR)$(MANDIR)/man3
+	cd modules && $(PERL) Makefile.PL PREFIX=$(PERLSITEPREFIX) \
+	INSTALLMAN1DIR=$(DESTDIR)$(MANDIR)/man1 \
+	INSTALLMAN3DIR=$(DESTDIR)$(MANDIR)/man3
 
 script/mimedefang-util.1: script/mimedefang-util
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=1 --perm_rw=644 \
