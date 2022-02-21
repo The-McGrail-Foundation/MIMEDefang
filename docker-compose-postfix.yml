@@ -1,0 +1,9 @@
+version: '2.2'
+services:
+    mimedefang:
+        container_name: mimedefang-postfix
+        image: mimedefang/postfix:v1.0
+        working_dir: /tests
+        volumes:
+         - .:/tests
+        command: sh t/dockerPostfix.sh
