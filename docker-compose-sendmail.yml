@@ -2,7 +2,7 @@ version: '2.2'
 services:
     mimedefang:
         container_name: mimedefang-sendmail
-        image: mimedefang/sendmail:v1.0
+        image: mimedefang/sendmail:v2.86
         working_dir: /tests
         volumes:
          - .:/tests

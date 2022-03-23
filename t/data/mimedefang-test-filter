@@ -1,0 +1,336 @@
+# -*- Perl -*-
+#***********************************************************************
+#
+# mimedefang-filter
+#
+# Suggested minimum-protection filter for Microsoft Windows clients, plus
+# SpamAssassin checks if SpamAssassin is installed.
+#
+# Copyright (C) 2002 Roaring Penguin Software Inc.
+#
+# This program may be distributed under the terms of the GNU General
+# Public License, Version 2.
+#
+# $Id$
+#***********************************************************************
+
+#***********************************************************************
+# Set administrator's e-mail address here.  The administrator receives
+# quarantine messages and is listed as the contact for site-wide
+# MIMEDefang policy.    A good example would be 'defang-admin@mydomain.com'
+#***********************************************************************
+$AdminAddress = 'postmaster@localhost';
+$AdminName = "MIMEDefang Administrator's Full Name";
+
+#***********************************************************************
+# Set the e-mail address from which MIMEDefang quarantine warnings and
+# user notifications appear to come.    A good example would be
+# 'mimedefang@mydomain.com'.    Make sure to have an alias for this
+# address if you want replies to it to work.
+#***********************************************************************
+$DaemonAddress = 'mimedefang@localhost';
+
+#***********************************************************************
+# If you set $AddWarningsInline to 1, then MIMEDefang tries *very* hard
+# to add warnings directly in the message body (text or html) rather
+# than adding a separate "WARNING.TXT" MIME part.  If the message
+# has no text or html part, then a separate MIME part is still used.
+#***********************************************************************
+$AddWarningsInline = 0;
+
+#***********************************************************************
+# To enable syslogging of virus and spam activity, add the following
+# to the filter:
+# md_graphdefang_log_enable();
+# You may optionally provide a syslogging facility by passing an
+# argument such as:  md_graphdefang_log_enable('local4');  If you do this, be
+# sure to setup the new syslog facility (probably in /etc/syslog.conf).
+# An optional second argument causes a line of output to be produced
+# for each recipient (if it is 1), or only a single summary line
+# for all recipients (if it is 0.)  The default is 1.
+# Comment this line out to disable logging.
+#***********************************************************************
+md_graphdefang_log_enable('mail', 1);
+
+#***********************************************************************
+# Uncomment this to block messages with more than 50 parts.  This will
+# *NOT* work unless you're using Roaring Penguin's patched version
+# of MIME tools, version MIME-tools-5.411a-RP-Patched-02 or later.
+#
+# WARNING: DO NOT SET THIS VARIABLE unless you're using at least
+# MIME-tools-5.411a-RP-Patched-02; otherwise, your filter will fail.
+#***********************************************************************
+# $MaxMIMEParts = 50;
+
+#***********************************************************************
+# Set various stupid things your mail client does below.
+#***********************************************************************
+
+# Set the next one if your mail client cannot handle multiple "inline"
+# parts.
+$Stupidity{"NoMultipleInlines"} = 0;
+
+# Detect and load Perl modules
+detect_and_load_perl_modules();
+
+# This procedure returns true for entities with bad filenames.
+sub filter_bad_filename  {
+        my($entity) = @_;
+        my($bad_exts, $re);
+
+        # Bad extensions
+        $bad_exts = '(ade|adp|app|asd|asf|asx|bas|bat|chm|cmd|com|cpl|crt|dll|exe|fxp|hlp|hta|hto|inf|ini|ins|isp|jse?|lib|lnk|mdb|mde|msc|msi|msp|mst|ocx|pcd|pif|prg|reg|scr|sct|sh|shb|shs|sys|url|vb|vbe|vbs|vcs|vxd|wmd|wms|wmz|wsc|wsf|wsh|\{[^\}]+\})';
+
+        # Do not allow:
+        # - CLSIDs  {foobarbaz}
+        # - bad extensions (possibly with trailing dots) at end
+        $re = '\.' . $bad_exts . '\.*$';
+
+        return 1 if (re_match($entity, $re));
+
+        # Look inside ZIP files
+        if (re_match($entity, '\.zip$') and
+    $Features{"Archive::Zip"}) {
+    my $bh = $entity->bodyhandle();
+    if (defined($bh)) {
+            my $path = $bh->path();
+            if (defined($path)) {
+        return re_match_in_zip_directory($path, $re);
+            }
+    }
+        }
+        return 0;
+}
+
+#***********************************************************************
+# %PROCEDURE: filter_begin
+# %ARGUMENTS:
+#  $entity -- the parsed MIME::Entity
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Called just before e-mail parts are processed
+#***********************************************************************
+sub filter_begin {
+    my($entity) = @_;
+    # ALWAYS drop messages with suspicious chars in headers
+    if ($SuspiciousCharsInHeaders) {
+        md_graphdefang_log('suspicious_chars');
+        action_quarantine_entire_message("Message quarantined because of suspicious characters in headers");
+        # Do NOT allow message to reach recipient(s)
+        return action_discard();
+    }
+
+    # Copy original message into work directory as an "mbox" file for
+    # virus-scanning
+    md_copy_orig_msg_to_work_dir_as_mbox_file();
+
+    # Scan for viruses if any virus-scanners are installed
+    my($code, $category, $action) = message_contains_virus();
+
+    # Lower level of paranoia - only looks for actual viruses
+    $FoundVirus = ($category eq "virus");
+
+    # Higher level of paranoia - takes care of "suspicious" objects
+    # $FoundVirus = ($action eq "quarantine");
+
+    if ($FoundVirus) {
+        md_graphdefang_log('virus', $VirusName, $RelayAddr);
+        md_syslog('warning', "Discarding because of virus $VirusName");
+        return action_discard();
+    }
+
+    if ($action eq "tempfail") {
+        action_tempfail("Problem running virus-scanner");
+        md_syslog('warning', "Problem running virus scanner: code=$code, category=$category, action=$action");
+    }
+}
+
+#***********************************************************************
+# %PROCEDURE: filter
+# %ARGUMENTS:
+#  entity -- a Mime::Entity object (see MIME-tools documentation for details)
+#  fname -- the suggested filename, taken from the MIME Content-Disposition:
+#                       header.  If no filename was suggested, then fname is ""
+#  ext -- the file extension (everything from the last period in the name
+#                   to the end of the name, including the period.)
+#  type -- the MIME type, taken from the Content-Type: header.
+#
+#  NOTE: There are two likely and one unlikely place for a filename to
+#  appear in a MIME message:    In Content-Disposition: filename, in
+#  Content-Type: name, and in Content-Description.  If you are paranoid,
+#  you will use the re_match and re_match_ext functions, which return true
+#  if ANY of these possibilities match.  re_match checks the whole name;
+#  re_match_ext checks the extension.  See the sample filter below for usage.
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  This function is called once for each part of a MIME message.
+#  There are many action_*() routines which can decide the fate
+#  of each part; see the mimedefang-filter man page.
+#***********************************************************************
+sub filter {
+    my($entity, $fname, $ext, $type) = @_;
+
+    return if message_rejected(); # Avoid unnecessary work
+
+    # Block message/partial parts
+    if (lc($type) eq "message/partial") {
+        md_graphdefang_log('message/partial');
+        return action_bounce("MIME type message/partial not accepted here");
+    }
+
+    if (filter_bad_filename($entity)) {
+        md_graphdefang_log('bad_filename', $fname, $type);
+        return action_drop_with_warning("An attachment named $fname was removed from this document as it\nconstituted a security hazard.    If you require this document, please contact\nthe sender and arrange an alternate means of receiving it.\n");
+    }
+
+    return action_accept();
+}
+
+#***********************************************************************
+# %PROCEDURE: filter_multipart
+# %ARGUMENTS:
+#  entity -- a Mime::Entity object (see MIME-tools documentation for details)
+#  fname -- the suggested filename, taken from the MIME Content-Disposition:
+#                       header.  If no filename was suggested, then fname is ""
+#  ext -- the file extension (everything from the last period in the name
+#                   to the end of the name, including the period.)
+#  type -- the MIME type, taken from the Content-Type: header.
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  This is called for multipart "container" parts such as message/rfc822.
+#  You cannot replace the body (because multipart parts have no body),
+#  but you should check for bad filenames.
+#***********************************************************************
+sub filter_multipart {
+    my($entity, $fname, $ext, $type) = @_;
+
+    return if message_rejected(); # Avoid unnecessary work
+
+    if (filter_bad_filename($entity)) {
+        md_graphdefang_log('bad_filename', $fname, $type);
+        action_notify_administrator("A MULTIPART attachment of type $type, named $fname was dropped.\n");
+        return action_drop_with_warning("An attachment of type $type, named $fname was removed from this document as it\nconstituted a security hazard.  If you require this document, please contact\nthe sender and arrange an alternate means of receiving it.\n");
+    }
+
+    # Block message/partial parts
+    if (lc($type) eq "message/partial") {
+        md_graphdefang_log('message/partial');
+        return action_bounce("MIME type message/partial not accepted here");
+    }
+
+    return action_accept();
+}
+
+
+#***********************************************************************
+# %PROCEDURE: defang_warning
+# %ARGUMENTS:
+#  oldfname -- the old file name of an attachment
+#  fname -- the new "defanged" name
+# %RETURNS:
+#  A warning message
+# %DESCRIPTION:
+#  This function customizes the warning message when an attachment
+#  is defanged.
+#***********************************************************************
+sub defang_warning {
+    my($oldfname, $fname) = @_;
+    return "An attachment named '$oldfname' was converted to '$fname'.\n" .
+    "To recover the file, right-click on the attachment and Save As\n" .
+    "'$oldfname'\n";
+}
+
+# If SpamAssassin found SPAM, append report.    We do it as a separate
+# attachment of type text/plain
+sub filter_end {
+    my($entity) = @_;
+
+    # If you want quarantine reports, uncomment next line
+    # send_quarantine_notifications();
+
+    # IMPORTANT NOTE:  YOU MUST CALL send_quarantine_notifications() AFTER
+    # ANY PARTS HAVE BEEN QUARANTINED.  SO IF YOU MODIFY THIS FILTER TO
+    # QUARANTINE SPAM, REWORK THE LOGIC TO CALL send_quarantine_notifications()
+    # AT THE END!!!
+
+    # No sense doing any extra work
+    return if message_rejected();
+
+    # Spam checks if SpamAssassin is installed
+    if ($Features{"SpamAssassin"}) {
+        if (-s "./INPUTMSG" < 100*1024) {
+            # Only scan messages smaller than 100kB.    Larger messages
+            # are extremely unlikely to be spam, and SpamAssassin is
+            # dreadfully slow on very large messages.
+            my($hits, $req, $names, $report) = spam_assassin_check();
+            my($score);
+            if ($hits < 40) {
+                $score = "*" x int($hits);
+            } else {
+                $score = "*" x 40;
+            }
+            # We add a header which looks like this:
+            # X-Spam-Score: 6.8 (******) NAME_OF_TEST,NAME_OF_TEST
+            # The number of asterisks in parens is the integer part
+            # of the spam score clamped to a maximum of 40.
+            # MUA filters can easily be written to trigger on a
+            # minimum number of asterisks...
+            if ($hits >= 100) {
+                return action_bounce();
+            } elsif ($hits >= $req) {
+                action_change_header("X-Spam-Score", "$hits ($score) $names");
+                md_graphdefang_log('spam', $hits, $RelayAddr);
+
+                # If you find the SA report useful, add it, I guess...
+                action_add_part($entity, "text/plain", "-suggest",
+                                "$report\n", "SpamAssassinReport.txt", "inline");
+            } else {
+                # Delete any existing X-Spam-Score header?
+                action_delete_header("X-Spam-Score");
+            }
+        }
+    }
+
+    # Check email message with Rspamd
+    my ($hits, $req, $names, $report, $action, $is_spam);
+    if (-s "./INPUTMSG" < 100*1024) {
+      ($hits, $req, $names, $report, $action, $is_spam) = rspamd_check();
+      md_syslog("Warning", "Action: $action, Spam: $is_spam, Names: $names");
+      if ($is_spam eq "true") {
+        action_change_header("X-Spam-Score", "$hits/$req $names");
+        md_syslog("Warning", "Action: $action");
+        md_graphdefang_log('spam', $hits, $RelayAddr);
+      } else {
+        # Delete any existing X-Spam-Score header?
+        action_delete_header("X-Spam-Score");
+     }
+    }
+
+    # I HATE HTML MAIL!  If there's a multipart/alternative with both
+    # text/plain and text/html parts, nuke the text/html.  Thanks for
+    # wasting our disk space and bandwidth...
+
+    # If you want to strip out HTML parts if there is a corresponding
+    # plain-text part, uncomment the next line.
+    # remove_redundant_html_parts($entity);
+
+    md_graphdefang_log('mail_in');
+
+    # Deal with malformed MIME.
+    # Some viruses produce malformed MIME messages that are misinterpreted
+    # by mail clients.  They also might slip under the radar of MIMEDefang.
+    # If you are worried about this, you should canonicalize all
+    # e-mail by uncommenting the action_rebuild() line.  This will
+    # force _all_ messages to be reconstructed as valid MIME.  It will
+    # increase the load on your server, and might break messages produced
+    # by marginal software.  Your call.
+
+    # action_rebuild();
+}
+
+# DO NOT delete the next line, or Perl will complain.
+1;
+

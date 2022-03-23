@@ -26,7 +26,7 @@ sub include_mimedefang : Test(startup)
 sub smtp_mail
 {
   my ($from, $to, $filemail) = @_;
-  my $messages;
+  my $messages = '';
 
   return 0 if not -f $filemail;
   open my $fh, '<', $filemail or return 0;
@@ -36,19 +36,24 @@ sub smtp_mail
   my @email = split(/\@/, $from);
   my $smtp = Net::SMTP->new("localhost",
                            Hello => $email[1],
-                           Timeout => 30,
+                           Timeout => 10,
                            Debug   => 0,
                           );
   return "Connection error" if not defined $smtp;
-  $smtp->mail('<>');
+  $smtp->mail('<defang@localhost>');
   $smtp->to("$to\n");
   $messages .= $smtp->message();
-  $smtp->data($mailcnt);
+  $smtp->data();
+  $messages .= $smtp->message();
+  $smtp->datasend($mailcnt);
   $messages .= $smtp->message();
   $smtp->dataend;
   $messages .= $smtp->message();
   $smtp->quit;
   $messages .= $smtp->message();
+  undef $mailcnt;
+  undef $smtp;
+  undef $fh;
   return $messages;
 }
 
