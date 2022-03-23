@@ -40,7 +40,9 @@ EMBPERLLIBS=@EMBPERLLIBS@
 LIBS_WITHOUT_PTHREAD=@LIBS_WITHOUT_PTHREAD@
 LIBS=@LIBS@
 PERLINSTALLSITELIB=@PERLINSTALLSITELIB@
+PERLINSTALLPRIVLIB=@PERLINSTALLPRIVLIB@
 PERLVENDORPREFIX=@PERLVENDORPREFIX@
+PERLVENDORLIB=@PERLINSTALLPRIVLIB@/vendor_perl
 LDFLAGS=@LDFLAGS@
 IP_HEADER=@IP_HEADER@
 SPOOLDIR=@SPOOLDIR@
@@ -51,7 +53,7 @@ INSTALL_STRIP_FLAG=-s
 
 ## NO MORE ./configure substitutions beyond this point!
 
-all: libs mimedefang mimedefang-multiplexor md-mx-ctrl pod2man
+all: mimedefang mimedefang-multiplexor md-mx-ctrl pod2man
 
 mimedefang-multiplexor: mimedefang-multiplexor.o event.o event_tcp.o drop_privs_nothread.o notifier.o syslog-fac.o utils.o $(EMBPERLOBJS)
 	$(CC) $(CFLAGS) -o mimedefang-multiplexor mimedefang-multiplexor.o event.o event_tcp.o drop_privs_nothread.o syslog-fac.o notifier.o utils.o $(EMBPERLOBJS) $(LIBS_WITHOUT_PTHREAD) $(EMBPERLLDFLAGS) $(EMBPERLLIBS)
@@ -120,16 +122,10 @@ gen_id.o: gen_id.c mimedefang.h
 
 clean:: FORCE
 	rm -f *~ *.o mimedefang mimedefang-multiplexor md-mx-ctrl xs_init.c
-	make -C modules clean
 	rm modules/Makefile.old
 
 pod2man:: script/mimedefang-util.1
 
-
-libs::
-	cd modules && $(PERL) Makefile.PL PREFIX=$(PERLSITEPREFIX) \
-	INSTALLMAN1DIR=$(DESTDIR)$(MANDIR)/man1 \
-	INSTALLMAN3DIR=$(DESTDIR)$(MANDIR)/man3
 
 script/mimedefang-util.1: script/mimedefang-util
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=1 --perm_rw=644 \
@@ -207,7 +203,10 @@ install: all
 	$(INSTALL) -m 755 $(INSTALL_STRIP_FLAG) mimedefang               $(DESTDIR)$(prefix)/bin/mimedefang
 
 	# Install .pm files
-	make -C modules install
+	$(INSTALL) -m 755 -d $(DESTDIR)$(PERLVENDORLIB)/Mail
+	$(INSTALL) -m 755 -d $(DESTDIR)$(PERLVENDORLIB)/Mail/MIMEDefang
+	$(INSTALL) -m 644 modules/lib/Mail/MIMEDefang.pm $(DESTDIR)$(PERLVENDORLIB)/Mail/MIMEDefang.pm
+	$(INSTALL) -m 644 modules/lib/Mail/MIMEDefang/*.pm $(DESTDIR)$(PERLVENDORLIB)/Mail/MIMEDefang/
 
 	$(INSTALL) -m 755 watch-mimedefang         $(DESTDIR)$(prefix)/bin/watch-mimedefang
 	$(INSTALL) -m 755 watch-multiple-mimedefangs.tcl $(DESTDIR)$(prefix)/bin/watch-multiple-mimedefangs.tcl
