@@ -73,17 +73,17 @@ everything in this README in much greater detail.  Anyway, on with it:
 
 1) Sendmail
 
-**You must be using Sendmail 8.12.x or 8.13.x**
+**You must be using Sendmail 8.12.x or higher**
 
-Obtain the latest Sendmail 8.12.x or 8.13.x source release from
+Obtain the latest Sendmail 8.12.x or higher source release from
 http://www.sendmail.org.  Unpack it.  If you are building 8.12.x,
 add the following lines to devtools/Site/site.config.m4:
 
         dnl Milter
 	APPENDDEF(`conf_sendmail_ENVDEF', `-DMILTER')
 
-This enables the mail filter feature.  (For 8.13.x, Milter is enabled
-by default.)
+This enables the mail filter feature.  (For 8.13.x and higher versions,
+Milter is enabled by default.)
 
 Go ahead and build Sendmail following the instructions in the Sendmail
 documentation.  Install and configure Sendmail.
