@@ -9,8 +9,8 @@ make distro 1>/dev/null 2>&1
 mkdir -p ~/rpmbuild/SOURCES
 mkdir -p ~/rpmbuild/BUILD
 cp mimedefang-2.86.tar.gz ~/rpmbuild/SOURCES
-rpmbuild -bb redhat/mimedefang.spec
-dnf -y install ~/rpmbuild/RPMS/x86_64/mimedefang-*
+rpmbuild -bb redhat/mimedefang.spec 1>/dev/null 2>&1
+dnf -y install ~/rpmbuild/RPMS/x86_64/mimedefang-* 1>/dev/null 2>&1
 cp t/data/mimedefang-test-filter /etc/mail/mimedefang-filter
 
 /usr/bin/mimedefang-multiplexor -m 4 -x 10 -y 0 -U defang -l -d -s /var/spool/MIMEDefang/mimedefang-multiplexor.sock
