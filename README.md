@@ -219,6 +219,12 @@ remember to kill the mimedefang processes.  A sample /etc/rc.d/init.d script
 for Red Hat Linux is in the redhat directory.  A sample generic init script
 which should work on most UNIXes is in the examples directory.
 
+DOCKER
+-------------
+There are docker images available on Docker Hub at https://hub.docker.com/u/mimedefang
+with MIMEDefang configured with postfix(8) or sendmail(8) MTA.
+
+
 CONFIGURATION
 -------------
 
