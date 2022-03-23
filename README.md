@@ -73,17 +73,17 @@ everything in this README in much greater detail.  Anyway, on with it:
 
 1) Sendmail
 
-**You must be using Sendmail 8.12.x or 8.13.x**
+**You must be using Sendmail 8.12.x or higher**
 
-Obtain the latest Sendmail 8.12.x or 8.13.x source release from
+Obtain the latest Sendmail 8.12.x or higher source release from
 http://www.sendmail.org.  Unpack it.  If you are building 8.12.x,
 add the following lines to devtools/Site/site.config.m4:
 
         dnl Milter
 	APPENDDEF(`conf_sendmail_ENVDEF', `-DMILTER')
 
-This enables the mail filter feature.  (For 8.13.x, Milter is enabled
-by default.)
+This enables the mail filter feature.  (For 8.13.x and higher versions,
+Milter is enabled by default.)
 
 Go ahead and build Sendmail following the instructions in the Sendmail
 documentation.  Install and configure Sendmail.
@@ -218,6 +218,12 @@ before the line which actually starts Sendmail.  When you shut down Sendmail,
 remember to kill the mimedefang processes.  A sample /etc/rc.d/init.d script
 for Red Hat Linux is in the redhat directory.  A sample generic init script
 which should work on most UNIXes is in the examples directory.
+
+DOCKER
+-------------
+There are docker images available on Docker Hub at https://hub.docker.com/u/mimedefang
+with MIMEDefang configured with postfix(8) or sendmail(8) MTA.
+
 
 CONFIGURATION
 -------------
