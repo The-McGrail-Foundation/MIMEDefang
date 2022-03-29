@@ -10,7 +10,7 @@ Mail::MIMEDefang::Actions - actions methods for email filters
 =head1 DESCRIPTION
 
 Mail::MIMEDefang::Actions are a set of methods that can be called
-from C<mimedefang-filter> to accept or reject the email message.
+from F<mimedefang-filter> to accept or reject the email message.
 
 =head1 METHODS
 
