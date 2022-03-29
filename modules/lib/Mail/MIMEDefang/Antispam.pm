@@ -3,6 +3,21 @@
 # Public License, Version 2.
 #
 
+=head1 NAME
+
+Mail::MIMEDefang::Antispam - antispam related methods for email filters
+
+=head1 DESCRIPTION
+
+Mail::MIMEDefang::Antispam are a set of methods that can be called
+from F<mimedefang-filter> to check email messages with antispam softwares.
+
+=head1 METHODS
+
+=over 4
+
+=cut
+
 package Mail::MIMEDefang::Antispam;
 
 use strict;
@@ -21,6 +36,13 @@ our @EXPORT_OK;
             spam_assassin_status spam_assassin_is_spam
             rspamd_check);
 
+=item spam_assassin_is_spam
+
+Method that scans a mmessage using SpamAssassin and returns True if the email
+message has been detected as spam.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: spam_assassin_is_spam
 # %ARGUMENTS:
@@ -38,6 +60,25 @@ sub spam_assassin_is_spam {
 
     return ($hits >= $req);
 }
+
+=item spam_assassin_check
+
+Method that scans a message using SpamAssassin and returns an array of four
+elements,
+
+=over 4
+
+=item * Weight of message ('hits')
+
+=item * Number of hits required before SA considers a message spam
+
+=item * Comma separated list of symbolic test names that were triggered
+
+=item * A 'report' string, detailing tests that failed and their weights
+
+=back
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: spam_assassin_check
@@ -67,6 +108,14 @@ sub spam_assassin_check {
     return ($hits, $req, $tests, $report);
 }
 
+=item spam_assassin_status
+
+Method that scans a mmessage using SpamAssassin and returns a
+C<Mail::SpamAssassin:PerMsgStatus> object.
+The caller is responsible for calling the C<finish> method.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: spam_assassin_status
 # %ARGUMENTS:
@@ -92,6 +141,12 @@ sub spam_assassin_status {
     pop_status_tag();
     return $status;
 }
+
+=item spam_assassin_init
+
+Initialize Apache SpamAssassin and returns a C<Mail::SpamAssassin> object.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: spam_assassin_init
@@ -126,6 +181,13 @@ sub spam_assassin_init {
 
     return $SASpamTester;
 }
+
+=item spam_assassin_mail
+
+Method that calls SpamAssassin and returns
+a C<Mail::SpamAssassin::Message> object.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: spam_assassin_mail
@@ -162,6 +224,32 @@ sub spam_assassin_mail {
     }
     return $SASpamTester->parse(\@msg);
 }
+
+=item rspamd_check
+
+Method that scans the message using Rspamd and returns an array of six elemets:
+
+=over 4
+
+=item * Weight of message ('hits')
+
+=item * Number of hits required before Rspamd considers a message spam
+
+=item * Comma separated list of symbolic test names that were triggered
+
+=item * A 'report' string, detailing tests that failed and their weights
+  or a Json report if JSON and LWP modules are present
+
+=item * An action that should be applied to the email
+
+=item * A flag explaining if the email is a spam message or not (true/false).
+
+=back
+
+An optional rspamd url can be passed to the method, its default value
+is http://127.0.0.1:11333.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: rspamd_check
@@ -272,3 +360,9 @@ sub rspamd_check {
 
     return ($hits, $req, $tests, $report, $action, $is_spam);
 }
+
+=back
+
+=cut
+
+1;
