@@ -3,6 +3,21 @@
 # Public License, Version 2.
 #
 
+=head1 NAME
+
+Mail::MIMEDefang::Utils - Support methods used internally or by email filters
+
+=head1 DESCRIPTION
+
+Mail::MIMEDefang::Utils are a set of methods that can be called
+from F<mimedefang-filter> or by other methods.
+
+=head1 METHODS
+
+=over 4
+
+=cut
+
 package Mail::MIMEDefang::Utils;
 
 use strict;
@@ -21,6 +36,12 @@ our @EXPORT = qw(time_str date_str
                  md_copy_orig_msg_to_work_dir_as_mbox_file);
 our @EXPORT_OK = qw(read_results);
 
+=item time_str
+
+Method that returns a string representing the current time.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: time_str
 # %ARGUMENTS:
@@ -37,6 +58,12 @@ sub time_str {
                    $year + 1900, $mon+1, $mday, $hour, $min, $sec);
 }
 
+=item hour_str
+
+Method that returns a string representing the current hour.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: hour_str
 # %ARGUMENTS:
@@ -51,6 +78,13 @@ sub hour_str {
     ($sec, $min, $hour, $mday, $mon, $year, $junk) = localtime(time());
     return sprintf('%04d-%02d-%02d-%02d', $year+1900, $mon+1, $mday, $hour);
 }
+
+=item synthesize_received_header
+
+Method that synthesizes a valid Received: header to reflect re-mailing.
+Needed by Apache SpamAssassin to correctly parse email messages.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: synthesize_received_header
@@ -90,6 +124,13 @@ sub synthesize_received_header {
     return $hdr;
 }
 
+=item copy_or_link
+
+Method that copies a file if it fails to create an hard link
+to the original file.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: copy_or_link
 # %ARGUMENTS:
@@ -120,6 +161,13 @@ sub copy_or_link {
     return 1;
 }
 
+=item read_results
+
+Method that extracts an array of command, key, values from RESULTS file,
+needed for regression tests.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: read_results
 # %ARGUMENTS:
@@ -143,6 +191,13 @@ sub read_results
   undef $fh;
   return @res;
 }
+
+=item re_match
+
+Method that returns 1 if either Content-Disposition.filename or
+Content-Type.name matches the regexp; 0 otherwise.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: re_match
@@ -174,6 +229,13 @@ sub re_match {
 
   return 0;
 }
+
+=item re_match_ext
+
+Method that returns 1 if the EXTENSION part of either
+Content-Disposition.filename or Content-Type.name matches regexp; 0 otherwise.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: re_match_ext
@@ -207,13 +269,20 @@ sub re_match_ext {
   return 0;
 }
 
+=item re_match_in_rar_directory
+
+Method that returns 1 if the EXTENSION part of any file in the rar archive
+matches regexp.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: re_match_in_rar_directory
 # %ARGUMENTS:
 #  fname -- name of RAR file
 #  regexp -- a regular expression
 # %RETURNS:
-#  1 if the EXTENSION part of any file in the zip archive matches regexp
+#  1 if the EXTENSION part of any file in the rar archive matches regexp
 #  Matching is case-insensitive.
 # %DESCRIPTION:
 #  A helper function for filter.
@@ -248,13 +317,20 @@ sub re_match_in_rar_directory {
   return 0;
 }
 
+=item re_match_in_7zip_directory
+
+Method that returns 1 if the EXTENSION part of any file in the 7zip archive
+matches regexp.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: re_match_in_7zip_directory
 # %ARGUMENTS:
 #  fname -- name of 7zip file
 #  regexp -- a regular expression
 # %RETURNS:
-#  1 if the EXTENSION part of any file in the zip archive matches regexp
+#  1 if the EXTENSION part of any file in the 7zip archive matches regexp
 #  Matching is case-insensitive.
 # %DESCRIPTION:
 #  A helper function for filter.
@@ -289,6 +365,13 @@ sub re_match_in_7zip_directory {
 
   return 0;
 }
+
+=item re_match_in_zip_directory
+
+Method that returns 1 if the EXTENSION part of any file in the zip archive
+matches regexp.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: re_match_in_zip_directory
@@ -325,6 +408,13 @@ sub re_match_in_zip_directory {
 }
 use strict 'subs';
 
+=item md_copy_orig_msg_to_work_dir_as_mbox_file
+
+Method that copies original INPUTMSG file into work directory for virus-scanning
+as a valid mbox file.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: md_copy_orig_msg_to_work_dir_as_mbox_file
 # %ARGUMENTS:
@@ -357,5 +447,9 @@ sub md_copy_orig_msg_to_work_dir_as_mbox_file {
   close(OUT);
   return 1;
 }
+
+=back
+
+=cut
 
 1;

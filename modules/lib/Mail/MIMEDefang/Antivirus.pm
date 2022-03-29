@@ -3,6 +3,22 @@
 # Public License, Version 2.
 #
 
+=head1 NAME
+
+Mail::MIMEDefang::Antivirus - Antivirus interface methods for email filters
+
+=head1 DESCRIPTION
+
+Mail::MIMEDefang::Antivirus are a set of methods that can be called
+from F<mimedefang-filter> to scan with installed antivirus
+software the email message.
+
+=head1 METHODS
+
+=over 4
+
+=cut
+
 package Mail::MIMEDefang::Antivirus;
 
 use strict;
@@ -46,6 +62,12 @@ our @EXPORT_OK;
                 scan_file_using_fprotd_v6 scan_file_using_carrier_scan
                 );
 
+=item message_contains_virus
+
+Method that scans a message using every installed virus scanner.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: message_contains_virus
 # %ARGUMENTS:
@@ -82,6 +104,12 @@ sub message_contains_virus {
   pop_status_tag();
   return (wantarray ? ($code, $category, $action) : $code);
 }
+
+=item entity_contains_virus
+
+Method that scans a C<MIME::Entity> part using every installed virus scanner.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: entity_contains_virus
@@ -120,6 +148,14 @@ sub entity_contains_virus {
   pop_status_tag();
   return (wantarray ? ($code, $category, $action) : $code);
 }
+
+=item initialize_virus_scanner_routines
+
+Method that sets C<@VirusScannerMessageRoutines> and
+C<@VirusScannerEntityRoutines> to arrays of virus-scanner routines to call,
+based on installed scanners.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: initialize_virus_scanner_routines
@@ -2930,6 +2966,12 @@ sub interpret_nod32_code {
     return ($code, 'swerr', 'tempfail');
 }
 
+=item run_virus_scanner
+
+Method that runs a virus scanner, collecting output in C<$VirusScannerMessages>.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: run_virus_scanner
 # %ARGUMENTS:
@@ -2978,3 +3020,9 @@ sub run_virus_scanner {
     $CurrentVirusScannerMessage = $msg;
     return ($retcode, 'ok', 'proceed');
 }
+
+=back
+
+=cut
+
+1;

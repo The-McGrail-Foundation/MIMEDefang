@@ -140,13 +140,41 @@ lib/manpages:
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang.pm modules/man/Mail::MIMEDefang.3p
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
-		--center="Mail::MIMEDefang Documentation" \
+		--center="Mail::MIMEDefang::Actions Documentation" \
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/Actions.pm modules/man/Mail::MIMEDefang::Actions.3p
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
-		--center="Mail::MIMEDefang Documentation" \
+		--center="Mail::MIMEDefang::Antispam Documentation" \
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/Antispam.pm modules/man/Mail::MIMEDefang::Antispam.3p
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
+		--center="Mail::MIMEDefang::Antivirus Documentation" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang/Antivirus.pm modules/man/Mail::MIMEDefang::Antivirus.3p
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
+		--center="Mail::MIMEDefang::Mail Documentation" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang/Mail.pm modules/man/Mail::MIMEDefang::Mail.3p
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
+		--center="Mail::MIMEDefang::MIME Documentation" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang/MIME.pm modules/man/Mail::MIMEDefang::MIME.3p
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
+		--center="Mail::MIMEDefang::Net Documentation" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang/Net.pm modules/man/Mail::MIMEDefang::Net.3p
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
+		--center="Mail::MIMEDefang::RFC2822 Documentation" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang/RFC2822.pm modules/man/Mail::MIMEDefang::RFC2822.3p
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
+		--center="Mail::MIMEDefang::Unit Documentation" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang/Unit.pm modules/man/Mail::MIMEDefang::Unit.3p
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
+		--center="Mail::MIMEDefang::Utils Documentation" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang/Utils.pm modules/man/Mail::MIMEDefang::Utils.3p
 
 distclean:: clean
 	rm -f config.log config.status Makefile config.cache config.h mimedefang.pl \

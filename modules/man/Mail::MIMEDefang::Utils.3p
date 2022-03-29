@@ -132,72 +132,59 @@
 .rm #[ #] #H #V #F C
 .\" ========================================================================
 .\"
-.IX Title "modules::lib::Mail::MIMEDefang::Antispam 3p"
-.TH modules::lib::Mail::MIMEDefang::Antispam 3p "2022-03-29" "2.86" "Mail::MIMEDefang::Antispam Documentation"
+.IX Title "modules::lib::Mail::MIMEDefang::Utils 3p"
+.TH modules::lib::Mail::MIMEDefang::Utils 3p "2022-03-29" "2.86" "Mail::MIMEDefang::Utils Documentation"
 .\" For nroff, turn off justification.  Always turn off hyphenation; it makes
 .\" way too many mistakes in technical documents.
 .if n .ad l
 .nh
 .SH "NAME"
-Mail::MIMEDefang::Antispam \- antispam related methods for email filters
+Mail::MIMEDefang::Utils \- Support methods used internally or by email filters
 .SH "DESCRIPTION"
 .IX Header "DESCRIPTION"
-Mail::MIMEDefang::Antispam are a set of methods that can be called
-from \fImimedefang-filter\fR to check email messages with antispam softwares.
+Mail::MIMEDefang::Utils are a set of methods that can be called
+from \fImimedefang-filter\fR or by other methods.
 .SH "METHODS"
 .IX Header "METHODS"
-.IP "spam_assassin_is_spam" 4
-.IX Item "spam_assassin_is_spam"
-Method that scans a mmessage using SpamAssassin and returns True if the email
-message has been detected as spam.
-.IP "spam_assassin_check" 4
-.IX Item "spam_assassin_check"
-Method that scans a message using SpamAssassin and returns an array of four
-elements,
-.RS 4
-.IP "\(bu" 4
-Weight of message ('hits')
-.IP "\(bu" 4
-Number of hits required before \s-1SA\s0 considers a message spam
-.IP "\(bu" 4
-Comma separated list of symbolic test names that were triggered
-.IP "\(bu" 4
-A 'report' string, detailing tests that failed and their weights
-.RE
-.RS 4
-.RE
-.IP "spam_assassin_status" 4
-.IX Item "spam_assassin_status"
-Method that scans a mmessage using SpamAssassin and returns a
-\&\f(CW\*(C`Mail::SpamAssassin:PerMsgStatus\*(C'\fR object.
-The caller is responsible for calling the \f(CW\*(C`finish\*(C'\fR method.
-.IP "spam_assassin_init" 4
-.IX Item "spam_assassin_init"
-Initialize Apache SpamAssassin and returns a \f(CW\*(C`Mail::SpamAssassin\*(C'\fR object.
-.IP "spam_assassin_mail" 4
-.IX Item "spam_assassin_mail"
-Method that calls SpamAssassin and returns
-a \f(CW\*(C`Mail::SpamAssassin::Message\*(C'\fR object.
-.IP "rspamd_check" 4
-.IX Item "rspamd_check"
-Method that scans the message using Rspamd and returns an array of six elemets:
-.RS 4
-.IP "\(bu" 4
-Weight of message ('hits')
-.IP "\(bu" 4
-Number of hits required before Rspamd considers a message spam
-.IP "\(bu" 4
-Comma separated list of symbolic test names that were triggered
-.IP "\(bu" 4
-A 'report' string, detailing tests that failed and their weights
-  or a Json report if \s-1JSON\s0 and \s-1LWP\s0 modules are present
-.IP "\(bu" 4
-An action that should be applied to the email
-.IP "\(bu" 4
-A flag explaining if the email is a spam message or not (true/false).
-.RE
-.RS 4
-.Sp
-An optional rspamd url can be passed to the method, its default value
-is http://127.0.0.1:11333.
-.RE
+.IP "time_str" 4
+.IX Item "time_str"
+Method that returns a string representing the current time.
+.IP "hour_str" 4
+.IX Item "hour_str"
+Method that returns a string representing the current hour.
+.IP "synthesize_received_header" 4
+.IX Item "synthesize_received_header"
+Method that synthesizes a valid Received: header to reflect re-mailing.
+Needed by Apache SpamAssassin to correctly parse email messages.
+.IP "copy_or_link" 4
+.IX Item "copy_or_link"
+Method that copies a file if it fails to create an hard link
+to the original file.
+.IP "read_results" 4
+.IX Item "read_results"
+Method that extracts an array of command, key, values from \s-1RESULTS\s0 file,
+needed for regression tests.
+.IP "re_match" 4
+.IX Item "re_match"
+Method that returns 1 if either Content\-Disposition.filename or
+Content\-Type.name matches the regexp; 0 otherwise.
+.IP "re_match_ext" 4
+.IX Item "re_match_ext"
+Method that returns 1 if the \s-1EXTENSION\s0 part of either
+Content\-Disposition.filename or Content\-Type.name matches regexp; 0 otherwise.
+.IP "re_match_in_rar_directory" 4
+.IX Item "re_match_in_rar_directory"
+Method that returns 1 if the \s-1EXTENSION\s0 part of any file in the rar archive
+matches regexp.
+.IP "re_match_in_7zip_directory" 4
+.IX Item "re_match_in_7zip_directory"
+Method that returns 1 if the \s-1EXTENSION\s0 part of any file in the 7zip archive
+matches regexp.
+.IP "re_match_in_zip_directory" 4
+.IX Item "re_match_in_zip_directory"
+Method that returns 1 if the \s-1EXTENSION\s0 part of any file in the zip archive
+matches regexp.
+.IP "md_copy_orig_msg_to_work_dir_as_mbox_file" 4
+.IX Item "md_copy_orig_msg_to_work_dir_as_mbox_file"
+Method that copies original \s-1INPUTMSG\s0 file into work directory for virus-scanning
+as a valid mbox file.

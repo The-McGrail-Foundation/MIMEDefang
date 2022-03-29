@@ -3,6 +3,21 @@
 # Public License, Version 2.
 #
 
+=head1 NAME
+
+Mail::MIMEDefang::Unit - Methods used by MIMEDefang regression tests
+
+=head1 DESCRIPTION
+
+Mail::MIMEDefang::Unit are a set of methods that are called from MIMEDefang
+regression tests.
+
+=head1 METHODS
+
+=over 4
+
+=cut
+
 package Mail::MIMEDefang::Unit;
 
 use strict;
@@ -13,6 +28,12 @@ use base qw( Test::Class );
 use Net::SMTP;
 use Test::Most;
 
+=item include_mimedefang
+
+Method that includes F<mimedefang.pl.in> code without running anything.
+
+=cut
+
 # This bit of evil is how we pull in MIMEDefang's .pl code without running anything.
 sub include_mimedefang : Test(startup)
 {
@@ -22,6 +43,12 @@ sub include_mimedefang : Test(startup)
 	do './mimedefang.pl.in';
 	use warnings 'redefine';
 }
+
+=item smtp_mail
+
+Method which sends a test email and returns SMTP replies.
+
+=cut
 
 sub smtp_mail
 {
@@ -56,5 +83,9 @@ sub smtp_mail
   undef $fh;
   return $messages;
 }
+
+=back
+
+=cut
 
 1;

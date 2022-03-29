@@ -3,6 +3,21 @@
 # Public License, Version 2.
 #
 
+=head1 NAME
+
+Mail::MIMEDefang::Mail - Mail and SMTP related methods for email filters
+
+=head1 DESCRIPTION
+
+Mail::MIMEDefang::Mail are a set of methods that can be called
+from F<mimedefang-filter> to send email messages or to run SMTP checks.
+
+=head1 METHODS
+
+=over 4
+
+=cut
+
 package Mail::MIMEDefang::Mail;
 
 use strict;
@@ -19,6 +34,13 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw( resend_message_one_recipient resend_message_specifying_mode
                   resend_message pretty_print_mail md_check_against_smtp_server );
 
+=item resend_message_one_recipient
+
+Method that re-sends the message as if it came from original sender to
+a single recipient.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: resend_message_one_recipient
 # %ARGUMENTS:
@@ -34,6 +56,13 @@ sub resend_message_one_recipient {
 	my($recip, $deliverymode) = @_;
 	return resend_message_specifying_mode($deliverymode, [ $recip ]);
 }
+
+=item resend_message_specifying_mode
+
+Method that re-sends the message as if it came from original sender to
+a list of recipients.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: resend_message_specifying_mode
@@ -124,6 +153,13 @@ sub resend_message_specifying_mode {
   # NOTREACHED
 }
 
+=item resend_message
+
+Method that re-sends the message as if it came from original sender to
+a list of recipients.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: resend_message
 # %ARGUMENTS:
@@ -140,6 +176,13 @@ sub resend_message {
   @recips = @_;
   return resend_message_specifying_mode("-odd", \@recips);
 }
+
+=item pretty_print_mail
+
+Method that makes a pretty-printed version of the e-mail body no longer
+than size characters.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: pretty_print_mail
@@ -187,6 +230,14 @@ sub pretty_print_mail {
   }
   return $chunk;
 }
+
+=item get_smtp_return_code
+
+Method that reads return codes from SMTP server, returns a four-element
+list:(retval, code, dsn, text), where code is a 3-digit SMTP code.
+Retval is 'CONTINUE', 'TEMPFAIL' or 'REJECT'.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: get_smtp_return_code
@@ -246,6 +297,26 @@ sub get_smtp_return_code {
   return ('TEMPFAIL', "451", "4.3.0", $msg );
 }
 
+=item get_smtp_extensions
+
+Method that checks SMTP server's supported extensions.
+It expects EHLO to have been sent already (artifact of get_smtp_return_code).
+The sub returns a four-element list:(retval, code, dsn, exts)
+
+=over 4
+
+=item * retval is 'CONTINUE', 'TEMPFAIL', or 'REJECT'.
+
+=item * code is a 3-digit SMTP code.
+
+=item * dsn is an extended SMTP status code
+
+=item * exts is a hash of EXTNAME->EXTOPTS
+
+=back
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: get_smtp_extensions
 # %ARGUMENTS:
@@ -296,6 +367,24 @@ sub get_smtp_extensions {
   $code =~ m/4../ and return ('TEMPFAIL', "$code", "4.0.0", %exts );
   $code =~ m/5../ and return ('REJECT', "$code", "5.0.0", %exts );
 }
+
+=item md_check_against_smtp_server
+
+Method that verifies a recipient against another SMTP server by issuing a
+HELO / MAIL FROM: / RCPT TO: / QUIT sequence.
+The method returns:
+
+=over 4
+
+=item * ('CONTINUE', "OK") if recipient is OK
+
+=item * ('TEMPFAIL', "err") if temporary failure
+
+=item * ('REJECT', "err") if recipient is not OK.
+
+=back
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: md_check_against_smtp_server
@@ -465,5 +554,9 @@ sub md_check_against_smtp_server {
   $sock->close();
   return ($retval, $text, $code, $dsn);
 }
+
+=back
+
+=cut
 
 1;

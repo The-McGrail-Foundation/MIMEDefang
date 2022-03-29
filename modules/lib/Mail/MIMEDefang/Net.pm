@@ -3,6 +3,21 @@
 # Public License, Version 2.
 #
 
+=head1 NAME
+
+Mail::MIMEDefang::Net - Network related methods for email filters
+
+=head1 DESCRIPTION
+
+Mail::MIMEDefang::Net are a set of methods that can be called
+from F<mimedefang-filter> to call network related services.
+
+=head1 METHODS
+
+=over 4
+
+=cut
+
 package Mail::MIMEDefang::Net;
 
 use strict;
@@ -19,6 +34,13 @@ our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_black_l
                  relay_is_blacklisted_multi relay_is_blacklisted_multi_count relay_is_blacklisted_multi_list
                  is_public_ip4_address md_get_bogus_mx_hosts get_mx_ip_addresses);
 our @EXPORT_OK = qw(get_host_name);
+
+=item expand_ipv6_address
+
+Method that returns an IPv6 address with all zero fields explicitly expanded,
+any field shorter than 4 hex digits will be padded with zeros.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: expand_ipv6_address
@@ -52,6 +74,12 @@ sub expand_ipv6_address {
   return join(':', map { (length($_) < 4 ? ('0' x (4-length($_)) . $_) : $_) } (split(/:/, $addr)));
 }
 
+=item reverse_ip_address_for_rbl
+
+Method that returns the ip address in the appropriately-reversed format used
+for RBL lookups.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: reverse_ip_address_for_rbl
@@ -69,6 +97,14 @@ sub reverse_ip_address_for_rbl {
   }
   return join('.', reverse(split(/\./, $addr)));
 }
+
+=item relay_is_blacklisted
+
+Method that returns the result of the lookup (eg 127.0.0.2).
+Parameters are the ip address of the relay host and the domain of the
+rbl server.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: relay_is_blacklisted
@@ -119,6 +155,7 @@ sub get_host_name {
 Returns true if $ip_addr is a publicly-routable IPv4 address, false otherwise
 
 =cut
+
 sub is_public_ip4_address {
 	my ($addr) = @_;
 	my @octets = split(/\./, $addr);
@@ -164,13 +201,13 @@ sub is_public_ip4_address {
 	return 1;
 }
 
-
 =item get_mx_ip_addresses $domain [$resolver_object]
 
 Get IP addresses of all MX hosts for given domain.  If there are
 no MX hosts, then return A records.
 
 =cut
+
 sub get_mx_ip_addresses {
 	my($domain, $res) = @_;
 	my @results;
@@ -257,6 +294,15 @@ sub md_get_bogus_mx_hosts {
 	}
 	return @bogus_hosts;
 }
+
+=item relay_is_blacklisted_multi
+
+Method that rerurns a hash table with one entry per original domain.
+Entries in hash will be:
+C<{ $domain =<gt> $return }>, where $return is one of SERVFAIL, NXDOMAIN or
+a list of IP addresses as a dotted-quad.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: relay_is_blacklisted_multi
@@ -349,6 +395,13 @@ sub relay_is_blacklisted_multi {
   return $ans;
 }
 
+=item relay_is_blacklisted_multi_count
+
+Method that returns a number indicating how many RBLs the host
+was blacklisted in.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: relay_is_blacklisted_multi_count
 # %ARGUMENTS:
@@ -379,6 +432,13 @@ sub relay_is_blacklisted_multi_count {
   }
   return $count;
 }
+
+=item relay_is_blacklisted_multi_list
+
+Method that returns an array indicating the domains in which
+the relay is blacklisted.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: relay_is_blacklisted_multi_list
@@ -413,5 +473,9 @@ sub relay_is_blacklisted_multi_list {
   # array reference.
   return (wantarray ? @$result : $result);
 }
+
+=back
+
+=cut
 
 1;

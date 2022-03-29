@@ -3,6 +3,21 @@
 # Public License, Version 2.
 #
 
+=head1 NAME
+
+Mail::MIMEDefang::MIME - MIME objects interface methods for email filters
+
+=head1 DESCRIPTION
+
+Mail::MIMEDefang::MIME are a set of methods that can be called
+from F<mimedefang-filter> to operate on MIME objects.
+
+=head1 METHODS
+
+=over 4
+
+=cut
+
 package Mail::MIMEDefang::MIME;
 
 require Exporter;
@@ -29,6 +44,13 @@ sub builtin_create_parser {
     $parser->tmp_to_core(0);
     return $parser;
 }
+
+=item rebuild_entity
+
+Method that descends through input entity and rebuilds an output entity.
+The various parts of the input entity may be modified (or even deleted).
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: rebuild_entity
@@ -111,6 +133,12 @@ sub rebuild_entity {
   }
 }
 
+=item collect_parts
+
+Method that adds parts to the array C<@FlatParts> for flattening.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: collect_parts
 # %ARGUMENTS:
@@ -139,9 +167,7 @@ sub collect_parts {
   }
 }
 
-=pod
-
-=head2  takeStabAtFilename ( $entity )
+=item  takeStabAtFilename ( $entity )
 
 Makes a guess at a filename for the attachment.  Calls MIME::Head's
 recommended_filename() method, which tries 'Content-Disposition.filename'and if
@@ -164,6 +190,13 @@ sub takeStabAtFilename
 
 	return '';
 }
+
+=item find_part
+
+Method that returns the first MIME entity of type C<$content_type>,
+C<undef> if none exists.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: find_part
@@ -202,6 +235,12 @@ sub find_part {
   return undef;
 }
 
+=item append_to_part
+
+Method that appends text to C<$part>
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: append_to_part
 # %ARGUMENTS:
@@ -223,6 +262,14 @@ sub append_to_part {
   $Changed = 1;
   return 1;
 }
+
+=item remove_redundant_html_parts
+
+Method that rebuilds the email message without redundant HTML parts.
+That is, if a multipart/alternative entity contains text/plain and text/html
+parts, the text/html part will be removed.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: remove_redundant_html_parts
@@ -309,6 +356,13 @@ sub html_end {
   print OUT $text;
 }
 
+=item append_to_html_part
+
+Method that appends text to the spicified mime part, but does so by
+parsing HTML and adding the text before </body> or </html> tags.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: append_to_html_part
 # %ARGUMENTS:
@@ -361,6 +415,12 @@ sub append_to_html_part {
   return 1;
 }
 
+=item append_text_boilerplate
+
+Method that appends text to text/plain part or parts.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: append_text_boilerplate
 # %ARGUMENTS:
@@ -399,6 +459,14 @@ sub append_text_boilerplate {
   }
   return $ok;
 }
+
+=item append_html_boilerplate
+
+Method that appends text to text/html part or parts.
+It tries to be clever and inserts the text before the </body> tag
+to be able of being seen.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: append_html_boilerplate
@@ -440,5 +508,9 @@ sub append_html_boilerplate {
   }
   return $ok;
 }
+
+=back
+
+=cut
 
 1;

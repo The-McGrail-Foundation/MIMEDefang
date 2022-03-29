@@ -132,72 +132,58 @@
 .rm #[ #] #H #V #F C
 .\" ========================================================================
 .\"
-.IX Title "modules::lib::Mail::MIMEDefang::Antispam 3p"
-.TH modules::lib::Mail::MIMEDefang::Antispam 3p "2022-03-29" "2.86" "Mail::MIMEDefang::Antispam Documentation"
+.IX Title "modules::lib::Mail::MIMEDefang::Net 3p"
+.TH modules::lib::Mail::MIMEDefang::Net 3p "2022-03-29" "2.86" "Mail::MIMEDefang::Net Documentation"
 .\" For nroff, turn off justification.  Always turn off hyphenation; it makes
 .\" way too many mistakes in technical documents.
 .if n .ad l
 .nh
 .SH "NAME"
-Mail::MIMEDefang::Antispam \- antispam related methods for email filters
+Mail::MIMEDefang::Net \- Network related methods for email filters
 .SH "DESCRIPTION"
 .IX Header "DESCRIPTION"
-Mail::MIMEDefang::Antispam are a set of methods that can be called
-from \fImimedefang-filter\fR to check email messages with antispam softwares.
+Mail::MIMEDefang::Net are a set of methods that can be called
+from \fImimedefang-filter\fR to call network related services.
 .SH "METHODS"
 .IX Header "METHODS"
-.IP "spam_assassin_is_spam" 4
-.IX Item "spam_assassin_is_spam"
-Method that scans a mmessage using SpamAssassin and returns True if the email
-message has been detected as spam.
-.IP "spam_assassin_check" 4
-.IX Item "spam_assassin_check"
-Method that scans a message using SpamAssassin and returns an array of four
-elements,
-.RS 4
-.IP "\(bu" 4
-Weight of message ('hits')
-.IP "\(bu" 4
-Number of hits required before \s-1SA\s0 considers a message spam
-.IP "\(bu" 4
-Comma separated list of symbolic test names that were triggered
-.IP "\(bu" 4
-A 'report' string, detailing tests that failed and their weights
-.RE
-.RS 4
-.RE
-.IP "spam_assassin_status" 4
-.IX Item "spam_assassin_status"
-Method that scans a mmessage using SpamAssassin and returns a
-\&\f(CW\*(C`Mail::SpamAssassin:PerMsgStatus\*(C'\fR object.
-The caller is responsible for calling the \f(CW\*(C`finish\*(C'\fR method.
-.IP "spam_assassin_init" 4
-.IX Item "spam_assassin_init"
-Initialize Apache SpamAssassin and returns a \f(CW\*(C`Mail::SpamAssassin\*(C'\fR object.
-.IP "spam_assassin_mail" 4
-.IX Item "spam_assassin_mail"
-Method that calls SpamAssassin and returns
-a \f(CW\*(C`Mail::SpamAssassin::Message\*(C'\fR object.
-.IP "rspamd_check" 4
-.IX Item "rspamd_check"
-Method that scans the message using Rspamd and returns an array of six elemets:
-.RS 4
-.IP "\(bu" 4
-Weight of message ('hits')
-.IP "\(bu" 4
-Number of hits required before Rspamd considers a message spam
-.IP "\(bu" 4
-Comma separated list of symbolic test names that were triggered
-.IP "\(bu" 4
-A 'report' string, detailing tests that failed and their weights
-  or a Json report if \s-1JSON\s0 and \s-1LWP\s0 modules are present
-.IP "\(bu" 4
-An action that should be applied to the email
-.IP "\(bu" 4
-A flag explaining if the email is a spam message or not (true/false).
-.RE
-.RS 4
-.Sp
-An optional rspamd url can be passed to the method, its default value
-is http://127.0.0.1:11333.
-.RE
+.IP "expand_ipv6_address" 4
+.IX Item "expand_ipv6_address"
+Method that returns an IPv6 address with all zero fields explicitly expanded,
+any field shorter than 4 hex digits will be padded with zeros.
+.IP "reverse_ip_address_for_rbl" 4
+.IX Item "reverse_ip_address_for_rbl"
+Method that returns the ip address in the appropriately-reversed format used
+for \s-1RBL\s0 lookups.
+.IP "relay_is_blacklisted" 4
+.IX Item "relay_is_blacklisted"
+Method that returns the result of the lookup (eg 127.0.0.2).
+Parameters are the ip address of the relay host and the domain of the
+rbl server.
+.ie n .IP "is_public_ip4_address $ip_addr" 4
+.el .IP "is_public_ip4_address \f(CW$ip_addr\fR" 4
+.IX Item "is_public_ip4_address $ip_addr"
+Returns true if \f(CW$ip_addr\fR is a publicly-routable IPv4 address, false otherwise
+.ie n .IP "get_mx_ip_addresses $domain [$resolver_object]" 4
+.el .IP "get_mx_ip_addresses \f(CW$domain\fR [$resolver_object]" 4
+.IX Item "get_mx_ip_addresses $domain [$resolver_object]"
+Get \s-1IP\s0 addresses of all \s-1MX\s0 hosts for given domain.  If there are
+no \s-1MX\s0 hosts, then return A records.
+.ie n .IP "md_get_bogus_mx_hosts $domain" 4
+.el .IP "md_get_bogus_mx_hosts \f(CW$domain\fR" 4
+.IX Item "md_get_bogus_mx_hosts $domain"
+Returns a list of \*(L"bogus\*(R" \s-1IP\s0 addresses that are in \f(CW$domain\fR's list of \s-1MX\s0
+records.  A \*(L"bogus\*(R" \s-1IP\s0 address is loopback/private/multicast/etc.
+.IP "relay_is_blacklisted_multi" 4
+.IX Item "relay_is_blacklisted_multi"
+Method that rerurns a hash table with one entry per original domain.
+Entries in hash will be:
+\&\f(CW\*(C`{ $domain =<gt\*(C'\fR \f(CW$return\fR }>, where \f(CW$return\fR is one of \s-1SERVFAIL, NXDOMAIN\s0 or
+a list of \s-1IP\s0 addresses as a dotted-quad.
+.IP "relay_is_blacklisted_multi_count" 4
+.IX Item "relay_is_blacklisted_multi_count"
+Method that returns a number indicating how many RBLs the host
+was blacklisted in.
+.IP "relay_is_blacklisted_multi_list" 4
+.IX Item "relay_is_blacklisted_multi_list"
+Method that returns an array indicating the domains in which
+the relay is blacklisted.

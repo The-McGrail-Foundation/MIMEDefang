@@ -3,6 +3,21 @@
 # Public License, Version 2.
 #
 
+=head1 NAME
+
+Mail::MIMEDefang::RFC2822 - Dates related methods for email filters
+
+=head1 DESCRIPTION
+
+Mail::MIMEDefang::RFC2822 are a set of methods that can be called
+from F<mimedefang-filter> to create RFC2822 formatted dates.
+
+=head1 METHODS
+
+=over 4
+
+=cut
+
 package Mail::MIMEDefang::RFC2822;
 
 use strict;
@@ -14,6 +29,12 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(gen_date_msgid_headers);
 our @EXPORT_OK = qw(header_timezone rfc2822_date gen_msgid_header);
+
+=item gen_date_msgid_headers
+
+Method that generates RFC2822 compliant Date and Message-ID headers.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: gen_date_msgid_headers
@@ -28,6 +49,12 @@ sub gen_date_msgid_headers {
   my ($msgid_header) = @_;
   return "Date: " . rfc2822_date() . "\n" . $msgid_header;
 }
+
+=item rfc2822_date
+
+Method that returns an RFC2822 formatted date.
+
+=cut
 
 sub rfc2822_date
 {
@@ -46,6 +73,12 @@ sub rfc2822_date
 		header_timezone($CachedTimezone, $now)
 	);
 }
+
+=item header_timezone
+
+Method that returns an RFC2822 compliant timezone header.
+
+=cut
 
 sub header_timezone
 {
@@ -67,6 +100,12 @@ sub header_timezone
     }
     return $CachedTimezone;
 }
+
+=item gen_msgid_header
+
+Method that generates RFC2822 compliant Message-ID headers.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: gen_msgid_header
@@ -95,5 +134,9 @@ sub gen_msgid_header {
 		$hostname
 	);
 }
+
+=back
+
+=cut
 
 1;

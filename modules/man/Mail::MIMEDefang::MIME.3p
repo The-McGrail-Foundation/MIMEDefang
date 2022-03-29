@@ -132,72 +132,56 @@
 .rm #[ #] #H #V #F C
 .\" ========================================================================
 .\"
-.IX Title "modules::lib::Mail::MIMEDefang::Antispam 3p"
-.TH modules::lib::Mail::MIMEDefang::Antispam 3p "2022-03-29" "2.86" "Mail::MIMEDefang::Antispam Documentation"
+.IX Title "modules::lib::Mail::MIMEDefang::MIME 3p"
+.TH modules::lib::Mail::MIMEDefang::MIME 3p "2022-03-29" "2.86" "Mail::MIMEDefang::MIME Documentation"
 .\" For nroff, turn off justification.  Always turn off hyphenation; it makes
 .\" way too many mistakes in technical documents.
 .if n .ad l
 .nh
 .SH "NAME"
-Mail::MIMEDefang::Antispam \- antispam related methods for email filters
+Mail::MIMEDefang::MIME \- MIME objects interface methods for email filters
 .SH "DESCRIPTION"
 .IX Header "DESCRIPTION"
-Mail::MIMEDefang::Antispam are a set of methods that can be called
-from \fImimedefang-filter\fR to check email messages with antispam softwares.
+Mail::MIMEDefang::MIME are a set of methods that can be called
+from \fImimedefang-filter\fR to operate on \s-1MIME\s0 objects.
 .SH "METHODS"
 .IX Header "METHODS"
-.IP "spam_assassin_is_spam" 4
-.IX Item "spam_assassin_is_spam"
-Method that scans a mmessage using SpamAssassin and returns True if the email
-message has been detected as spam.
-.IP "spam_assassin_check" 4
-.IX Item "spam_assassin_check"
-Method that scans a message using SpamAssassin and returns an array of four
-elements,
-.RS 4
-.IP "\(bu" 4
-Weight of message ('hits')
-.IP "\(bu" 4
-Number of hits required before \s-1SA\s0 considers a message spam
-.IP "\(bu" 4
-Comma separated list of symbolic test names that were triggered
-.IP "\(bu" 4
-A 'report' string, detailing tests that failed and their weights
-.RE
-.RS 4
-.RE
-.IP "spam_assassin_status" 4
-.IX Item "spam_assassin_status"
-Method that scans a mmessage using SpamAssassin and returns a
-\&\f(CW\*(C`Mail::SpamAssassin:PerMsgStatus\*(C'\fR object.
-The caller is responsible for calling the \f(CW\*(C`finish\*(C'\fR method.
-.IP "spam_assassin_init" 4
-.IX Item "spam_assassin_init"
-Initialize Apache SpamAssassin and returns a \f(CW\*(C`Mail::SpamAssassin\*(C'\fR object.
-.IP "spam_assassin_mail" 4
-.IX Item "spam_assassin_mail"
-Method that calls SpamAssassin and returns
-a \f(CW\*(C`Mail::SpamAssassin::Message\*(C'\fR object.
-.IP "rspamd_check" 4
-.IX Item "rspamd_check"
-Method that scans the message using Rspamd and returns an array of six elemets:
-.RS 4
-.IP "\(bu" 4
-Weight of message ('hits')
-.IP "\(bu" 4
-Number of hits required before Rspamd considers a message spam
-.IP "\(bu" 4
-Comma separated list of symbolic test names that were triggered
-.IP "\(bu" 4
-A 'report' string, detailing tests that failed and their weights
-  or a Json report if \s-1JSON\s0 and \s-1LWP\s0 modules are present
-.IP "\(bu" 4
-An action that should be applied to the email
-.IP "\(bu" 4
-A flag explaining if the email is a spam message or not (true/false).
-.RE
-.RS 4
+.IP "rebuild_entity" 4
+.IX Item "rebuild_entity"
+Method that descends through input entity and rebuilds an output entity.
+The various parts of the input entity may be modified (or even deleted).
+.IP "collect_parts" 4
+.IX Item "collect_parts"
+Method that adds parts to the array \f(CW@FlatParts\fR for flattening.
+.ie n .IP "takeStabAtFilename ( $entity )" 4
+.el .IP "takeStabAtFilename ( \f(CW$entity\fR )" 4
+.IX Item "takeStabAtFilename ( $entity )"
+Makes a guess at a filename for the attachment.  Calls MIME::Head's
+\&\fBrecommended_filename()\fR method, which tries 'Content\-Disposition.filename'and if
+not found, 'Content\-Type.name'.
 .Sp
-An optional rspamd url can be passed to the method, its default value
-is http://127.0.0.1:11333.
-.RE
+Returns a MIME-decoded filename, or a blank string if none found.
+.IP "find_part" 4
+.IX Item "find_part"
+Method that returns the first \s-1MIME\s0 entity of type \f(CW$content_type\fR,
+\&\f(CW\*(C`undef\*(C'\fR if none exists.
+.IP "append_to_part" 4
+.IX Item "append_to_part"
+Method that appends text to \f(CW$part\fR
+.IP "remove_redundant_html_parts" 4
+.IX Item "remove_redundant_html_parts"
+Method that rebuilds the email message without redundant \s-1HTML\s0 parts.
+That is, if a multipart/alternative entity contains text/plain and text/html
+parts, the text/html part will be removed.
+.IP "append_to_html_part" 4
+.IX Item "append_to_html_part"
+Method that appends text to the spicified mime part, but does so by
+parsing \s-1HTML\s0 and adding the text before </body> or </html> tags.
+.IP "append_text_boilerplate" 4
+.IX Item "append_text_boilerplate"
+Method that appends text to text/plain part or parts.
+.IP "append_html_boilerplate" 4
+.IX Item "append_html_boilerplate"
+Method that appends text to text/html part or parts.
+It tries to be clever and inserts the text before the </body> tag
+to be able of being seen.
