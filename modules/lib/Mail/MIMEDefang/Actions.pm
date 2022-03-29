@@ -3,6 +3,21 @@
 # Public License, Version 2.
 #
 
+=head1 NAME
+
+Mail::MIMEDefang::Actions - actions methods for email filters
+
+=head1 DESCRIPTION
+
+Mail::MIMEDefang::Actions are a set of methods that can be called
+from C<mimedefang-filter> to accept or reject the email message.
+
+=head1 METHODS
+
+=over 4
+
+=cut
+
 package Mail::MIMEDefang::Actions;
 
 use strict;
@@ -27,6 +42,13 @@ our @EXPORT_OK;
   message_rejected process_added_parts
 };
 
+=item action_rebuild
+
+Sets a flag telling MIMEDefang to rebuild message even if it is
+unchanged.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: action_rebuild
 # %ARGUMENTS:
@@ -41,6 +63,14 @@ sub action_rebuild {
     return undef unless (in_message_context("action_rebuild") && !in_filter_wrapup("action_rebuild"));
     $Rebuild = 1;
 }
+
+=item action_add_entity
+
+Makes a note to add a part to the message.  Parts are *actually* added
+at the end, which lets us correctly handle non-multipart messages or
+multipart/foo where "foo" != "mixed".  Sets the rebuild flag.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: action_add_entity
@@ -64,6 +94,14 @@ sub action_add_entity
 	action_rebuild();
 	return $entity;
 }
+
+=item action_add_part
+
+Makes a note to add a part to the message.  Parts are *actually* added
+at the end, which lets us correctly handle non-multipart messages or
+multipart/foo where "foo" != "mixed".  Sets the rebuild flag.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: action_add_part
@@ -109,6 +147,13 @@ sub action_add_part {
     return action_add_entity($part, $offset);
 }
 
+=item process_added_parts
+
+Actually adds requested parts to entity.  Ensures that entity is
+of type multipart/mixed.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: process_added_parts
 # %ARGUMENTS:
@@ -141,6 +186,14 @@ sub process_added_parts {
     return $entity;
 }
 
+=item action_insert_header
+
+Makes a note for milter to insert a header in the message in the
+specified position.  May not be supported on all versions of Sendmail;
+on unsupported versions, the C milter falls back to action_add_header.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: action_insert_header
 # %ARGUMENTS:
@@ -160,6 +213,12 @@ sub action_insert_header {
     write_result_line('N', $header, $pos, $value);
 }
 
+=item action_add_header
+
+Makes a note for milter to add a header to the message.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: action_add_header
 # %ARGUMENTS:
@@ -175,6 +234,11 @@ sub action_add_header {
     write_result_line('H', $header, $value);
 }
 
+=item action_change_header
+
+Makes a note for milter to change a header in the message.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: action_change_header
@@ -195,6 +259,12 @@ sub action_change_header {
     write_result_line('I', $header, $idx, $value);
 }
 
+=item action_delete_header
+
+Makes a note for milter to delete a header in the message.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: action_delete_header
 # %ARGUMENTS:
@@ -212,6 +282,12 @@ sub action_delete_header {
 
     write_result_line('J', $header, $idx);
 }
+
+=item action_delete_all_headers
+
+Makes a note for milter to delete all instances of header.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: action_delete_all_headers
@@ -251,6 +327,12 @@ sub action_delete_all_headers {
     return 1;
 }
 
+=item action_accept
+
+Makes a note for milter to accept the current part.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: action_accept
 # %ARGUMENTS:
@@ -265,6 +347,13 @@ sub action_accept {
     $Action = "accept";
     return 1;
 }
+
+=item action_accept_with_warning
+
+Makes a note for milter to accept the current part,
+but add a warning to the message.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: action_accept_with_warning
@@ -285,6 +374,13 @@ sub action_accept_with_warning {
     return 1;
 }
 
+=item message_rejected
+
+Method that returns True if message has been rejected
+(with action_bounce or action_tempfail), false otherwise.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: message_rejected
 # %ARGUMENTS:
@@ -299,6 +395,13 @@ sub message_rejected {
 	    defined($Actions{'bounce'})   ||
 	    defined($Actions{'discard'}));
 }
+
+=item action_drop
+
+Makes a note for milter to drop the current part without
+any warning.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: action_drop
@@ -315,6 +418,13 @@ sub action_drop {
     $Action = "drop";
     return 1;
 }
+
+=item action_drop_with_warning
+
+Makes a note for milter to drop the current part
+and add a warning to the message.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: action_drop_with_warning
@@ -333,6 +443,13 @@ sub action_drop_with_warning {
     push(@Warnings, "$msg\n");
     return 1;
 }
+
+=item action_replace_with_warning
+
+Makes a note for milter to drop the current part
+and replace it with a warning.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: action_replace_with_warning
@@ -358,6 +475,13 @@ sub action_replace_with_warning {
  					     Data => [ "$msg\n" ]);
     return 1;
 }
+
+=item action_defang
+
+Makes a note for milter to defang the current part by changing its name,
+filename and possibly MIME type.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: action_defang
@@ -411,6 +535,13 @@ sub action_defang {
     return 1;
 }
 
+=item action_external_filter
+
+Pipes the part through the UNIX command $cmd, and replaces the
+part with the result of running the filter.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: action_external_filter
 # %ARGUMENTS:
@@ -462,6 +593,14 @@ sub action_external_filter {
     $Actions{'external_filter'}++;
     return 1;
 }
+
+=item action_quarantine
+
+Makes a note for milter to drop the current part,
+emails the MIMEDefang administrator a notification,
+and quarantines the part in the quarantine directory.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: action_quarantine
@@ -518,6 +657,13 @@ sub action_quarantine {
     return 1;
 }
 
+=item action_sm_quarantine
+
+Asks Sendmail to quarantine message in mqueue using Sendmail's
+smfi_quarantine facility.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: action_sm_quarantine
 # %ARGUMENTS:
@@ -535,6 +681,12 @@ sub action_sm_quarantine {
     $Actions{'sm_quarantine'} = 1;
     write_result_line("Q", $reason);
 }
+
+=item get_quarantine_dir
+
+Method that returns the configured quarantine directory.
+
+=cut
 
 sub get_quarantine_dir {
 
@@ -599,6 +751,12 @@ sub get_quarantine_dir {
     return $QuarantineSubdir;
 }
 
+=item action_quarantine_entire_message
+
+Method that puts a copy of the entire message in the quarantine directory.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: action_quarantine_entire_message
 # %ARGUMENTS:
@@ -639,6 +797,14 @@ sub action_quarantine_entire_message {
     return 1;
 }
 
+=item action_bounce
+
+Method that Causes the SMTP transaction to fail with an SMTP 554 failure code
+and the specified reply text.
+If code or DSN are omitted or invalid, use 554 and 5.7.1.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: action_bounce
 # %ARGUMENTS:
@@ -665,6 +831,13 @@ sub action_bounce {
     return 1;
 }
 
+=item action_discard
+
+Method that causes the entire message to be silently discarded without without
+notifying anyone.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: action_discard
 # %ARGUMENTS:
@@ -681,6 +854,12 @@ sub action_discard {
     $Actions{'discard'}++;
     return 1;
 }
+
+=item action_notify_sender
+
+Method that sends an email to the sender containing the $msg.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: action_notify_sender
@@ -714,6 +893,12 @@ sub action_notify_sender {
     return 0;
 }
 
+=item action_notify_administrator
+
+Method that sends an email to MIMEDefang administrator containing the $msg.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: action_notify_administrator
 # %ARGUMENTS:
@@ -740,6 +925,13 @@ sub action_notify_administrator {
     return 0;
 }
 
+=item action_tempfail
+
+Method that sends a temporary failure with a 4.x.x SMTP code.
+If code or DSN are omitted or invalid, use 451 and 4.3.0.
+
+=cut
+
 #***********************************************************************
 # %PROCEDURE: action_tempfail
 # %ARGUMENTS:
@@ -763,6 +955,13 @@ sub action_tempfail {
     $Actions{'tempfail'}++;
     return 1;
 }
+
+=item action_replace_with_url
+
+Method that places the part in doc_root/{sha1_of_part}.ext and replaces it with
+a text/plain part giving the URL for pickup.
+
+=cut
 
 #***********************************************************************
 # %PROCEDURE: action_replace_with_url
@@ -835,5 +1034,9 @@ sub action_replace_with_url {
     action_replace_with_warning($msg);
     return 1;
 }
+
+=back
+
+=cut
 
 1;

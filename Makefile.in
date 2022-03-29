@@ -124,7 +124,7 @@ clean:: FORCE
 	rm -f *~ *.o mimedefang mimedefang-multiplexor md-mx-ctrl xs_init.c
 	rm modules/Makefile.old
 
-pod2man:: script/mimedefang-util.1
+pod2man:: script/mimedefang-util.1 lib/MIMEDefang.pm.3 lib/Actions.pm.3
 
 
 script/mimedefang-util.1: script/mimedefang-util
@@ -132,6 +132,20 @@ script/mimedefang-util.1: script/mimedefang-util
 		--center="MIMEDefang Documentation" \
 		--release=$(VERSION) \
 		script/mimedefang-util script/mimedefang-util.1
+
+lib/MIMEDefang.pm.3:
+	mkdir -p modules/man
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
+		--center="Mail::MIMEDefang Documentation" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang.pm modules/man/Mail::MIMEDefang.3p
+
+lib/Actions.pm.3:
+	mkdir -p modules/man
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
+		--center="Mail::MIMEDefang Documentation" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang/Actions.pm modules/man/Mail::MIMEDefang::Actions.3p
 
 distclean:: clean
 	rm -f config.log config.status Makefile config.cache config.h mimedefang.pl \
@@ -141,7 +155,7 @@ distclean:: clean
 	mimedefang-notify.7 \
 	mimedefang.8 mimedefang.pl.8 md-mx-ctrl.8 watch-mimedefang \
 	redhat/mimedefang-init redhat/mimedefang-spec redhat/mimedefang-sysconfig \
-	script/mimedefang-util.1
+	script/mimedefang-util.1 modules/man/Mail::MIMEDefang.3p modules/man/Mail::MIMEDefang::Actions.3p
 
 install-redhat: install
 	$(INSTALL) -m 755 -d $(DESTDIR)${sysconfdir}/rc.d/init.d
@@ -213,6 +227,8 @@ install: all
 	$(INSTALL) -m 755 mimedefang.pl            $(DESTDIR)$(prefix)/bin/mimedefang.pl
 	$(INSTALL) -m 755 script/mimedefang-util   $(DESTDIR)$(prefix)/bin/mimedefang-util
 	$(INSTALL) -m 644 script/mimedefang-util.1 $(DESTDIR)$(MANDIR)/man1/mimedefang-util.1
+	$(INSTALL) -m 644 modules/lib/Mail/MIMEDefang.3p $(DESTDIR)$(MANDIR)/man3p/Mail::MIMEDefang.3p
+	$(INSTALL) -m 644 modules/lib/Mail/MIMEDefang/Actions.3p $(DESTDIR)$(MANDIR)/man3p/Mail::MIMEDefang::Actions.3p
 	$(INSTALL) -m 644 mimedefang.8             $(DESTDIR)$(MANDIR)/man8/mimedefang.8
 	$(INSTALL) -m 644 watch-mimedefang.8       $(DESTDIR)$(MANDIR)/man8/watch-mimedefang.8
 	$(INSTALL) -m 644 watch-multiple-mimedefangs.8 $(DESTDIR)$(MANDIR)/man8/watch-multiple-mimedefangs.8

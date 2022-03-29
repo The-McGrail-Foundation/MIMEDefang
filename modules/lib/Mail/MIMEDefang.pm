@@ -19,7 +19,7 @@ People use MIMEDefang to:
     Remove HTML mail parts
     Add boilerplate disclaimers to outgoing mail
     Remove or alter attachments
-    Replace attachments with URL’s
+    Replace attachments with URL's
     Implement sophisticated access controls.
 
 You're limited only by your imagination. If you can think of it and code it in Perl, you can do it with MIMEDefang.
@@ -1066,5 +1066,9 @@ sub send_admin_mail {
 
   send_mail($DaemonAddress, $DaemonName, $AdminAddress, $mail);
 }
+
+=back
+
+=cut
 
 1;
