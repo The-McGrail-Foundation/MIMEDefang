@@ -20,6 +20,7 @@ mimedefang-protocol.7
 mimedefang.8
 mimedefang.pl
 mimedefang.pl.8
+modules/man/*.3p
 redhat/mimedefang-init
 redhat/mimedefang-sysconfig
 script/mimedefang-util
