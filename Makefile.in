@@ -122,7 +122,6 @@ gen_id.o: gen_id.c mimedefang.h
 
 clean:: FORCE
 	rm -f *~ *.o mimedefang mimedefang-multiplexor md-mx-ctrl xs_init.c
-	rm modules/Makefile.old
 
 pod2man:: script/mimedefang-util.1 lib/manpages
 
@@ -137,42 +136,52 @@ lib/manpages:
 	mkdir -p modules/man
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
 		--center="Mail::MIMEDefang Documentation" \
+		--name="Mail::MIMEDefang" \
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang.pm modules/man/Mail::MIMEDefang.3p
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
 		--center="Mail::MIMEDefang::Actions Documentation" \
+		--name="Mail::MIMEDefang::Actions" \
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/Actions.pm modules/man/Mail::MIMEDefang::Actions.3p
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
 		--center="Mail::MIMEDefang::Antispam Documentation" \
+		--name="Mail::MIMEDefang::Antispam" \
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/Antispam.pm modules/man/Mail::MIMEDefang::Antispam.3p
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
 		--center="Mail::MIMEDefang::Antivirus Documentation" \
+		--name="Mail::MIMEDefang::Antivirus" \
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/Antivirus.pm modules/man/Mail::MIMEDefang::Antivirus.3p
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
 		--center="Mail::MIMEDefang::Mail Documentation" \
+		--name="Mail::MIMEDefang::Mail" \
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/Mail.pm modules/man/Mail::MIMEDefang::Mail.3p
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
 		--center="Mail::MIMEDefang::MIME Documentation" \
+		--name="Mail::MIMEDefang::MIME" \
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/MIME.pm modules/man/Mail::MIMEDefang::MIME.3p
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
 		--center="Mail::MIMEDefang::Net Documentation" \
+		--name="Mail::MIMEDefang::Net" \
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/Net.pm modules/man/Mail::MIMEDefang::Net.3p
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
 		--center="Mail::MIMEDefang::RFC2822 Documentation" \
+		--name="Mail::MIMEDefang::RFC2822" \
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/RFC2822.pm modules/man/Mail::MIMEDefang::RFC2822.3p
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
 		--center="Mail::MIMEDefang::Unit Documentation" \
+		--name="Mail::MIMEDefang::Unit" \
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/Unit.pm modules/man/Mail::MIMEDefang::Unit.3p
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3p --perm_rw=644 \
 		--center="Mail::MIMEDefang::Utils Documentation" \
+		--name="Mail::MIMEDefang::Utils" \
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/Utils.pm modules/man/Mail::MIMEDefang::Utils.3p
 
@@ -246,18 +255,24 @@ install: all
 	$(INSTALL) -m 755 $(INSTALL_STRIP_FLAG) mimedefang               $(DESTDIR)$(prefix)/bin/mimedefang
 
 	# Install .pm files
-	$(INSTALL) -m 755 -d $(DESTDIR)$(PERLVENDORLIB)/Mail
-	$(INSTALL) -m 755 -d $(DESTDIR)$(PERLVENDORLIB)/Mail/MIMEDefang
-	$(INSTALL) -m 644 modules/lib/Mail/MIMEDefang.pm $(DESTDIR)$(PERLVENDORLIB)/Mail/MIMEDefang.pm
-	$(INSTALL) -m 644 modules/lib/Mail/MIMEDefang/*.pm $(DESTDIR)$(PERLVENDORLIB)/Mail/MIMEDefang/
+	if test -d $(DESTDIR)$(PERLINSTALLSITELIB) ; then \
+	  $(INSTALL) -m 755 -d $(DESTDIR)$(PERLINSTALLSITELIB)/Mail ; \
+	  $(INSTALL) -m 755 -d $(DESTDIR)$(PERLINSTALLSITELIB)/Mail/MIMEDefang ; \
+	  $(INSTALL) -m 644 modules/lib/Mail/MIMEDefang.pm $(DESTDIR)$(PERLINSTALLSITELIB)/Mail/MIMEDefang.pm ; \
+	  $(INSTALL) -m 644 modules/lib/Mail/MIMEDefang/*.pm $(DESTDIR)$(PERLINSTALLSITELIB)/Mail/MIMEDefang/ ; \
+        else \
+	  $(INSTALL) -m 755 -d $(DESTDIR)$(PERLVENDORLIB)/Mail ; \
+	  $(INSTALL) -m 755 -d $(DESTDIR)$(PERLVENDORLIB)/Mail/MIMEDefang ; \
+	  $(INSTALL) -m 644 modules/lib/Mail/MIMEDefang.pm $(DESTDIR)$(PERLVENDORLIB)/Mail/MIMEDefang.pm ; \
+	  $(INSTALL) -m 644 modules/lib/Mail/MIMEDefang/*.pm $(DESTDIR)$(PERLVENDORLIB)/Mail/MIMEDefang/ ; \
+        fi
 
 	$(INSTALL) -m 755 watch-mimedefang         $(DESTDIR)$(prefix)/bin/watch-mimedefang
 	$(INSTALL) -m 755 watch-multiple-mimedefangs.tcl $(DESTDIR)$(prefix)/bin/watch-multiple-mimedefangs.tcl
 	$(INSTALL) -m 755 mimedefang.pl            $(DESTDIR)$(prefix)/bin/mimedefang.pl
 	$(INSTALL) -m 755 script/mimedefang-util   $(DESTDIR)$(prefix)/bin/mimedefang-util
 	$(INSTALL) -m 644 script/mimedefang-util.1 $(DESTDIR)$(MANDIR)/man1/mimedefang-util.1
-	$(INSTALL) -m 644 modules/lib/Mail/MIMEDefang.3p $(DESTDIR)$(MANDIR)/man3p/Mail::MIMEDefang.3p
-	$(INSTALL) -m 644 modules/lib/Mail/MIMEDefang/*.3p $(DESTDIR)$(MANDIR)/man3p/
+	$(INSTALL) -m 644 modules/man/Mail::MIMEDefang*.3p $(DESTDIR)$(MANDIR)/man3p/
 	$(INSTALL) -m 644 mimedefang.8             $(DESTDIR)$(MANDIR)/man8/mimedefang.8
 	$(INSTALL) -m 644 watch-mimedefang.8       $(DESTDIR)$(MANDIR)/man8/watch-mimedefang.8
 	$(INSTALL) -m 644 watch-multiple-mimedefangs.8 $(DESTDIR)$(MANDIR)/man8/watch-multiple-mimedefangs.8
