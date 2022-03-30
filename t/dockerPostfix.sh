@@ -4,6 +4,7 @@ echo "Building MIMEDefang inside Docker..."
 
 dnf remove -y --noautoremove mimedefang 1>/dev/null 2>&1
 make distclean 1>/dev/null 2>&1
+./configure 1>/dev/null 2>&1
 make distro 1>/dev/null 2>&1
 mkdir -p ~/rpmbuild/SOURCES
 mkdir -p ~/rpmbuild/BUILD
