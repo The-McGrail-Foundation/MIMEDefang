@@ -142,8 +142,9 @@ Version:       2.86
 Release:       0
 License:       GPL
 Group:         Networking/Mail
-Source0:       http://www.roaringpenguin.com/%{name}/%{name}-%{version}.tar.gz
-Url:           http://www.roaringpenguin.com/%{name}
+Source0:       https://mimedefang.org/static/%{name}-%{version}%{?prerelease}.tar.gz
+Source1:       https://mimedefang.org/static/%{name}-%{version}%{?prerelease}.tar.gz.asc
+Url:           https://mimedefang.org
 Vendor:        MIMEDefang
 Buildroot:     %{_tmppath}/%{name}-root
 Requires:      perl-Digest-SHA1 perl-MIME-tools perl-MailTools perl-Unix-Syslog
@@ -170,7 +171,7 @@ willingness of your e-mail users to commit to security, or they will
 complain loudly about MIMEDefang.
 
 %prep
-%setup -q -n %{name}-%{version}
+%setup -q -n %{name}-%{version}%{?prerelease}
 autoconf
 %configure --prefix=%{_prefix} \
             --mandir=%{_mandir} \
