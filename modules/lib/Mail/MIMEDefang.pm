@@ -1069,6 +1069,30 @@ sub send_admin_mail {
 
 =back
 
+=over 4
+
+=back
+
+=head2 SEE ALSO
+
+L<Mail::MIMEDefang::Actions(3)>
+
+L<Mail::MIMEDefang::Antispam(3)>
+
+L<Mail::MIMEDefang::Antivirus(3)>
+
+L<Mail::MIMEDefang::Mail(3)>
+
+L<Mail::MIMEDefang::MIME(3)>
+
+L<Mail::MIMEDefang::Net(3)>
+
+L<Mail::MIMEDefang::RFC2822(3)>
+
+L<Mail::MIMEDefang::Unit(3)>
+
+L<Mail::MIMEDefang::Utils(3)>
+
 =cut
 
 1;
