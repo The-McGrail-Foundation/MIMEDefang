@@ -270,7 +270,9 @@ is http://127.0.0.1:11333.
 sub rspamd_check {
     my ($uri) = @_;
     my $rp;
-    my ($hits, $req, $tests, $report, $action, $is_spam);
+    my ($hits, $req, $action, $is_spam);
+    my $tests = '';
+    my $report = '';
 
     $uri = 'http://127.0.0.1:11333' if not defined $uri;
 
@@ -320,7 +322,8 @@ sub rspamd_check {
 	$report = $res->content;
         return ($hits, $req, $tests, $report, $action, $is_spam);
       } else {
-        return undef;
+        md_syslog("Warning", "Cannot connect to Rspamd server, the message will be temporarily delayed");
+        return (0, 0, '', '', "soft reject", "false");
       }
     } else {
       my @rs = ($Features{"Path:RSPAMC"}, "./INPUTMSG");
