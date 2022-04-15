@@ -285,7 +285,7 @@ sub rspamd_check {
         return undef;
     }
     # forking method is deprecated
-    if($Features{"Path:RSPAMC"}) {
+    if($Features{"Path:RSPAMC"} and ($rspamc eq 0)) {
       md_syslog("Warning", "Using fork method to check Rspamd server (deprecated)");
       $rspamc = 0;
     }
