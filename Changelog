@@ -2,6 +2,11 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2022-04-19 Giovanni Bechis <g.bechis@snb.it>
+
+	* add anonymize_uri to remove utm_* parameters
+	  from uris.
+
 2022-04-14 Giovanni Bechis <g.bechis@snb.it>
 
 	* use new Rspamd connection method by default

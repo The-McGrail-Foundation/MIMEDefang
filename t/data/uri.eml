@@ -1,0 +1,7 @@
+From: Sender <sender@example.com>
+To: Recipient <recipient@example.com>
+Subject: Uri UTM
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii; format=flowed
+
+Click on this http://www.example.com/My_Blog/mypage.aspx?id=123&utm_source=twitterfeed&utm_medium=twitter#c123456 url

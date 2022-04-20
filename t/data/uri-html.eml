@@ -1,0 +1,16 @@
+From: Foo <foo@example.org>
+To: Bar <bar@example.com>
+Subject: multipart email
+MIME-Version: 1.0
+Content-Type: text/html; charset=us-ascii; format=flowed
+
+<html>
+  <head>
+     <title>Foo</title>
+  </head>
+  <body>
+    <p>
+    <a href="http://www.example.com/My_Blog/mypage.aspx?id=123&utm_source=twitterfeed&utm_medium=twitter#c123456">test</a>
+    </p>
+  </body>
+</html>

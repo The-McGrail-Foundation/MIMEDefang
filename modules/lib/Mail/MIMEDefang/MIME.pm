@@ -33,7 +33,7 @@ our @EXPORT_OK;
 
 @EXPORT = qw(builtin_create_parser rebuild_entity find_part append_to_part
              remove_redundant_html_parts append_to_html_part append_html_boilerplate
-             append_text_boilerplate);
+             append_text_boilerplate anonymize_uri);
 @EXPORT_OK = qw(collect_parts);
 
 sub builtin_create_parser {
@@ -505,6 +505,142 @@ sub append_html_boilerplate {
 		    $Actions{'append_html_boilerplate'}++;
 	    }
 	  }
+  }
+  return $ok;
+}
+
+sub _anonymize_text_uri {
+  my ($part) = @_;
+
+  return 0 unless defined($part->bodyhandle);
+  my($path) = $part->bodyhandle->path;
+  my $npath = $path . '.tmp';
+  return 0 unless (defined($path));
+
+  my $body = $part->bodyhandle;
+
+  # If there's no body, then we can't add
+  return 0 unless $body;
+
+  my $ifh = $body->open('r');
+  return 0 unless $ifh;
+
+  my $ofh;
+  if (!open($ofh, '>', $npath)) {
+    $ifh->close();
+    return 0;
+  }
+
+  my $line;
+  my $nline;
+  while (defined($line = $ifh->getline())) {
+    if($line =~ /https?\:\/\/.{3,512}\/(.{1,30})?(\&|\?)utm([_a-z0-9=]+)/) {
+      my @params = split(/(\?|\&|\s+)/, $line);
+      foreach my $p ( @params ) {
+        if($p =~ /(\?|\&)?utm_.{,20}\=.{1,64}/) {
+          next;
+        } else {
+          $nline .= $p;
+        }
+      }
+      $nline =~ s/(\&{2,}|\?{2,}|\n)//g;
+      $ofh->print($nline);
+    } else {
+      $ofh->print($line);
+    }
+  }
+  $ifh->close();
+  $ofh->close();
+
+  # Rename over the old path
+  return 1 if rename($npath, $path);
+
+  # Rename failed
+  unlink($npath);
+  $Changed = 1;
+  return 0;
+}
+
+sub html_utm_filter {
+  my($text) = @_;
+
+  my $nline;
+  if($text =~ /https?\:\/\/.{3,512}\/(.{1,30})?(\&|\?)utm([_a-z0-9=]+)/) {
+    my @params = split(/(\?|\&|\s+|\>|\"|\')/, $text);
+    foreach my $p ( @params ) {
+      if($p =~ /(\?|\&)?utm_.{,20}\=.{1,64}/) {
+        next;
+      } else {
+        $nline .= $p;
+      }
+    }
+    $nline =~ s/(\&{2,}|\?{2,}|\n)//g;
+    print OUT $nline;
+  } else {
+    print OUT $text;
+  }
+}
+
+sub _anonymize_html_uri {
+  my ($part) = @_;
+
+  if (!$Features{"HTML::Parser"}) {
+          md_syslog('warning', "Attempt to call append_to_html_part, but HTML::Parser Perl module not installed");
+          return 0;
+  }
+
+  return 0 unless defined($part->bodyhandle);
+  my($path) = $part->bodyhandle->path;
+  return 0 unless (defined($path));
+  return 0 unless (open(IN, "<$path"));
+  if (!open(OUT, ">$path.tmp")) {
+          close(IN);
+          return(0);
+  }
+
+  my($p);
+  $p = HTML::Parser->new(api_version => 3,
+                         default_h   => [\&html_utm_filter, "text"],
+                         end_h       => [\&html_echo,  "text"]);
+  $p->unbroken_text(1);
+  $p->parse_file(*IN);
+
+  close(IN);
+  close(OUT);
+
+  # Rename the path
+  return 0 unless rename($path, "$path.old");
+  unless (rename("$path.tmp", $path)) {
+          rename ("$path.old", $path);
+          return 0;
+  }
+  unlink "$path.old";
+  $Changed = 1;
+  return 1;
+}
+
+=item anonymize_uri
+
+Anonymize an url by removing all utm_* parameters.
+
+=cut
+
+sub anonymize_uri {
+  my ($msg) = @_;
+
+  @FlatParts = ();
+  my($ok) = 0;
+  collect_parts($msg, 1);
+  foreach $part (@FlatParts) {
+    if (lc($part->head->mime_type) =~ /text\/html/) {
+      if (_anonymize_html_uri($part)) {
+        $ok = 1;
+      }
+    } elsif (lc($part->head->mime_type) =~ /text\/plain/) {
+      if (_anonymize_text_uri($part)) {
+        $ok = 1;
+      }
+    }
   }
   return $ok;
 }
