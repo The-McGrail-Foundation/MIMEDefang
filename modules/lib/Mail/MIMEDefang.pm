@@ -81,9 +81,9 @@ our $VERSION = '2.86';
       $results_fh
       init_globals print_and_flush detect_and_load_perl_modules
       init_status_tag push_status_tag pop_status_tag
-      signal_changed signal_unchanged md_syslog write_result_line
-      in_message_context in_filter_context in_filter_wrapup in_filter_end
-      percent_decode percent_encode percent_encode_for_graphdefang
+      signal_changed signal_unchanged md_syslog md_graphdefang_log
+      write_result_line in_message_context in_filter_context in_filter_wrapup
+      in_filter_end percent_decode percent_encode percent_encode_for_graphdefang
       send_mail send_quarantine_notifications signal_complete send_admin_mail
       md_version
     };
@@ -348,6 +348,70 @@ Prints a message to syslog(3) using the specified facility
 		return undef unless grep { $_ eq $thing } @ {$Unix::Syslog::EXPORT_TAGS{macros} };
 		return eval "Unix::Syslog::$thing()";
 	}
+}
+
+=item md_graphdefang_log
+
+This is called to log events that occur during mimedefang processing.
+It should be called from mimedefang-filter with appropriate
+event names and values.  Possible examples:
+C<md_graphdefang_log('virus',$VirusName,$filename);>
+C<md_graphdefang_log('spam',$hits);>
+C<md_graphdefang_log('bad_filename',$filename,$extension);>
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: md_graphdefang_log
+# %ARGUMENTS:
+#  event -- The name of the event that is being logged.  Examples
+#           include virus, spam, mail, etc.
+#  value1 -- (optional) A value associated with the event being logged.
+#  value2 -- (optional) A value associated with the event being logged.
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  This is called to log events that occur during mimedefang processing.
+#  It should be called from mimedefang-filter with appropriate
+#  event names and values.  Possible examples:
+#      md_graphdefang_log('virus',$VirusName,$filename);
+#      md_graphdefang_log('spam',$hits);
+#      md_graphdefang_log('bad_filename',$filename,$extension);
+#***********************************************************************
+sub md_graphdefang_log
+{
+    return unless defined($GraphDefangSyslogFacility);
+    return if (!in_message_context("md_graphdefang_log"));
+
+    my $event = shift;
+    my $value1 = shift;
+    my $value2 = shift;
+
+    $value1 = "" unless defined($value1);
+    $value2 = "" unless defined($value2);
+
+    my $lcsender = percent_encode_for_graphdefang(lc($Sender));
+
+    # Make values safe for graphdefang
+    my $id = percent_encode_for_graphdefang($MsgID);
+    my $subj = percent_encode_for_graphdefang($Subject);
+    $event = percent_encode_for_graphdefang($event);
+    $value1 = percent_encode_for_graphdefang($value1);
+    $value2 = percent_encode_for_graphdefang($value2);
+    if ($EnumerateRecipients || scalar(@Recipients) == 1) {
+	foreach my $recipient (@Recipients) {
+	    my $lcrecipient = percent_encode_for_graphdefang(lc($recipient));
+	    md_syslog("$GraphDefangSyslogFacility|info","MDLOG,$id," .
+		      "$event,$value1,$value2,$lcsender," .
+		      "$lcrecipient,$subj");
+	}
+    } else {
+	my $lcrecipient = "rcpts=" . scalar(@Recipients);
+	$lcrecipient = percent_encode_for_graphdefang($lcrecipient);
+	md_syslog("$GraphDefangSyslogFacility|info","MDLOG,$id," .
+		  "$event,$value1,$value2,$lcsender," .
+		  "$lcrecipient,$subj");
+    }
 }
 
 =item detect_and_load_perl_modules
