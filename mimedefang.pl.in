@@ -1237,52 +1237,6 @@ sub replace_entire_message {
 }
 
 #***********************************************************************
-# %PROCEDURE: add_recipient
-# %ARGUMENTS:
-#  recip -- recipient to add
-# %RETURNS:
-#  0 on failure, 1 on success.
-# %DESCRIPTION:
-#  Signals to MIMEDefang to add a recipient to the envelope.
-#***********************************************************************
-sub add_recipient {
-    my($recip) = @_;
-    write_result_line("R", $recip);
-    return 1;
-}
-
-#***********************************************************************
-# %PROCEDURE: change_sender
-# %ARGUMENTS:
-#  sender -- new envelope sender
-# %RETURNS:
-#  0 on failure, 1 on success.
-# %DESCRIPTION:
-#  Signals to MIMEDefang to change the envelope sender.  Only works on
-#  Sendmail 8.14.0 and higher, but no feedback is given to Perl caller!
-#***********************************************************************
-sub change_sender {
-    my($sender) = @_;
-    write_result_line("f", $sender);
-    return 1;
-}
-
-#***********************************************************************
-# %PROCEDURE: delete_recipient
-# %ARGUMENTS:
-#  recip -- recipient to delete
-# %RETURNS:
-#  0 on failure, 1 on success.
-# %DESCRIPTION:
-#  Signals to MIMEDefang to delete a recipient from the envelope.
-#***********************************************************************
-sub delete_recipient {
-    my($recip) = @_;
-    write_result_line("S", $recip);
-    return 1;
-}
-
-#***********************************************************************
 # %PROCEDURE: send_filter_answer
 # %ARGUMENTS:
 #  ok -- 1 = accept, 0 = reject, -1 = tmpfail

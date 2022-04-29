@@ -39,7 +39,7 @@ our @EXPORT_OK;
   action_tempfail action_add_header action_add_entity action_quarantine
   action_change_header action_delete_header action_insert_header action_external_filter
   action_replace_with_url action_drop_with_warning action_delete_all_headers
-  message_rejected process_added_parts
+  message_rejected process_added_parts add_recipient delete_recipient change_sender
 };
 
 =item action_rebuild
@@ -953,6 +953,70 @@ sub action_tempfail {
 
     write_result_line('T', $code, $dsn, $reply);
     $Actions{'tempfail'}++;
+    return 1;
+}
+
+=item add_recipient
+
+Signals to MIMEDefang to add a recipient to the envelope.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: add_recipient
+# %ARGUMENTS:
+#  recip -- recipient to add
+# %RETURNS:
+#  0 on failure, 1 on success.
+# %DESCRIPTION:
+#  Signals to MIMEDefang to add a recipient to the envelope.
+#***********************************************************************
+sub add_recipient {
+    my($recip) = @_;
+    write_result_line("R", $recip);
+    return 1;
+}
+
+=item delete_recipient
+
+Signals to MIMEDefang to delete a recipient from the envelope.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: delete_recipient
+# %ARGUMENTS:
+#  recip -- recipient to delete
+# %RETURNS:
+#  0 on failure, 1 on success.
+# %DESCRIPTION:
+#  Signals to MIMEDefang to delete a recipient from the envelope.
+#***********************************************************************
+sub delete_recipient {
+    my($recip) = @_;
+    write_result_line("S", $recip);
+    return 1;
+}
+
+=item change_sender
+
+Signals to MIMEDefang to change the envelope sender.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: change_sender
+# %ARGUMENTS:
+#  sender -- new envelope sender
+# %RETURNS:
+#  0 on failure, 1 on success.
+# %DESCRIPTION:
+#  Signals to MIMEDefang to change the envelope sender.  Only works on
+#  Sendmail 8.14.0 and higher, but no feedback is given to Perl caller!
+#***********************************************************************
+sub change_sender {
+    my($sender) = @_;
+    write_result_line("f", $sender);
     return 1;
 }
 
