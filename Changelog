@@ -30,6 +30,8 @@ affect your filter.
 	  using Mail::MIMEDefang::RFC2822 namespace.
 	- read_results sub must be called
 	  using Mail::MIMEDefang::Unit namespace.
+	- To read MIMEDefang version, md_version() must be used,
+	  version() is still accessible as Mail::MIMEDefang::version
 
 2022-02-10 Giovanni Bechis <g.bechis@snb.it>
 

@@ -79,16 +79,17 @@ our $VERSION = '2.86';
       $GeneralWarning
       $HTMLFoundEndBody $HTMLBoilerplate $SASpamTester
       $results_fh
-      version init_globals print_and_flush detect_and_load_perl_modules
+      init_globals print_and_flush detect_and_load_perl_modules
       init_status_tag push_status_tag pop_status_tag
       signal_changed signal_unchanged md_syslog write_result_line
       in_message_context in_filter_context in_filter_wrapup in_filter_end
       percent_decode percent_encode percent_encode_for_graphdefang
       send_mail send_quarantine_notifications signal_complete send_admin_mail
+      md_version
     };
 
 @EXPORT_OK = qw{
-      read_config set_status_tag detect_antivirus_support
+      read_config set_status_tag detect_antivirus_support version
     };
 
 sub new {
@@ -1066,6 +1067,21 @@ sub send_admin_mail {
 
   send_mail($DaemonAddress, $DaemonName, $AdminAddress, $mail);
 }
+
+=item md_version
+
+Returns MIMEDefang version
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: md_version
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  MIMEDefang version
+#***********************************************************************
+*md_version = \&version;
 
 =back
 

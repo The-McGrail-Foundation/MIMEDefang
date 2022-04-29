@@ -291,17 +291,6 @@ sub stream_by_domain {
 }
 
 #***********************************************************************
-# %PROCEDURE: md_version
-# %ARGUMENTS:
-#  None
-# %RETURNS:
-#  MIMEDefang version
-#***********************************************************************
-sub md_version {
-    return '@VERSION@';
-}
-
-#***********************************************************************
 # %PROCEDURE: main
 # %ARGUMENTS:
 #  workdir -- directory to "chdir" to and do all work in.
