@@ -621,7 +621,9 @@ sub _anonymize_html_uri {
 
 =item anonymize_uri
 
-Anonymize an url by removing all utm_* parameters.
+Anonymize urls by removing all utm_* parameters,
+takes the message part as parameter and returns
+a boolean value if the sub succeeded or not.
 
 =cut
 
