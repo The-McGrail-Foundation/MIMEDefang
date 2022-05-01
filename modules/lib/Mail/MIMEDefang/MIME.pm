@@ -537,7 +537,7 @@ sub _anonymize_text_uri {
     if($line =~ /https?\:\/\/.{3,512}\/(.{1,30})?(\&|\?)utm([_a-z0-9=]+)/) {
       my @params = split(/(\?|\&|\s+)/, $line);
       foreach my $p ( @params ) {
-        if($p =~ /(\?|\&)?utm\_.{,20}\=.{1,64}/) {
+        if($p =~ /(\?|\&)?utm_.{1,20}\=.{1,64}/) {
           next;
         } else {
           $nline .= $p;
