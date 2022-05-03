@@ -4149,6 +4149,17 @@ $as_echo_n "checking for Perl module LWP::UserAgent... " >&6; }
     { $as_echo "$as_me:${as_lineno-$LINENO}: result: $HAVE_LWP" >&5
 $as_echo "$HAVE_LWP" >&6; }
 
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for Perl module Mail::DKIM" >&5
+$as_echo_n "checking for Perl module Mail::DKIM... " >&6; }
+    (echo "use Mail::DKIM;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_DKIM=no
+    else
+	HAVE_DKIM=yes
+    fi
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: $HAVE_DKIM" >&5
+$as_echo "$HAVE_DKIM" >&6; }
+
         dirs=`echo 'print "@INC\n";' | $PERL`
     foundit=""
     for i in $dirs ; do
@@ -8019,6 +8030,13 @@ if test "$HAVE_LWP" = "no" ; then
      echo "using rspamd_check function in your filter."
      echo ""
    fi
+fi
+
+if test "$HAVE_DKIM" = "no" ; then
+   echo ""
+   echo "Could not find Mail::DKIM Perl module... do not use"
+   echo "md_dkim_sign function in your filter."
+   echo ""
 fi
 
 

@@ -208,6 +208,15 @@ else
     fi
     AC_MSG_RESULT($HAVE_LWP)
 
+    AC_MSG_CHECKING([for Perl module Mail::DKIM])
+    (echo "use Mail::DKIM;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_DKIM=no
+    else
+	HAVE_DKIM=yes
+    fi
+    AC_MSG_RESULT($HAVE_DKIM)
+
     dnl Check MIME::Tools version
     dirs=`echo 'print "@INC\n";' | $PERL`
     foundit=""
@@ -1113,6 +1122,13 @@ if test "$HAVE_LWP" = "no" ; then
      echo "using rspamd_check function in your filter."
      echo ""
    fi
+fi
+
+if test "$HAVE_DKIM" = "no" ; then
+   echo ""
+   echo "Could not find Mail::DKIM Perl module... do not use"
+   echo "md_dkim_sign function in your filter."
+   echo ""
 fi
 
 
