@@ -1,8 +1,8 @@
-package MIMEDefang::Unit::dates;
+package Mail::MIMEDefang::Unit::dates;
 use strict;
 use warnings;
-use lib qw(t/lib);
-use base qw(MIMEDefang::Unit);
+use lib qw(modules/lib);
+use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 use POSIX;
 
@@ -38,6 +38,18 @@ sub gen_msgid_header_works : Test(1)
 	no warnings 'once';
 	local $::main::QueueID = 'wookie';
 	like(::main::gen_msgid_header(), qr/Message-ID: <\d{12}\.wookie\@[-a-zA-Z0-9\.]+>\n/, 'Got Message-ID header in correct format');
+}
+
+sub t_time_str: Test(1)
+{
+	# XXX use a better regexp
+	like(Mail::MIMEDefang::Utils::time_str(), qr/[0-9]{4}\-[0-9]{2}\-[0-9]{2}\-[0-9]{2}\.[0-9]{2}\.[0-9]{2}/);
+}
+
+sub t_hour_str: Test(1)
+{
+	# XXX use a better regexp
+	like(Mail::MIMEDefang::Utils::hour_str(), qr/[0-9]{4}\-[0-9]{2}\-[0-9]{2}\-[0-9]{2}/);
 }
 
 __PACKAGE__->runtests();

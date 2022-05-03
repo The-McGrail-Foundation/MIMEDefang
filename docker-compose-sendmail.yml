@@ -1,0 +1,9 @@
+version: '2.2'
+services:
+    mimedefang:
+        container_name: mimedefang-sendmail
+        image: mimedefang/sendmail:v2.86
+        working_dir: /tests
+        volumes:
+         - .:/tests
+        command: sh t/dockerSendmail.sh

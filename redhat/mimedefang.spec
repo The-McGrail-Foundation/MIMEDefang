@@ -131,22 +131,24 @@
 %define user           defang
 %define with_antivirus 0
 
+%global debug_package %{nil}
+
 %{?_with_antivirus: %{expand: %%define with_antivirus 1}}
 %{?_without_antivirus: %{expand: %%define with_antivirus 0}}
 
 Summary:       Email filtering application using sendmail's milter interface
 Name:          mimedefang
-Version:       2.84
-Release:       1
+Version:       3.0
+Release:       0
 License:       GPL
 Group:         Networking/Mail
-Source0:       http://www.roaringpenguin.com/%{name}/%{name}-%{version}.tar.gz
-Url:           http://www.roaringpenguin.com/%{name}
-Vendor:        Roaring Penguin Software Inc.
+Source0:       https://mimedefang.org/static/%{name}-%{version}%{?prerelease}.tar.gz
+Source1:       https://mimedefang.org/static/%{name}-%{version}%{?prerelease}.tar.gz.asc
+Url:           https://mimedefang.org
+Vendor:        MIMEDefang
 Buildroot:     %{_tmppath}/%{name}-root
-Requires:      sendmail > 8.12.0
-Requires:      perl-Digest-SHA1 perl-MIME-tools perl-IO-stringy perl-MailTools perl-Unix-Syslog
-BuildRequires: sendmail-devel > 8.12.0
+Requires:      perl-Digest-SHA1 perl-MIME-tools perl-MailTools perl-Unix-Syslog
+BuildRequires: sendmail-milter-devel >= 8.12.0
 BuildRequires: autoconf > 2.55
 
 %description
@@ -169,7 +171,7 @@ willingness of your e-mail users to commit to security, or they will
 complain loudly about MIMEDefang.
 
 %prep
-%setup -q -n %{name}-%{version}
+%setup -q -n %{name}-%{version}%{?prerelease}
 autoconf
 %configure --prefix=%{_prefix} \
             --mandir=%{_mandir} \
@@ -192,7 +194,8 @@ make DONT_STRIP=1
 rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT/%{dir_log}
-make install-redhat DESTDIR=$RPM_BUILD_ROOT
+make DESTDIR=$RPM_BUILD_ROOT \
+     INSTALL='install -p' INSTALL_STRIP_FLAG='' install-redhat
 # Turn off execute bit on scripts in contrib
 find contrib -type f -print0 | xargs -0 chmod a-x
 
@@ -204,11 +207,12 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root)
-%doc COPYING Changelog README* examples SpamAssassin
+%doc Changelog README* examples SpamAssassin
 %dir %{dir_spool}
 %dir %{dir_log}
 %dir %{dir_quarantine}
 %{_bindir}/*
+%{perl_vendorlib}/*
 %{_mandir}/*
 %config(noreplace) /etc/mail/mimedefang-filter
 %config(noreplace) /etc/mail/sa-mimedefang.cf
@@ -253,18 +257,26 @@ Use the sendmail-cf package to rebuild your /etc/mail/sendmail.cf file and
 restart your sendmail daemon.
 
 EOF
+%if 0%{?rhel} > 6 || 0%{?fedora} > 23
+%systemd_preun %{name}.service
+%else
 /sbin/chkconfig --add mimedefang
+%endif
 
 %preun
-if [ $1 = 0 ] ; then
-	/sbin/service mimedefang stop > /dev/null 2>&1 || true
-	/sbin/chkconfig --del mimedefang || true
+%if 0%{?rhel} > 6 || 0%{?fedora} > 23
+%systemd_preun %{name}.service
+%else
+if [ $1 -eq 0 ]; then
+  /sbin/service %{name} stop > /dev/null 2>&1 || :
+  /sbin/chkconfig --del %{name}
 fi
+%endif
 
 %package contrib
 Summary:	Contributed software that works with MIMEDefang
-Version:	2.84
-Release:	1
+Version:	3.0
+Release:	0
 Group:          Networking/Mail
 
 %description contrib

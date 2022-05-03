@@ -1,8 +1,8 @@
-package MIMEDefang::Unit::filter_sender;
+package Mail::MIMEDefang::Unit::filter_sender;
 use strict;
 use warnings;
-use lib qw(t/lib);
-use base qw(MIMEDefang::Unit);
+use lib qw(modules/lib);
+use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
 sub create_filter : Test(setup)

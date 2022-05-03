@@ -194,6 +194,8 @@ notify(EventSelector *es, Listener *l, char const *msg)
 	}
 
 	if (strlen(msg) > MAX_MSGLEN) {
+	    syslog(LOG_ERR, "notify failed: message size is bigger then allowed");
+	    close_listener(l);
 	    return;
 	}
 	strcpy(l->msg, msg);

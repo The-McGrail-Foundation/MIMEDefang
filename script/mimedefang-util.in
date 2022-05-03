@@ -1,4 +1,16 @@
 #!@PERL@
+
+#***********************************************************************
+#
+# mimedefang-util
+#
+# Utility script for message structure debugging
+#
+# * This program may be distributed under the terms of the GNU General
+# * Public License, Version 2.
+#
+#***********************************************************************
+
 use strict;
 use warnings;
 use Getopt::Long;
