@@ -2,6 +2,11 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2022-05-03 Giovanni Bechis <g.bechis@snb.it>
+
+	* add md_dkim_sign method to sign email messages
+	  with DKIM signatures
+
 2022-04-19 Giovanni Bechis <g.bechis@snb.it>
 
 	* add anonymize_uri to remove utm_* parameters
