@@ -45,7 +45,7 @@ sub t_detect_and_load_perl_modules : Test(4)
 
 sub t_mimedefang_version : Test(1)
 {
-  like(md_version(), qr/[0-9]\.[0-9]{2}/);
+  like(md_version(), qr/[0-9]\.[0-9]{1,2}/);
 }
 
 __PACKAGE__->runtests();
