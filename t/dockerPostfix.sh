@@ -2,13 +2,15 @@
 
 echo "Building MIMEDefang inside Docker..."
 
+VER=$(perl -I modules/lib -e 'use Mail::MIMEDefang; print Mail::MIMEDefang::md_version();')
+
 dnf remove -y --noautoremove mimedefang 1>/dev/null 2>&1
 make distclean 1>/dev/null 2>&1
 ./configure 1>/dev/null 2>&1
 make distro 1>/dev/null 2>&1
 mkdir -p ~/rpmbuild/SOURCES
 mkdir -p ~/rpmbuild/BUILD
-cp mimedefang-2.86.tar.gz ~/rpmbuild/SOURCES
+cp mimedefang-${VER}.tar.gz ~/rpmbuild/SOURCES
 rpmbuild -bb redhat/mimedefang.spec 1>/dev/null 2>&1
 dnf -y install ~/rpmbuild/RPMS/x86_64/mimedefang-* 1>/dev/null 2>&1
 cp t/data/mimedefang-test-filter /etc/mail/mimedefang-filter
