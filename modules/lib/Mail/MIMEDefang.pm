@@ -1161,6 +1161,8 @@ L<Mail::MIMEDefang::Antispam(3)>
 
 L<Mail::MIMEDefang::Antivirus(3)>
 
+L<Mail::MIMEDefang::DKIM(3)>
+
 L<Mail::MIMEDefang::Mail(3)>
 
 L<Mail::MIMEDefang::MIME(3)>
