@@ -1,7 +1,6 @@
 *.bak
 *.o
 .DS_Store
-MANIFEST
 Makefile
 config.h
 config.log
