@@ -158,7 +158,7 @@ lib/manpages:
 		--center="Mail::MIMEDefang::DKIM Documentation" \
 		--name="Mail::MIMEDefang::DKIM" \
 		--release=$(VERSION) \
-		modules/lib/Mail/MIMEDefang/Mail.pm modules/man/Mail::MIMEDefang::Mail.3
+		modules/lib/Mail/MIMEDefang/DKIM.pm modules/man/Mail::MIMEDefang::DKIM.3
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \
 		--center="Mail::MIMEDefang::Mail Documentation" \
 		--name="Mail::MIMEDefang::Mail" \
