@@ -89,7 +89,7 @@ our $VERSION = '3.0';
     };
 
 @EXPORT_OK = qw{
-      read_config set_status_tag detect_antivirus_support version
+      set_status_tag detect_antivirus_support version
     };
 
 sub new {
@@ -466,45 +466,6 @@ sub detect_antivirus_support() {
     }
   }
   return 0;
-}
-
-=item read_config(file_path)
-
-Loads a config file where global variables can be stored.
-
-=cut
-
-#***********************************************************************
-# %PROCEDURE: read_config
-# %ARGUMENTS:
-#  configuration file path
-# %RETURNS:
-#  return 1 if configuration file cannot be loaded; 0 otherwise
-# %DESCRIPTION:
-#  loads a configuration file to overwrite global variables values
-#***********************************************************************
-# Derivative work from amavisd-new read_config_file($$)
-# Copyright (C) 2002-2018 Mark Martinec
-sub read_config($) {
-  my($config_file) = @_;
-
-  $config_file = File::Spec->rel2abs($config_file);
-
-  my(@stat_list) = stat($config_file);  # symlinks-friendly
-  my $errn = @stat_list ? 0 : 0+$!;
-  my $owner_uid = $stat_list[4];
-  my $msg;
-
-  if ($errn == ENOENT) { $msg = "does not exist" }
-  elsif ($errn)        { $msg = "is inaccessible: $!" }
-  elsif (-d _)         { $msg = "is a directory" }
-  elsif (-S _ || -b _ || -c _) { $msg = "is not a regular file or pipe" }
-  elsif ($owner_uid) { $msg = "should be owned by root (uid 0)" }
-  if (defined $msg)    {
-    return (1, $msg);
-  }
-  if (defined(do $config_file)) {}
-  return (0, undef);
 }
 
 =item init_status_tag

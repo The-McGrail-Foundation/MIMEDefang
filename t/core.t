@@ -20,7 +20,7 @@ sub t_init_globals2 : Test(2)
   is($::main::Changed, 0);
 }
 
-sub t_read_config : Test(3)
+sub t_read_config : Test(1)
 {
   init_globals();
   no warnings qw(redefine once);
@@ -28,7 +28,7 @@ sub t_read_config : Test(3)
   use warnings qw(redefine once);
   SKIP: {
     skip "read_config test must be run as root", 1 unless ($< eq 0);
-    Mail::MIMEDefang::read_config("t/data/md.conf");
+    ::main::read_config("t/data/md.conf");
     is($SALocalTestsOnly, 0);
   };
 }
