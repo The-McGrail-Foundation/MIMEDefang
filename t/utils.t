@@ -17,13 +17,13 @@ sub t_percent_encode : Test(1)
   is($pe, "foo%0D%0Abar%09bl%25t");
 }
 
-sub t_percent_decode : Test(2)
+sub t_percent_decode : Test(1)
 {
   my $pd = percent_decode("foo%0D%0Abar%09bl%25t");
   is($pd, "foo\r\nbar\tbl%t");
 }
 
-sub t_synthetize : Test(3)
+sub t_synthetize : Test(1)
 {
   init_globals();
   $Helo = "test.example.com";
@@ -35,7 +35,7 @@ sub t_synthetize : Test(3)
   like($header, qr/Received\: from $Helo \( \[$RealRelayAddr\]\)\n\tby $hn \(envelope-sender $Sender\) \(MIMEDefang\) with ESMTP id NOQUEUE/);
 }
 
-sub t_re_match : Test(4)
+sub t_re_match : Test(2)
 {
   my ($done, @parts);
 
@@ -56,7 +56,7 @@ sub t_re_match : Test(4)
   }
 }
 
-sub t_re_match_ext : Test(5)
+sub t_re_match_ext : Test(2)
 {
   my ($done, @parts);
 
@@ -72,6 +72,42 @@ sub t_re_match_ext : Test(5)
       is($done, 0);
     }
   }
+}
+
+sub t_re_match_zip : Test(2)
+{
+  my ($done, @parts);
+
+  # Set up temporary dir
+  system('rm', '-rf', 't/tmp');
+  mkdir('t/tmp', 0755);
+
+  # Make a parser
+  my $parser = MIME::Parser->new();
+  $parser->extract_nested_messages(1);
+  $parser->extract_uuencode(1);
+  $parser->output_to_core(0);
+  $parser->tmp_to_core(0);
+  my $filer = MIME::Parser::FileInto->new('t/tmp');
+  $filer->ignore_filename(1);
+  $parser->filer($filer);
+
+  detect_and_load_perl_modules();
+  my $entity = $parser->parse_open("t/data/zip.eml");
+  @parts = $entity->parts();
+  foreach my $part (@parts) {
+    my $bh = $part->bodyhandle();
+    if (defined($bh)) {
+      my $path = $bh->path();
+      if (defined($path)) {
+        $done = re_match_in_zip_directory($path, "\.bin");
+        is($done, 0);
+        $done = re_match_in_zip_directory($path, "\.txt");
+        is($done, 1);
+      }
+    }
+  }
+  system('rm', '-rf', 't/tmp');
 }
 
 __PACKAGE__->runtests();

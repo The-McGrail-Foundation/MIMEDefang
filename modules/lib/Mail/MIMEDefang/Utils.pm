@@ -34,7 +34,7 @@ our @EXPORT = qw(time_str date_str
                  synthesize_received_header copy_or_link
                  re_match re_match_ext re_match_in_rar_directory re_match_in_zip_directory
                  md_copy_orig_msg_to_work_dir_as_mbox_file);
-our @EXPORT_OK = qw(read_results);
+our @EXPORT_OK = qw(read_results md_init);
 
 =item time_str
 
@@ -387,15 +387,19 @@ matches regexp.
 no strict 'subs';
 sub dummy_zip_error_handler {} ;
 
+sub md_init {
+  if (!defined($Features{"Archive::Zip"}) or ($Features{"Archive::Zip"} eq 1)) {
+    (eval 'use Archive::Zip qw( :ERROR_CODES ); $Features{"Archive::Zip"} = 1;')
+    or $Features{"Archive::Zip"} = 0;
+  }
+}
+
 sub re_match_in_zip_directory {
   my($zipname, $regexp) = @_;
   unless ($Features{"Archive::Zip"}) {
 	  md_syslog('err', "Attempted to use re_match_in_zip_directory, but Perl module Archive::Zip is not installed.");
 	  return 0;
   }
-  # detect_and_load_modules doesn't load constants that are not automatically
-  # exported, so we need to load ERROR_CODES constants as needed
-  use Archive::Zip qw( :ERROR_CODES );
   my $zip = Archive::Zip->new();
 
   # Prevent carping about errors

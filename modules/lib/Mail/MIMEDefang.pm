@@ -445,6 +445,7 @@ sub detect_and_load_perl_modules() {
         (eval 'use Net::DNS; $Features{"Net::DNS"} = 1;')
         or $Features{"Net::DNS"} = 0;
       }
+    Mail::MIMEDefang::Utils::md_init();
     }
 }
 
