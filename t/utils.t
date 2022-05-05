@@ -42,12 +42,15 @@ sub t_re_match : Test(4)
   my $parser = new MIME::Parser;
   $parser->output_to_core(1);
   my $entity = $parser->parse_open("t/data/multipart.eml");
+  my $bad_exts = '(bin|exe|\{[^\}]+\})';
+  my $re = '\.' . $bad_exts . '\.*$';
   @parts = $entity->parts();
   foreach my $part (@parts) {
     if($part->head->mime_encoding eq "base64") {
-      $done = re_match($part, "wow\.bin");
+      $done = re_match($part, $re);
       is($done, 1);
-      $done = re_match($part, "test\.bin");
+    } else {
+      $done = re_match($part, $re);
       is($done, 0);
     }
   }
