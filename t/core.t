@@ -36,7 +36,6 @@ sub t_read_config : Test(1)
 sub t_detect_and_load_perl_modules : Test(4)
 {
   my $dnsver;
-  my %Features;
   $Features{"Net::DNS"} = 1;
   detect_and_load_perl_modules();
   $dnsver = Net::DNS->version;
