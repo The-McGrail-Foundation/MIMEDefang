@@ -1,0 +1,47 @@
+Message-ID: <2e238d52-0f98-cdea-3e9d-dda625df5a08@example.com>
+Date: Thu, 5 May 2022 14:50:09 +0200
+MIME-Version: 1.0
+User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101
+ Thunderbird/91.8.0
+Content-Language: en-US
+To: me@example.com
+From: You <you@example.com>
+Subject: Test
+Content-Type: multipart/mixed; boundary="------------62ATfdiTB07G9boOgpgkRqfH"
+
+This is a multi-part message in MIME format.
+--------------62ATfdiTB07G9boOgpgkRqfH
+Content-Type: multipart/alternative;
+ boundary="------------02Tj3lGNeKJ1fcXPjVb9IeWa"
+
+--------------02Tj3lGNeKJ1fcXPjVb9IeWa
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+Test
+--------------02Tj3lGNeKJ1fcXPjVb9IeWa
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+<html>
+  <head>
+
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  </head>
+  <body>
+    Test
+  </body>
+</html>
+
+--------------02Tj3lGNeKJ1fcXPjVb9IeWa--
+--------------62ATfdiTB07G9boOgpgkRqfH
+Content-Type: application/zip; name="test.zip"
+Content-Disposition: attachment; filename="test.zip"
+Content-Transfer-Encoding: base64
+
+UEsDBAoAAAAAADN2pVTGNbk7BQAAAAUAAAAIABwAdGVzdC50eHRVVAkAA+HHc2Lhx3NidXgL
+AAEE6AMAAAToAwAAdGVzdApQSwECHgMKAAAAAAAzdqVUxjW5OwUAAAAFAAAACAAYAAAAAAAB
+AAAApIEAAAAAdGVzdC50eHRVVAUAA+HHc2J1eAsAAQToAwAABOgDAABQSwUGAAAAAAEAAQBO
+AAAARwAAAAAA
+
+--------------62ATfdiTB07G9boOgpgkRqfH--
