@@ -146,6 +146,7 @@ t/data/mimedefang-test-filter
 t/data/multipart.eml
 t/data/uri-html.eml
 t/data/uri.eml
+t/data/zip.eml
 t/dates.t
 t/dockerPostfix.sh
 t/dockerSendmail.sh
