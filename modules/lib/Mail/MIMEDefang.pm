@@ -445,7 +445,33 @@ sub detect_and_load_perl_modules() {
         (eval 'use Net::DNS; $Features{"Net::DNS"} = 1;')
         or $Features{"Net::DNS"} = 0;
       }
-    Mail::MIMEDefang::Utils::md_init();
+      if(exists &Mail::MIMEDefang::Actions::md_init) {
+        Mail::MIMEDefang::Action::md_init();
+      }
+      if(exists &Mail::MIMEDefang::Antispam::md_init) {
+        Mail::MIMEDefang::Antispam::md_init();
+      }
+      if(exists &Mail::MIMEDefang::Antivirus::md_init) {
+        Mail::MIMEDefang::Antivirus::md_init();
+      }
+      if(exists &Mail::MIMEDefang::DKIM::md_init) {
+        Mail::MIMEDefang::DKIM::md_init();
+      }
+      if(exists &Mail::MIMEDefang::Mail::md_init) {
+        Mail::MIMEDefang::Mail::md_init();
+      }
+      if(exists &Mail::MIMEDefang::MIME::md_init) {
+        Mail::MIMEDefang::MIME::md_init();
+      }
+      if(exists &Mail::MIMEDefang::Net::md_init) {
+        Mail::MIMEDefang::Net::md_init();
+      }
+      if(exists &Mail::MIMEDefang::RFC2822::md_init) {
+        Mail::MIMEDefang::RFC2822::md_init();
+      }
+      if(exists &Mail::MIMEDefang::Utils::md_init) {
+        Mail::MIMEDefang::Utils::md_init();
+      }
     }
 }
 

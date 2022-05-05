@@ -37,10 +37,6 @@ affect your filter.
 	  using Mail::MIMEDefang::Unit namespace.
 	- To read MIMEDefang version, md_version() must be used,
 	  version() is still accessible as Mail::MIMEDefang::version
-	- detect_and_load_modules doesn't load constants that are not automatically
-	  exported by Archive::Zip, ERROR_CODES constants must be loaded as needed
-	  using 'use Archive::Zip qw( :ERROR_CODES );' when needed.
-	  re_match_in_zip_directory has been adapted to handle that.
 
 2022-02-10 Giovanni Bechis <g.bechis@snb.it>
 
