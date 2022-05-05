@@ -23,6 +23,7 @@ package Mail::MIMEDefang::Net;
 use strict;
 use warnings;
 
+use IO::Select;
 use Net::DNS;
 use Sys::Hostname;
 

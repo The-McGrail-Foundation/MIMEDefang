@@ -24,6 +24,8 @@ package Mail::MIMEDefang::Antivirus;
 use strict;
 use warnings;
 
+use IO::Socket;
+
 use Mail::MIMEDefang;
 
 require Exporter;

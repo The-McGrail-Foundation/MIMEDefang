@@ -36,7 +36,6 @@ require Exporter;
 
 use Errno qw(ENOENT EACCES);
 use File::Spec;
-use Sys::Syslog;
 
 my $_syslogopen = undef;
 
@@ -439,7 +438,7 @@ sub detect_and_load_perl_modules() {
         or $Features{"HTML::Parser"} = 0;
       }
       if (!defined($Features{"Archive::Zip"}) or ($Features{"Archive::Zip"} eq 1)) {
-        (eval 'use Archive::Zip qw(:ERROR_CODES); $Features{"Archive::Zip"} = 1;')
+        (eval 'use Archive::Zip; $Features{"Archive::Zip"} = 1;')
         or $Features{"Archive::Zip"} = 0;
       }
       if (!defined($Features{"Net::DNS"}) or ($Features{"Net::DNS"} eq 1)) {
