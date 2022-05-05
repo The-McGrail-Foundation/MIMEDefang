@@ -393,6 +393,7 @@ sub re_match_in_zip_directory {
 	  md_syslog('err', "Attempted to use re_match_in_zip_directory, but Perl module Archive::Zip is not installed.");
 	  return 0;
   }
+  use Archive::Zip qw( :ERROR_CODES :CONSTANTS );
   my $zip = Archive::Zip->new();
 
   # Prevent carping about errors
