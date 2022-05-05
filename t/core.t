@@ -13,7 +13,7 @@ sub t_init_globals1 : Test(1)
   is($::main::Changed, 1);
 }
 
-sub t_init_globals2 : Test(2)
+sub t_init_globals2 : Test(1)
 {
   $::main::Changed = 1;
   init_globals();
@@ -33,7 +33,7 @@ sub t_read_config : Test(1)
   };
 }
 
-sub t_detect_and_load_perl_modules : Test(4)
+sub t_detect_and_load_perl_modules : Test(1)
 {
   my $dnsver;
   $Features{"Net::DNS"} = 1;
