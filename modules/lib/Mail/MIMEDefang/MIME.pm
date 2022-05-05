@@ -31,7 +31,7 @@ our @ISA = qw(Exporter);
 our @EXPORT;
 our @EXPORT_OK;
 
-@EXPORT = qw(builtin_create_parser rebuild_entity find_part append_to_part
+@EXPORT = qw(builtin_create_parser find_part append_to_part takeStabAtFilename
              remove_redundant_html_parts append_to_html_part append_html_boilerplate
              append_text_boilerplate anonymize_uri);
 @EXPORT_OK = qw(collect_parts);
@@ -43,94 +43,6 @@ sub builtin_create_parser {
     $parser->output_to_core(0);
     $parser->tmp_to_core(0);
     return $parser;
-}
-
-=item rebuild_entity
-
-Method that descends through input entity and rebuilds an output entity.
-The various parts of the input entity may be modified (or even deleted).
-
-=cut
-
-#***********************************************************************
-# %PROCEDURE: rebuild_entity
-# %ARGUMENTS:
-#  out -- output entity to hold rebuilt message
-#  in -- input message
-# %RETURNS:
-#  Nothing useful
-# %DESCRIPTION:
-#  Descends through input entity and rebuilds an output entity.  The
-#  various parts of the input entity may be modified (or even deleted)
-#***********************************************************************
-sub rebuild_entity {
-  my($out, $in) = @_;
-  my @parts = $in->parts;
-  my($type) = $in->mime_type;
-  $type =~ tr/A-Z/a-z/;
-  my($body) = $in->bodyhandle;
-  my($fname) = takeStabAtFilename($in);
-  $fname = "" unless defined($fname);
-  my $extension = "";
-  $extension = $1 if $fname =~ /(\.[^.]*)$/;
-
-  # If no Content-Type: header, add one
-  if (!$in->head->mime_attr('content-type')) {
-	  $in->head->mime_attr('Content-Type', $type);
-  }
-
-  if (!defined($body)) {
-	  $Action = "accept";
-	  if (defined(&filter_multipart)) {
-	    push_status_tag("In filter_multipart routine");
-	    filter_multipart($in, $fname, $extension, $type);
-	    pop_status_tag();
-	  }
-	  if ($Action eq "drop") {
-	    $Changed = 1;
-	    return 0;
-	  }
-
-	  if ($Action eq "replace") {
-	    $Changed = 1;
-	    $out->add_part($ReplacementEntity);
-	    return 0;
-	  }
-
-	  my($subentity);
-	  $subentity = $in->dup;
-	  $subentity->parts([]);
-	  $out->add_part($subentity);
-	  map { rebuild_entity($subentity, $_) } @parts;
-  } else {
-	  # This is where we call out to the user filter.  Get some useful
-	  # info to pass to the filter
-
-	  # Default action is to accept the part
-	  $Action = "accept";
-
-	  if (defined(&filter)) {
-	    push_status_tag("In filter routine");
-	    filter($in, $fname, $extension, $type);
-	    pop_status_tag();
-	  }
-
- 	  # If action is "drop", just drop it silently;
-	  if ($Action eq "drop") {
-	    $Changed = 1;
-	    return 0;
-	  }
-
-	  # If action is "replace", replace it with $ReplacementEntity;
-	  if ($Action eq "replace") {
-	    $Changed = 1;
-	    $out->add_part($ReplacementEntity);
-	    return 0;
-	  }
-
-	  # Otherwise, accept it
-	  $out->add_part($in);
-  }
 }
 
 =item collect_parts
