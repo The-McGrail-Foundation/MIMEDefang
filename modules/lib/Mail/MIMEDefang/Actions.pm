@@ -37,7 +37,8 @@ our @EXPORT_OK;
   action_rebuild action_notify_sender action_insert_header action_drop
   action_bounce action_accept action_defang action_discard action_add_part
   action_tempfail action_add_header action_add_entity action_quarantine
-  action_change_header action_delete_header action_insert_header action_external_filter
+  action_quarantine_entire_message action_change_header action_delete_header
+  action_insert_header action_external_filter
   action_replace_with_url action_drop_with_warning action_delete_all_headers
   message_rejected process_added_parts add_recipient delete_recipient change_sender
 };
