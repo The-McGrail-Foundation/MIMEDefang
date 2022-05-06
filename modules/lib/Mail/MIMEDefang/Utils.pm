@@ -30,7 +30,7 @@ use Mail::MIMEDefang::RFC2822;
 
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = qw(time_str date_str
+our @EXPORT = qw(time_str date_str hour_str
                  synthesize_received_header copy_or_link
                  re_match re_match_ext re_match_in_rar_directory re_match_in_zip_directory
                  md_copy_orig_msg_to_work_dir_as_mbox_file);
