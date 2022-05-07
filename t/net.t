@@ -19,9 +19,9 @@ sub t_get_host_name : Test(2)
 {
   my $hostname = hostname;
   my $host = ::main::get_host_name($hostname);
-  is($host, $hostname);
+  like($host, qr/$hostname\.*/);
   $host = ::main::get_host_name(undef);
-  is($host, $hostname);
+  like($host, qr/$hostname\.*/);
 }
 
 __PACKAGE__->runtests();
