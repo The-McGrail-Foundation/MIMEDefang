@@ -2,7 +2,6 @@ requires 'IO::Socket';
 requires 'MIME::Tools', '>= 5.509';
 requires 'MIME::WordDecoder';
 requires 'Digest::SHA';
-requires 'Mail::SpamAssassin', '3.004006';
 requires 'HTML::Parser';
 requires 'Archive::Zip';
 requires 'IO::Socket::SSL';
