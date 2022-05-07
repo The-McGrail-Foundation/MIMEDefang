@@ -11,3 +11,4 @@ requires 'Mail::DKIM';
 requires 'Sys::Syslog';
 requires 'ExtUtils::Embed';
 requires 'Test::Most';
+requires 'Test::Class';
