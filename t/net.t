@@ -24,4 +24,12 @@ sub t_get_host_name : Test(2)
   like($host, qr/$hostname\.*/);
 }
 
+sub t_ipv4_public_ip : Test(2)
+{
+  my $ip_priv = '172.16.0.1';
+  my $ip_pub = '212.212.212.212';
+  is(is_public_ip4_address($ip_priv), 0);
+  is(is_public_ip4_address($ip_pub), 1);
+}
+
 __PACKAGE__->runtests();
