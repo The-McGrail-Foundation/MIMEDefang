@@ -11,6 +11,9 @@ sub t0_smtp_sa : Test(1)
     if ( ! -f "/.dockerenv" ) {
       skip "Smtp test should run inside Docker", 1
     }
+    if ( $ENV{'SMTP_TEST'} eq 'no' ) {
+      skip "Smtp test disabled", 1
+    }
     my $from = 'defang';
     my $to = 'defang';
     my $filemail = "t/data/gtube.eml";
@@ -24,6 +27,9 @@ sub t1_smtp : Test(1)
   SKIP: {
     if ( ! -f "/.dockerenv" ) {
       skip "Smtp test should run inside Docker", 1
+    }
+    if ( $ENV{'SMTP_TEST'} eq 'no' ) {
+      skip "Smtp test disabled", 1
     }
     my $from = 'defang';
     my $to = 'defang';
