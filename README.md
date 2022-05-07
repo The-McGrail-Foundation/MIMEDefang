@@ -1,5 +1,7 @@
 # MIMEDefang
 
+[![CI](https://github.com/The-McGrail-Foundation/MIMEDefang/actions/workflows/main.yml/badge.svg)](https://github.com/The-McGrail-Foundation/MIMEDefang/actions/workflows/main.yml)
+
 1. INTRODUCTION
 ---------------
 
