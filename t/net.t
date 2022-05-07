@@ -32,4 +32,12 @@ sub t_ipv4_public_ip : Test(2)
   is(is_public_ip4_address($ip_pub), 1);
 }
 
+sub t_reverse_ip : Test(2)
+{
+  my $ipv4 = '192.168.0.2';
+  my $ipv6 = 'fe80::1121:34db:fb39:a64e';
+  is(reverse_ip_address_for_rbl($ipv4), '2.0.168.192');
+  is(reverse_ip_address_for_rbl($ipv6), 'e.4.6.a.9.3.b.f.b.d.4.3.1.2.1.1.0.0.0.0.0.0.0.0.0.0.0.0.0.8.e.f');
+}
+
 __PACKAGE__->runtests();
