@@ -22,8 +22,8 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - name: Regression tests
       - uses: actions/checkout@v3
+      - name: Regression tests
       - uses: shogo82148/actions-setup-perl@v1
         with:
           perl-version: '5.34'
