@@ -22,10 +22,12 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - uses: actions/checkout@v3
-      - name: Regression tests
-      - uses: shogo82148/actions-setup-perl@v1
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Setup Perl
+        uses: shogo82148/actions-setup-perl@v1
         with:
           perl-version: '5.34'
           install-modules-with: cpanm
-      - run: env SMTP_TEST=no prove -lv t
+      - name: Regression tests
+        run: env SMTP_TEST=no prove -lv t
