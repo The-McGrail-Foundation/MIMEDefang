@@ -42,6 +42,7 @@ contrib/linuxorg/spam-trusted-hosts
 contrib/munin/mimedefang_munin_plugin
 contrib/README
 contrib/word-to-html
+cpanfile
 docker-compose-postfix.yml
 docker-compose-sendmail.yml
 docker/sendmail/supervisord.conf
