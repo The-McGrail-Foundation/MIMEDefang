@@ -460,7 +460,7 @@ sub md_check_against_smtp_server {
   # because presumably that indicates the caller knows
   # what he or she is doing.
   if ($server ne '127.0.0.1' && $server ne '::1') {
-    my $host_expr = quotemeta(get_host_name());
+    my $host_expr = quotemeta(Mail::MIMEDefang::Net::get_host_name());
     if ($text =~ /^$host_expr\b/) {
       $sock->print("QUIT\r\n");
       $sock->flush();
