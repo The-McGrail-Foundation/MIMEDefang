@@ -91,12 +91,6 @@ our $VERSION = '3.0';
       set_status_tag detect_antivirus_support version
     };
 
-sub new {
-    my ($class, @params) = @_;
-    my $self = {};
-    return bless $self, $class;
-}
-
 =item version
 
 Returns current MIMEDefang version.
