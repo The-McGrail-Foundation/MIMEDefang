@@ -298,7 +298,9 @@ sub filter_end {
     my ($hits, $req, $names, $report, $action, $is_spam);
     if (-s "./INPUTMSG" < 100*1024) {
       ($hits, $req, $names, $report, $action, $is_spam) = rspamd_check();
-      md_syslog("Warning", "Action: $action, Spam: $is_spam, Names: $names");
+      if(defined $action or defined $is_spam or defined $names) {
+        md_syslog("Warning", "Action: $action, Spam: $is_spam, Names: $names");
+      }
       if ($is_spam eq "true") {
         action_change_header("X-Spam-Score", "$hits/$req $names");
         md_syslog("Warning", "Action: $action");
