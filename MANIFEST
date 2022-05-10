@@ -141,6 +141,7 @@ syslog-fac.c
 systemd-units/mimedefang-multiplexor.service
 systemd-units/mimedefang.service
 t/core.t
+t/actions.t
 t/data/gtube.eml
 t/data/md.conf
 t/data/mimedefang-test-filter
