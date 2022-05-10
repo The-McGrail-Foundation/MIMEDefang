@@ -1,6 +1,6 @@
 # MIMEDefang
 
-[![CI for MIMEDefang](https://github.com/The-McGrail-Foundation/MIMEDefang/actions/workflows/main.yml/badge.svg)](https://github.com/The-McGrail-Foundation/MIMEDefang/actions/workflows/main.yml)
+[![CI for MIMEDefang](https://github.com/The-McGrail-Foundation/MIMEDefang/actions/workflows/main.yml/badge.svg)](https://github.com/The-McGrail-Foundation/MIMEDefang/actions/workflows/main.yml) [![GitHub license](https://img.shields.io/github/license/The-McGrail-Foundation/MIMEDefang)](https://github.com/The-McGrail-Foundation/MIMEDefang/blob/master/LICENSE) [![GitHub release](https://img.shields.io/github/release/The-McGrail-Foundation/MIMEDefang.svg)](https://GitHub.com/The-McGrail-Foundation/MIMEDefang/releases/)
 
 1. INTRODUCTION
 ---------------
