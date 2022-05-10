@@ -107,6 +107,21 @@ sub version {
     return $VERSION;
 }
 
+=item md_version
+
+Returns MIMEDefang version
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: md_version
+# %ARGUMENTS:
+#  None
+# %RETURNS:
+#  MIMEDefang version
+#***********************************************************************
+*md_version = \&version;
+
 =item init_globals
 
 Initialize global variables used across MIMEDefang instance
@@ -1118,21 +1133,6 @@ sub send_admin_mail {
 
   send_mail($DaemonAddress, $DaemonName, $AdminAddress, $mail);
 }
-
-=item md_version
-
-Returns MIMEDefang version
-
-=cut
-
-#***********************************************************************
-# %PROCEDURE: md_version
-# %ARGUMENTS:
-#  None
-# %RETURNS:
-#  MIMEDefang version
-#***********************************************************************
-*md_version = \&version;
 
 =back
 
