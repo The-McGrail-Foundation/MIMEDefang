@@ -72,6 +72,23 @@ The headers to sign, by default the headers are:
 
 =cut
 
+sub md_signer_policy
+{
+        my $dkim = shift;
+
+        use Mail::DKIM::DkSignature;
+
+        my $sig = Mail::DKIM::Signature->new(
+                        Algorithm => $dkim->algorithm,
+                        Method => $dkim->method,
+                        Headers => $dkim->headers,
+                        Domain => $dkim->domain,
+                        Selector => $dkim->selector,
+                );
+        $dkim->add_signature($sig);
+        return;
+}
+
 sub md_dkim_sign {
 
   my ($keyfile, $algorithm, $method, $domain, $selector, $headers) = @_;
@@ -85,8 +102,10 @@ sub md_dkim_sign {
     return;
   }
 
-  my $dkim = Mail::DKIM::Signer->new(
-                       Algorithm => $algotithm,
+  my $dkim;
+  $dkim = Mail::DKIM::Signer->new(
+                       Policy => \&md_signer_policy,
+                       Algorithm => $algorithm,
                        Method => $method,
                        Domain => $domain,
                        Selector => $selector,
@@ -98,19 +117,15 @@ sub md_dkim_sign {
     return;
   }
 
-  $dkim->load(*IN);
-  close(IN);
-
   # or read an email and pass it into the signer, one line at a time
   while (<IN>) {
     # remove local line terminators
-    chomp;
-    s/\015$//;
-
-    # use SMTP line terminators
-    $dkim->PRINT("$_\015\012");
+    chomp $_;
+    s/\015?$/\015\012/s;
+    $dkim->PRINT($_);
   }
   $dkim->CLOSE;
+  close(IN);
 
   my $signature = $dkim->signature;
   my ($h, $v);
