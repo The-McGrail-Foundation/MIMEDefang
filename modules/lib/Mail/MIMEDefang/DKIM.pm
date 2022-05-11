@@ -35,7 +35,7 @@ our @EXPORT_OK;
 
 =item md_dkim_sign
 
-Returns a DKIM signature for the message.
+Returns a mail header and the DKIM signature for the message.
 The method accepts the following parameters:
 
 =item C<$keyfile>
@@ -86,13 +86,13 @@ sub md_dkim_sign {
   }
 
   my $dkim = Mail::DKIM::Signer->new(
-                         Algorithm => $algotithm,
-                         Method => $method,
-                         Domain => $domain,
-                         Selector => $selector,
-                         KeyFile => $keyfile,
-                         Headers => $headers,
-                    );
+                       Algorithm => $algotithm,
+                       Method => $method,
+                       Domain => $domain,
+                       Selector => $selector,
+                       KeyFile => $keyfile,
+                       Headers => $headers,
+                  );
   unless (open(IN, '<', "./INPUTMSG")) {
     md_syslog('err', "Could not open INPUTMSG in md_dkim_sign: $!");
     return;
@@ -113,7 +113,13 @@ sub md_dkim_sign {
   $dkim->CLOSE;
 
   my $signature = $dkim->signature;
-  return $signature->as_string;
+  my ($h, $v);
+  if($signature->as_string =~ /^(.*):\s(.*)$/s) {
+    $h = $1;
+    $v = $2;
+    return ($h, $v);
+  }
+  return;
 }
 
 =back

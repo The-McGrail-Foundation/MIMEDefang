@@ -10,7 +10,7 @@ use Mail::MIMEDefang::DKIM;
 
 use File::Copy;
 
-sub dkim_sign : Test(1)
+sub dkim_sign : Test(2)
 {
   copy('t/data/uri.eml', './INPUTMSG');
 
@@ -21,9 +21,20 @@ sub dkim_sign : Test(1)
     $correct_signature .= $_;
   }
   close(FD);
+  my ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem');
+  is(($header . ': ' . $dkim_sig), $correct_signature);
+  undef $correct_signature;
 
-  my $dkim_sig = md_dkim_sign('t/data/dkim.pem');
-  is($dkim_sig, $correct_signature);
+  open(FD, '<', 't/data/dkim_sig2.txt') or die("Cannot open signature file: $!");
+  while(<FD>) {
+    local $/;
+    $correct_signature .= $_;
+  }
+  close(FD);
+  ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem', undef, undef, 'example.com', 'selector');
+  is(($header . ': ' . $dkim_sig), $correct_signature);
+  undef $correct_signature;
+
   unlink('./INPUTMSG');
 }
 
