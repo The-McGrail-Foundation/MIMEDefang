@@ -1,8 +1,8 @@
-DKIM-Signature: v=1; a=rsa-sha1; c=relaxed; d=example.com; h=from:to
-	:subject:mime-version:content-type; s=selector; bh=MAUU+6+KlDJQz
-	CqO71VN08xBlF4=; b=IWcumjI4eGR01tTrN9XwjVN8tfNc0HRyjcZn3aIVHWF33
-	hz0nqBvLwZ5sbOsPFhBHuTCzVaw9tU2LuU2MSip92U6luK/3cON/rG4cgs+00jbU
-	yjDKgHlq3lDLFR395Xxe/K5m03MB8EGZa0Vu7GKF2isu7qORkjGQPVfQ0RRpC+Zr
-	ThFzVzwKbrk9bCO9oeqd5qXQfnVbNcdD/28q4VyUFDsQF11b3X8aeiB/XU8iQS6e
-	9ckkM3Tll8M1U1S37un/IKQWayIXbg230/x2+z1agJkxe0+4aHZ1gayDsEG4wDOQ
-	LASmV5VuUIm7h0NMJzmQfEwEDXIeAVq5JWLcCI4Dw==
+v=1; a=rsa-sha256; c=relaxed; d=example.com; h=from:to
+	:subject:mime-version:content-type; s=selector; bh=xWkDNGdajbyHm
+	dMPMgjYBPaKILYNC1EIC1dFBnpM8Ck=; b=nFL7A0ndt9kpKnwbJZpBIKDFf0Ekv
+	FTL+be3+Me0mKWcKF5LSNMewdfqwJw6A6EqJi4k5fTwZBa6fmXXe70klrNl4Eyk6
+	tCzlxvom4SonsJew7eSknkhNOENrDsnB6PypkYMf2CPyqCgyD886mCegNC1Il+B4
+	M5pQgKa0V28nzbH27w66qUwWna/KTB1jOyyhpYJ+7LJkz1rLemeROSB7+6QXKobs
+	hin3l+DTbAMuN1vssLareduIr90wQaMBbr2vWR50gZbL4mWtxcqRTXvzSoIkU0Yo
+	w5HRpSCdBrGGMfWffcd3Q4SJPtuk925rWvPGVDFiZ76ywofGT/w/eAVcQ==

@@ -1,4 +1,4 @@
-DKIM-Signature: v=1; a=rsa-sha1; c=relaxed; d=example.org; h=from:to
+v=1; a=rsa-sha1; c=relaxed; d=example.org; h=from:to
 	:subject:mime-version:content-type; s=default; bh=MAUU+6+KlDJQzC
 	qO71VN08xBlF4=; b=iC+NOs69+K26xTxaxdJomxKZOAqo2V3l7IeQw8pkJL0V6x
 	ibOLPxVChVLbkOxbDGfZVD85EgZ0BC0d0/ew70X/N10lHjpgFY+QnEftJphq0L/J

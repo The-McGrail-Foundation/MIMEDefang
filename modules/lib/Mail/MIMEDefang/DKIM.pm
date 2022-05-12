@@ -102,8 +102,7 @@ sub md_dkim_sign {
     return;
   }
 
-  my $dkim;
-  $dkim = Mail::DKIM::Signer->new(
+  my $dkim = Mail::DKIM::Signer->new(
                        Policy => \&md_signer_policy,
                        Algorithm => $algorithm,
                        Method => $method,
@@ -120,9 +119,11 @@ sub md_dkim_sign {
   # or read an email and pass it into the signer, one line at a time
   while (<IN>) {
     # remove local line terminators
-    chomp $_;
-    s/\015?$/\015\012/s;
-    $dkim->PRINT($_);
+    chomp;
+    s/\015$//;
+
+    # use SMTP line terminators
+    $dkim->PRINT("$_\015\012");
   }
   $dkim->CLOSE;
   close(IN);
@@ -132,6 +133,7 @@ sub md_dkim_sign {
   if($signature->as_string =~ /^(.*):\s(.*)$/s) {
     $h = $1;
     $v = $2;
+    $v =~ s/\r//gs;
     return ($h, $v);
   }
   return;

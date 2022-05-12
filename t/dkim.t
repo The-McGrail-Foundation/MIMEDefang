@@ -22,7 +22,7 @@ sub dkim_sign : Test(2)
   }
   close(FD);
   my ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem');
-  is(($header . ': ' . $dkim_sig), $correct_signature);
+  is($dkim_sig, $correct_signature);
   undef $correct_signature;
 
   open(FD, '<', 't/data/dkim_sig2.txt') or die("Cannot open signature file: $!");
@@ -31,8 +31,8 @@ sub dkim_sign : Test(2)
     $correct_signature .= $_;
   }
   close(FD);
-  ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem', undef, undef, 'example.com', 'selector');
-  is(($header . ': ' . $dkim_sig), $correct_signature);
+  ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem', 'rsa-sha256', undef, 'example.com', 'selector');
+  is($dkim_sig, $correct_signature);
   undef $correct_signature;
 
   unlink('./INPUTMSG');
