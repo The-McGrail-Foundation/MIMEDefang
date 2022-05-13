@@ -2,6 +2,10 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2022-05-12 Giovanni Bechis <g.bechis@snb.it>
+
+	* add md_dkim_verify method to verify DKIM signatures
+
 2022-05-03 Giovanni Bechis <g.bechis@snb.it>
 
 	* add md_dkim_sign method to sign email messages
