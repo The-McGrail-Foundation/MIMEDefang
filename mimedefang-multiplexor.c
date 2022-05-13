@@ -1440,7 +1440,8 @@ handleWorkerStderr(EventSelector *es,
 	/* EOF or error reading stderr -- close it and cancel handler */
 	if (n < 0) {
 	    if (DOLOG) {
-		if (s->qid && *(s->qid)) {
+	        qid = s->qid;
+		if (qid && *qid) {
 		    syslog(LOG_WARNING,
 			   "%s: handleWorkerStderr: Error reading from worker %d's stderr: %m", s->qid, WORKERNO(s));
 		} else {
@@ -1481,6 +1482,7 @@ handleWorkerStatusFD(EventSelector *es,
     char buffer[64];
     int n;
     int changed = 0;
+    char const *qid;
 
     while ( (n=read(fd, buffer, sizeof(buffer)-1)) > 0) {
 	buffer[n] = 0;
@@ -1495,7 +1497,8 @@ handleWorkerStatusFD(EventSelector *es,
 	/* EOF or error reading status FD -- close it and cancel handler */
 	if (n < 0) {
 	    if (DOLOG) {
-		if (s->qid && *s->qid) {
+	        qid = s->qid;
+		if (qid && *qid) {
 		    syslog(LOG_WARNING, "%s: handleWorkerStatusFD: Error reading from worker %d's status pipe: %m", s->qid, WORKERNO(s));
 		} else {
 		    syslog(LOG_WARNING, "handleWorkerStatusFD: Error reading from worker %d's status pipe: %m", WORKERNO(s));
