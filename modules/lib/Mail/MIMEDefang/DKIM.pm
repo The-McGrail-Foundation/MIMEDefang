@@ -23,6 +23,7 @@ package Mail::MIMEDefang::DKIM;
 require Exporter;
 
 use Mail::DKIM::Signer;
+use Mail::DKIM::Verifier;
 use Mail::DKIM::TextWrap;
 
 use Mail::MIMEDefang;
@@ -31,7 +32,24 @@ our @ISA = qw(Exporter);
 our @EXPORT;
 our @EXPORT_OK;
 
-@EXPORT = qw(md_dkim_sign);
+@EXPORT = qw(md_dkim_sign md_dkim_verify);
+
+sub md_signer_policy
+{
+        my $dkim = shift;
+
+        use Mail::DKIM::DkSignature;
+
+        my $sig = Mail::DKIM::Signature->new(
+                        Algorithm => $dkim->algorithm,
+                        Method => $dkim->method,
+                        Headers => $dkim->headers,
+                        Domain => $dkim->domain,
+                        Selector => $dkim->selector,
+                );
+        $dkim->add_signature($sig);
+        return;
+}
 
 =item md_dkim_sign
 
@@ -71,23 +89,6 @@ The headers to sign, by default the headers are:
                List-Post List-Owner List-Archive
 
 =cut
-
-sub md_signer_policy
-{
-        my $dkim = shift;
-
-        use Mail::DKIM::DkSignature;
-
-        my $sig = Mail::DKIM::Signature->new(
-                        Algorithm => $dkim->algorithm,
-                        Method => $dkim->method,
-                        Headers => $dkim->headers,
-                        Domain => $dkim->domain,
-                        Selector => $dkim->selector,
-                );
-        $dkim->add_signature($sig);
-        return;
-}
 
 sub md_dkim_sign {
 
@@ -137,6 +138,38 @@ sub md_dkim_sign {
     return ($h, $v);
   }
   return;
+}
+
+=item md_dkim_verify
+
+Verifies the DKIM signature of an email.
+Return value can be "pass", "fail", "invalid", "temperror", "none".
+In case of multiple signatures, the "best" result will be returned.
+Best is defined as "pass", followed by "fail", "invalid", and "none".
+
+=cut
+
+sub md_dkim_verify {
+
+  my $dkim = Mail::DKIM::Verifier->new();
+
+  unless (open(IN, '<', "./INPUTMSG")) {
+    md_syslog('err', "Could not open INPUTMSG in md_dkim_verify: $!");
+    return;
+  }
+
+  while (<IN>) {
+    # remove local line terminators
+    chomp;
+    s/\015$//;
+
+    # use SMTP line terminators
+    $dkim->PRINT("$_\015\012");
+  }
+  $dkim->CLOSE;
+  close(IN);
+
+  return $dkim->result;
 }
 
 =back

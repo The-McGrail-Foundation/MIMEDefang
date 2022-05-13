@@ -38,4 +38,19 @@ sub dkim_sign : Test(2)
   unlink('./INPUTMSG');
 }
 
+sub dkim_verify : Test(2)
+{
+  my $result;
+
+  copy('t/data/dkim1.eml', './INPUTMSG');
+  $result = md_dkim_verify();
+  is($result, "pass");
+  unlink('./INPUTMSG');
+
+  copy('t/data/dkim2.eml', './INPUTMSG');
+  $result = md_dkim_verify();
+  is($result, "fail");
+  unlink('./INPUTMSG');
+}
+
 __PACKAGE__->runtests();
