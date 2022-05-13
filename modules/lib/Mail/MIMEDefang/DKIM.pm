@@ -56,6 +56,8 @@ sub md_signer_policy
 Returns a mail header and the DKIM signature for the message.
 The method accepts the following parameters:
 
+=over 4
+
 =item C<$keyfile>
 
 The path to the private DKIM key
@@ -87,6 +89,8 @@ The headers to sign, by default the headers are:
                In-Reply-To References
                List-Id List-Help List-Unsubscribe List-Subscribe
                List-Post List-Owner List-Archive
+
+=back
 
 =cut
 
