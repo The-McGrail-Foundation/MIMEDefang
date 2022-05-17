@@ -449,12 +449,6 @@ sub detect_and_load_perl_modules() {
       if(exists &Mail::MIMEDefang::Antivirus::md_init) {
         Mail::MIMEDefang::Antivirus::md_init();
       }
-      if(exists &Mail::MIMEDefang::DKIM::md_init) {
-        Mail::MIMEDefang::DKIM::md_init();
-      }
-      if(exists &Mail::MIMEDefang::DKIM::ARC::md_init) {
-        Mail::MIMEDefang::DKIM::ARC::md_init();
-      }
       if(exists &Mail::MIMEDefang::Mail::md_init) {
         Mail::MIMEDefang::Mail::md_init();
       }
