@@ -34,7 +34,7 @@ our @EXPORT_OK;
 
 @EXPORT = qw(md_dkim_sign md_dkim_verify);
 
-sub md_signer_policy
+sub _md_signer_policy
 {
         my $dkim = shift;
 
@@ -108,7 +108,7 @@ sub md_dkim_sign {
   }
 
   my $dkim = Mail::DKIM::Signer->new(
-                       Policy => \&md_signer_policy,
+                       Policy => \&_md_signer_policy,
                        Algorithm => $algorithm,
                        Method => $method,
                        Domain => $domain,
