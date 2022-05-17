@@ -84,28 +84,12 @@ our $VERSION = '3.0';
       write_result_line in_message_context in_filter_context in_filter_wrapup
       in_filter_end percent_decode percent_encode percent_encode_for_graphdefang
       send_mail send_quarantine_notifications signal_complete send_admin_mail
-      md_version
+      md_version set_status_tag
     };
 
 @EXPORT_OK = qw{
-      set_status_tag detect_antivirus_support version
+      detect_antivirus_support
     };
-
-=item version
-
-Returns current MIMEDefang version.
-
-=cut
-
-sub version {
-    return $VERSION;
-}
-
-=item md_version
-
-Returns MIMEDefang version
-
-=cut
 
 #***********************************************************************
 # %PROCEDURE: md_version
@@ -114,7 +98,9 @@ Returns MIMEDefang version
 # %RETURNS:
 #  MIMEDefang version
 #***********************************************************************
-*md_version = \&version;
+sub md_version {
+    return $VERSION;
+}
 
 =item init_globals
 

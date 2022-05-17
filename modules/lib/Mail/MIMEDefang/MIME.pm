@@ -33,8 +33,7 @@ our @EXPORT_OK;
 
 @EXPORT = qw(builtin_create_parser find_part append_to_part takeStabAtFilename
              remove_redundant_html_parts append_to_html_part append_html_boilerplate
-             append_text_boilerplate anonymize_uri);
-@EXPORT_OK = qw(collect_parts);
+             append_text_boilerplate collect_parts anonymize_uri);
 
 sub builtin_create_parser {
     my $parser = MIME::Parser->new();

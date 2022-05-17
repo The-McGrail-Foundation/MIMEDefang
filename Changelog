@@ -20,28 +20,6 @@ affect your filter.
 
 	* use new Rspamd connection method by default
 
-2022-03-30 Giovanni Bechis <g.bechis@snb.it>
-
-	*** NOTE INCOMPATIBILITY ***
-
-	Some methods are no more automatically exported and must be called
-	using their namespace.
-	Methods that are no more exported are:
-	- All entity_contains_virus_*, message_contains_virus_*,
-	  interpret_*_code, scan_file_using_fprotd_v6 and scan_file_using_carrier_scan
-	  methods. Those methods must be called by using, for example,
-	  Mail::MIMEDefang::Antivirus::message_contains_virus_clamav().
-	- collect_parts must be called by using
-	  Mail::MIMEDefang::MIME::collect_parts().
-	- get_host_name must be called by using
-	  Mail::MIMEDefang::Net::get_host_name().
-	- header_timezone, rfc2822_date and gen_msgid_header must be called
-	  using Mail::MIMEDefang::RFC2822 namespace.
-	- read_results sub must be called
-	  using Mail::MIMEDefang::Unit namespace.
-	- To read MIMEDefang version, md_version() must be used,
-	  version() is still accessible as Mail::MIMEDefang::version
-
 2022-02-10 Giovanni Bechis <g.bechis@snb.it>
 
         * switch to Digest::SHA

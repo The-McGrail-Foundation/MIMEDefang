@@ -35,34 +35,34 @@ our @EXPORT;
 our @EXPORT_OK;
 
 @EXPORT = qw(message_contains_virus entity_contains_virus
-            initialize_virus_scanner_routines run_virus_scanner);
-@EXPORT_OK = qw(entity_contains_virus_avp entity_contains_virus_bdc
-                entity_contains_virus_nai entity_contains_virus_avp5
-                entity_contains_virus_csav entity_contains_virus_fsav
-                entity_contains_virus_clamd entity_contains_virus_fprot
-                entity_contains_virus_hbedv entity_contains_virus_clamav
-                entity_contains_virus_fprotd entity_contains_virus_fpscan
-                entity_contains_virus_clamdscan entity_contains_virus_fprotd_v6
-                entity_contains_virus_kavscanner entity_contains_virus_carrier_scan
-                message_contains_virus_avp message_contains_virus_bdc
-                message_contains_virus_nai message_contains_virus_avp5
-                message_contains_virus_csav message_contains_virus_fsav
-                message_contains_virus_clamd message_contains_virus_fprot
-                message_contains_virus_hbedv message_contains_virus_nod32
-                message_contains_virus_clamav message_contains_virus_fprotd
-                message_contains_virus_fpscan message_contains_virus_clamdscan
-                message_contains_virus_fprotd_v6 message_contains_virus_kavscanner
-                interpret_avp_code interpret_bdc_code
-                interpret_nai_code interpret_avp5_code
-                interpret_csav_code interpret_fsav_code
-                interpret_nvcc_code interpret_fprot_code
-                interpret_hbedv_code interpret_nod32_code
-                interpret_sweep_code interpret_trend_code
-                interpret_clamav_code interpret_clamav_code
-                interpret_fpscan_code interpret_vexira_code
-                interpret_savscan_code
-                scan_file_using_fprotd_v6 scan_file_using_carrier_scan
-                );
+             initialize_virus_scanner_routines run_virus_scanner
+             entity_contains_virus_avp entity_contains_virus_bdc
+             entity_contains_virus_nai entity_contains_virus_avp5
+             entity_contains_virus_csav entity_contains_virus_fsav
+             entity_contains_virus_clamd entity_contains_virus_fprot
+             entity_contains_virus_hbedv entity_contains_virus_clamav
+             entity_contains_virus_fprotd entity_contains_virus_fpscan
+             entity_contains_virus_clamdscan entity_contains_virus_fprotd_v6
+             entity_contains_virus_kavscanner entity_contains_virus_carrier_scan
+             message_contains_virus_avp message_contains_virus_bdc
+             message_contains_virus_nai message_contains_virus_avp5
+             message_contains_virus_csav message_contains_virus_fsav
+             message_contains_virus_clamd message_contains_virus_fprot
+             message_contains_virus_hbedv message_contains_virus_nod32
+             message_contains_virus_clamav message_contains_virus_fprotd
+             message_contains_virus_fpscan message_contains_virus_clamdscan
+             message_contains_virus_fprotd_v6 message_contains_virus_kavscanner
+             interpret_avp_code interpret_bdc_code
+             interpret_nai_code interpret_avp5_code
+             interpret_csav_code interpret_fsav_code
+             interpret_nvcc_code interpret_fprot_code
+             interpret_hbedv_code interpret_nod32_code
+             interpret_sweep_code interpret_trend_code
+             interpret_clamav_code interpret_clamav_code
+             interpret_fpscan_code interpret_vexira_code
+             interpret_savscan_code
+             scan_file_using_fprotd_v6 scan_file_using_carrier_scan
+            );
 
 =item message_contains_virus
 
