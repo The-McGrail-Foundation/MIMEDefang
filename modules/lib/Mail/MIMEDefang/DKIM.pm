@@ -150,6 +150,7 @@ Verifies the DKIM signature of an email.
 Return value can be "pass", "fail", "invalid", "temperror", "none".
 In case of multiple signatures, the "best" result will be returned.
 Best is defined as "pass", followed by "fail", "invalid", and "none".
+The second return value is the domain that has applied the signature.
 
 =cut
 
@@ -173,7 +174,7 @@ sub md_dkim_verify {
   $dkim->CLOSE;
   close(IN);
 
-  return $dkim->result;
+  return ($dkim->result, $dkim->signature->domain);
 }
 
 =back

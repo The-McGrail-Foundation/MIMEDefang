@@ -40,15 +40,15 @@ sub dkim_sign : Test(2)
 
 sub dkim_verify : Test(2)
 {
-  my $result;
+  my ($result, $domain);
 
   copy('t/data/dkim1.eml', './INPUTMSG');
-  $result = md_dkim_verify();
+  ($result, $domain) = md_dkim_verify();
   is($result, "pass");
   unlink('./INPUTMSG');
 
   copy('t/data/dkim2.eml', './INPUTMSG');
-  $result = md_dkim_verify();
+  ($result, $domain) = md_dkim_verify();
   is($result, "fail");
   unlink('./INPUTMSG');
 }
