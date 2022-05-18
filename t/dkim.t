@@ -38,17 +38,18 @@ sub dkim_sign : Test(2)
   unlink('./INPUTMSG');
 }
 
-sub dkim_verify : Test(2)
+sub dkim_verify : Test(3)
 {
-  my ($result, $domain);
+  my ($result, $domain, $ksize);
 
   copy('t/data/dkim1.eml', './INPUTMSG');
-  ($result, $domain) = md_dkim_verify();
+  ($result, $domain, $ksize) = md_dkim_verify();
   is($result, "pass");
+  is($ksize, 768);
   unlink('./INPUTMSG');
 
   copy('t/data/dkim2.eml', './INPUTMSG');
-  ($result, $domain) = md_dkim_verify();
+  ($result, $domain, $ksize) = md_dkim_verify();
   is($result, "fail");
   unlink('./INPUTMSG');
 }

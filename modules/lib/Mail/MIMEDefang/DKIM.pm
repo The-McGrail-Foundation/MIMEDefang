@@ -151,6 +151,7 @@ Return value can be "pass", "fail", "invalid", "temperror", "none".
 In case of multiple signatures, the "best" result will be returned.
 Best is defined as "pass", followed by "fail", "invalid", and "none".
 The second return value is the domain that has applied the signature.
+The third return value is the size of the DKIM public key.
 
 =cut
 
@@ -174,7 +175,11 @@ sub md_dkim_verify {
   $dkim->CLOSE;
   close(IN);
 
-  return ($dkim->result, $dkim->signature->domain);
+  my $key_size;
+  $key_size = eval {
+    my $pk = $dkim->signature->get_public_key;
+       $pk && $pk->cork && $pk->cork->size * 8 };
+  return ($dkim->result, $dkim->signature->domain, $key_size);
 }
 
 =back
