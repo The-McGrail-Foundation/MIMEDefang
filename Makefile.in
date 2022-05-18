@@ -269,13 +269,17 @@ install: all
 	if test -d $(DESTDIR)$(PERLINSTALLSITELIB) ; then \
 	  $(INSTALL) -m 755 -d $(DESTDIR)$(PERLINSTALLSITELIB)/Mail ; \
 	  $(INSTALL) -m 755 -d $(DESTDIR)$(PERLINSTALLSITELIB)/Mail/MIMEDefang ; \
+	  $(INSTALL) -m 755 -d $(DESTDIR)$(PERLINSTALLSITELIB)/Mail/MIMEDefang/DKIM ; \
 	  $(INSTALL) -m 644 modules/lib/Mail/MIMEDefang.pm $(DESTDIR)$(PERLINSTALLSITELIB)/Mail/MIMEDefang.pm ; \
 	  $(INSTALL) -m 644 modules/lib/Mail/MIMEDefang/*.pm $(DESTDIR)$(PERLINSTALLSITELIB)/Mail/MIMEDefang/ ; \
+	  $(INSTALL) -m 644 modules/lib/Mail/MIMEDefang/DKIM/*.pm $(DESTDIR)$(PERLINSTALLSITELIB)/Mail/MIMEDefang/DKIM/ ; \
         else \
 	  $(INSTALL) -m 755 -d $(DESTDIR)$(PERLVENDORLIB)/Mail ; \
 	  $(INSTALL) -m 755 -d $(DESTDIR)$(PERLVENDORLIB)/Mail/MIMEDefang ; \
+	  $(INSTALL) -m 755 -d $(DESTDIR)$(PERLVENDORLIB)/Mail/MIMEDefang/DKIM ; \
 	  $(INSTALL) -m 644 modules/lib/Mail/MIMEDefang.pm $(DESTDIR)$(PERLVENDORLIB)/Mail/MIMEDefang.pm ; \
 	  $(INSTALL) -m 644 modules/lib/Mail/MIMEDefang/*.pm $(DESTDIR)$(PERLVENDORLIB)/Mail/MIMEDefang/ ; \
+	  $(INSTALL) -m 644 modules/lib/Mail/MIMEDefang/DKIM/*.pm $(DESTDIR)$(PERLVENDORLIB)/Mail/MIMEDefang/DKIM/ ; \
         fi
 
 	$(INSTALL) -m 755 watch-mimedefang         $(DESTDIR)$(prefix)/bin/watch-mimedefang

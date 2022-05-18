@@ -100,6 +100,7 @@ modules/lib/Mail/MIMEDefang/Actions.pm
 modules/lib/Mail/MIMEDefang/Antispam.pm
 modules/lib/Mail/MIMEDefang/Antivirus.pm
 modules/lib/Mail/MIMEDefang/DKIM.pm
+modules/lib/Mail/MIMEDefang/DKIM/ARC.pm
 modules/lib/Mail/MIMEDefang/Mail.pm
 modules/lib/Mail/MIMEDefang/MIME.pm
 modules/lib/Mail/MIMEDefang/Net.pm
@@ -113,6 +114,7 @@ modules/man/Mail::MIMEDefang::Actions.3
 modules/man/Mail::MIMEDefang::Antispam.3
 modules/man/Mail::MIMEDefang::Antivirus.3
 modules/man/Mail::MIMEDefang::DKIM.3
+modules/man/Mail::MIMEDefang::DKIM::ARC.3
 modules/man/Mail::MIMEDefang::Mail.3
 modules/man/Mail::MIMEDefang::MIME.3
 modules/man/Mail::MIMEDefang::Net.3
@@ -142,6 +144,13 @@ systemd-units/mimedefang-multiplexor.service
 systemd-units/mimedefang.service
 t/core.t
 t/actions.t
+t/arc.t
+t/data/arc1.eml
+t/data/dkim1.eml
+t/data/dkim2.eml
+t/data/dkim.pem
+t/data/dkim_sig2.txt
+t/data/dkim_sig.txt
 t/data/gtube.eml
 t/data/md.conf
 t/data/mimedefang-test-filter
@@ -150,6 +159,7 @@ t/data/uri-html.eml
 t/data/uri.eml
 t/data/zip.eml
 t/dates.t
+t/dkim.t
 t/dockerPostfix.sh
 t/dockerSendmail.sh
 t/headers.t
