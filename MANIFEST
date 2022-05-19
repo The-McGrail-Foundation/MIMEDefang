@@ -101,6 +101,7 @@ modules/lib/Mail/MIMEDefang/Antispam.pm
 modules/lib/Mail/MIMEDefang/Antivirus.pm
 modules/lib/Mail/MIMEDefang/DKIM.pm
 modules/lib/Mail/MIMEDefang/DKIM/ARC.pm
+modules/lib/Mail/MIMEDefang/Authres.pm
 modules/lib/Mail/MIMEDefang/Mail.pm
 modules/lib/Mail/MIMEDefang/MIME.pm
 modules/lib/Mail/MIMEDefang/Net.pm
@@ -115,6 +116,7 @@ modules/man/Mail::MIMEDefang::Antispam.3
 modules/man/Mail::MIMEDefang::Antivirus.3
 modules/man/Mail::MIMEDefang::DKIM.3
 modules/man/Mail::MIMEDefang::DKIM::ARC.3
+modules/man/Mail::MIMEDefang::Authres.3
 modules/man/Mail::MIMEDefang::Mail.3
 modules/man/Mail::MIMEDefang::MIME.3
 modules/man/Mail::MIMEDefang::Net.3

@@ -165,6 +165,11 @@ lib/manpages:
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/DKIM/ARC.pm modules/man/Mail::MIMEDefang::DKIM::ARC.3
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \
+		--center="Mail::MIMEDefang::Authres Documentation" \
+		--name="Mail::MIMEDefang::Authres" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang/Authres.pm modules/man/Mail::MIMEDefang::Authres.3
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \
 		--center="Mail::MIMEDefang::Mail Documentation" \
 		--name="Mail::MIMEDefang::Mail" \
 		--release=$(VERSION) \
