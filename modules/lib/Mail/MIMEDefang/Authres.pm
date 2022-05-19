@@ -25,6 +25,7 @@ require Exporter;
 use Mail::SPF;
 
 use Mail::MIMEDefang::DKIM;
+use Mail::MIMEDefang::Net;
 
 our @ISA = qw(Exporter);
 our @EXPORT;
@@ -59,7 +60,7 @@ sub md_authres {
 
   my ($spfmail, $relayip, $serverdomain) = @_;
 
-  if(not defined $email and not defined $relayip and not defined $serverdomain) {
+  if(not defined $spfmail and not defined $relayip and not defined $serverdomain) {
     md_syslog('err', "Cannot calculate Authentication-results header without email address, relay ip and server domain name");
     return;
   }
@@ -68,13 +69,15 @@ sub md_authres {
   $spfmail =~ s/^<//;
   $spfmail =~ s/>$//;
   if(defined $spfmail and $spfmail =~ /\@/) {
-    my $spf_server  = Mail::SPF::Server->new();
-    my $request     = Mail::SPF::Request->new(
-      scope           => 'mfrom',
-      identity        => $spfmail,
-      ip_address      => $relayip,
-    );
-    $spfres = $spf_server->process($request);
+    if(is_public_ip4_address($relayip)) {
+      my $spf_server  = Mail::SPF::Server->new();
+      my $request     = Mail::SPF::Request->new(
+        scope           => 'mfrom',
+        identity        => $spfmail,
+        ip_address      => $relayip,
+      );
+      $spfres = $spf_server->process($request);
+    }
   }
   if(defined $spfres or $ksize > 0) {
     $authres = "$serverdomain (MIMEDefang);";
