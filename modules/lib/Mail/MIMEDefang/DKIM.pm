@@ -179,7 +179,7 @@ sub md_dkim_verify {
   $key_size = eval {
     my $pk = $dkim->signature->get_public_key;
        $pk && $pk->cork && $pk->cork->size * 8 };
-  if(defined $dkim->signature->domain and defined $key_size) {
+  if(defined $dkim->signature and defined $key_size) {
     return ($dkim->result, $dkim->signature->domain, $key_size);
   } else {
     return ($dkim->result, undef, 0);
