@@ -90,6 +90,7 @@ sub md_authres {
         $authres .= "\r\nspf=" . $spfres->code . " ($serverdomain: domain of $spfmail doesn't specify if $relayip is a permitted sender) smtp.mailfrom=$spfmail;";
       }
     }
+    $authres =~ s/\r//gs;
     return $authres;
   }
   return;
