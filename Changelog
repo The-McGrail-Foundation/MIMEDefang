@@ -5,7 +5,7 @@ affect your filter.
 2022-05-19 Giovanni Bechis <g.bechis@snb.it>
 
 	* add md_authres method to generate a basic Authentication-Results
-	  headers for the message
+	  header for the message
 
 2022-05-17 Giovanni Bechis <g.bechis@snb.it>
 
