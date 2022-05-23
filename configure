@@ -4340,6 +4340,17 @@ printf %s "checking for Perl module Mail::DKIM... " >&6; }
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $HAVE_DKIM" >&5
 printf "%s\n" "$HAVE_DKIM" >&6; }
 
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl module Mail::DKIM version" >&5
+printf %s "checking for Perl module Mail::DKIM version... " >&6; }
+    dkimver=`echo 'use Mail::DKIM; my $m = Mail::DKIM; print $m->VERSION' | $PERL 2>/dev/null`
+    if test $dkimver > 1.2020 ; then
+	HAVE_WORKING_ARC=yes
+    else
+	HAVE_WORKING_ARC=no
+    fi
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $dkimver" >&5
+printf "%s\n" "$dkimver" >&6; }
+
         dirs=`echo 'print "@INC\n";' | $PERL`
     foundit=""
     for i in $dirs ; do
@@ -8365,6 +8376,13 @@ if test "$HAVE_DKIM" = "no" ; then
    echo ""
    echo "Could not find Mail::DKIM Perl module... do not use"
    echo "md_dkim_sign function in your filter."
+   echo ""
+fi
+
+if test "$HAVE_WORKING_ARC" = "no" ; then
+   echo ""
+   echo "Could not find updated Mail::DKIM Perl module..."
+   echo "md_arc_sign function needs Mail::DKIM > 1.2020 to work properly."
    echo ""
 fi
 

@@ -217,6 +217,15 @@ else
     fi
     AC_MSG_RESULT($HAVE_DKIM)
 
+    AC_MSG_CHECKING([for Perl module Mail::DKIM version])
+    dkimver=`echo 'use Mail::DKIM; my $m = Mail::DKIM; print $m->VERSION' | $PERL 2>/dev/null`
+    if test $dkimver > 1.2020 ; then
+	HAVE_WORKING_ARC=yes
+    else
+	HAVE_WORKING_ARC=no
+    fi
+    AC_MSG_RESULT($dkimver)
+
     dnl Check MIME::Tools version
     dirs=`echo 'print "@INC\n";' | $PERL`
     foundit=""
@@ -1128,6 +1137,13 @@ if test "$HAVE_DKIM" = "no" ; then
    echo ""
    echo "Could not find Mail::DKIM Perl module... do not use"
    echo "md_dkim_sign function in your filter."
+   echo ""
+fi
+
+if test "$HAVE_WORKING_ARC" = "no" ; then
+   echo ""
+   echo "Could not find updated Mail::DKIM Perl module..."
+   echo "md_arc_sign function needs Mail::DKIM > 1.2020 to work properly."
    echo ""
 fi
 
