@@ -7,6 +7,7 @@ requires 'Archive::Zip';
 requires 'IO::Socket::SSL';
 requires 'JSON';
 requires 'LWP::UserAgent';
+requires 'URI';
 requires 'Net::DNS';
 requires 'Mail::DKIM';
 requires 'Mail::SPF';
