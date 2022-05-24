@@ -35,7 +35,7 @@ our @EXPORT_OK;
 
 =item md_authres
 
-Returns a mail Authentication-Results header.
+Returns a mail Authentication-Results header value.
 The method accepts the following parameters:
 
 =over 4
@@ -61,7 +61,7 @@ sub md_authres {
   my ($spfmail, $relayip, $serverdomain) = @_;
 
   if(not defined $spfmail and not defined $relayip and not defined $serverdomain) {
-    md_syslog('err', "Cannot calculate Authentication-results header without email address, relay ip and server domain name");
+    md_syslog('err', "Cannot calculate Authentication-Results header without email address, relay ip and server domain name");
     return;
   }
   my ($authres, $spfres);
