@@ -32,6 +32,14 @@ sub t_ipv4_public_ip : Test(2)
   is(is_public_ip4_address($ip_pub), 1);
 }
 
+sub t_ipv6_public_ip : Test(2)
+{
+  my $ip_priv = 'fe80::354f:365c:422e:6ae';
+  my $ip_pub = '2001:460:1e1f:ddc::1';
+  is(is_public_ip6_address($ip_priv), 0);
+  is(is_public_ip6_address($ip_pub), 1);
+}
+
 sub t_reverse_ip : Test(2)
 {
   my $ipv4 = '192.168.0.2';

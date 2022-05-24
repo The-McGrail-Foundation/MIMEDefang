@@ -33,7 +33,7 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_black_listed
                  relay_is_blacklisted_multi relay_is_blacklisted_multi_count relay_is_blacklisted_multi_list
-                 is_public_ip4_address md_get_bogus_mx_hosts get_mx_ip_addresses);
+                 is_public_ip4_address is_public_ip6_address md_get_bogus_mx_hosts get_mx_ip_addresses);
 our @EXPORT_OK = qw(get_host_name);
 
 =item expand_ipv6_address
@@ -199,6 +199,24 @@ sub is_public_ip4_address {
 		     $octets[1] == 255 &&
 		     $octets[2] == 255 &&
 		     $octets[3] == 255);
+	return 1;
+}
+
+=item is_public_ip6_address $ip_addr
+
+Returns true if $ip_addr is a publicly-routable IPv6 address, false otherwise
+
+=cut
+
+sub is_public_ip6_address {
+	my ($addr) = @_;
+	my @octets = split(/\:/, $addr);
+
+	# Unique-local address
+	return 0 if $octets[0] =~ /^fd/i;
+	# Link-local address
+	return 0 if $octets[0] =~ /^fe80/i;
+
 	return 1;
 }
 
