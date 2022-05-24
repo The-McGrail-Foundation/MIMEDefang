@@ -4342,14 +4342,15 @@ printf "%s\n" "$HAVE_DKIM" >&6; }
 
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl module Mail::DKIM version" >&5
 printf %s "checking for Perl module Mail::DKIM version... " >&6; }
-    dkimver=`echo 'use Mail::DKIM; my $m = Mail::DKIM; print $m->VERSION' | $PERL 2>/dev/null`
-    if test $dkimver > 1.2020 ; then
+    dkimver=`echo 'use Mail::DKIM; my $m = Mail::DKIM; print ($m->VERSION * 100000000)' | $PERL 2>/dev/null`
+    dkimdotver=`echo 'use Mail::DKIM; my $m = Mail::DKIM; print $m->VERSION' | $PERL 2>/dev/null`
+    if test $dkimver -gt 1202000000 ; then
 	HAVE_WORKING_ARC=yes
     else
 	HAVE_WORKING_ARC=no
     fi
-    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $dkimver" >&5
-printf "%s\n" "$dkimver" >&6; }
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $dkimdotver" >&5
+printf "%s\n" "$dkimdotver" >&6; }
 
         dirs=`echo 'print "@INC\n";' | $PERL`
     foundit=""

@@ -218,13 +218,14 @@ else
     AC_MSG_RESULT($HAVE_DKIM)
 
     AC_MSG_CHECKING([for Perl module Mail::DKIM version])
-    dkimver=`echo 'use Mail::DKIM; my $m = Mail::DKIM; print $m->VERSION' | $PERL 2>/dev/null`
-    if test $dkimver > 1.2020 ; then
+    dkimver=`echo 'use Mail::DKIM; my $m = Mail::DKIM; print ($m->VERSION * 100000000)' | $PERL 2>/dev/null`
+    dkimdotver=`echo 'use Mail::DKIM; my $m = Mail::DKIM; print $m->VERSION' | $PERL 2>/dev/null`
+    if test $dkimver -gt 1202000000 ; then
 	HAVE_WORKING_ARC=yes
     else
 	HAVE_WORKING_ARC=no
     fi
-    AC_MSG_RESULT($dkimver)
+    AC_MSG_RESULT($dkimdotver)
 
     dnl Check MIME::Tools version
     dirs=`echo 'print "@INC\n";' | $PERL`
