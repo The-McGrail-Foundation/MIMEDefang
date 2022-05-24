@@ -147,6 +147,7 @@ systemd-units/mimedefang.service
 t/core.t
 t/actions.t
 t/arc.t
+t/authres.t
 t/data/arc1.eml
 t/data/dkim1.eml
 t/data/dkim2.eml
