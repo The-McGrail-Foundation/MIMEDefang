@@ -27,10 +27,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      - name: Setup Perl
-        uses: shogo82148/actions-setup-perl@v1
-        with:
-          perl-version: '5.34'
-          install-modules-with: cpanm
+      - name: Install Perl modules
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install libmail-spf-perl libmail-dkim-perl libio-socket-ssl-perl libio-stringy-perl libmailtools-perl libmime-tools-perl libnet-smtp-ssl-perl libnet-ssleay-perl libtimedate-perl libunix-syslog-perl libhtml-parser-perl libarchive-zip-perl libtest-class-most-perl
       - name: Regression tests
         run: env SMTP_TEST=no prove -lv t
