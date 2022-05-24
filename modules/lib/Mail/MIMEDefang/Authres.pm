@@ -65,7 +65,7 @@ sub md_authres {
     return;
   }
   my ($authres, $spfres);
-  my ($dkimres, $dkimdom, $ksize) = md_dkim_verify();
+  my ($dkimres, $dkimdom, $ksize, $dkimpk) = md_dkim_verify();
   $spfmail =~ s/^<//;
   $spfmail =~ s/>$//;
   if(defined $spfmail and $spfmail =~ /\@/) {
@@ -78,9 +78,14 @@ sub md_authres {
     $spfres = $spf_server->process($request);
   }
   if(defined $spfres or $ksize > 0) {
+    my $dkimb = substr($dkimpk, 0, 8);
     $authres = "$serverdomain (MIMEDefang);";
     if($ksize > 0) {
-      $authres .= "\r\ndkim=$dkimres ($ksize-bit key) header.d=$dkimdom;";
+      $authres .= "\r\ndkim=$dkimres ($ksize-bit key) header.d=$dkimdom";
+      if(defined($dkimb)) {
+        $authres .= " header.b=$dkimb";
+      }
+      $authres .= ";";
     }
     if(defined $spfres) {
       if($spfres->code eq 'fail') {

@@ -152,6 +152,7 @@ In case of multiple signatures, the "best" result will be returned.
 Best is defined as "pass", followed by "fail", "invalid", and "none".
 The second return value is the domain that has applied the signature.
 The third return value is the size of the DKIM public key.
+The forth return value is the value of the "b" tag of the DKIM signature.
 
 =cut
 
@@ -180,9 +181,9 @@ sub md_dkim_verify {
     my $pk = $dkim->signature->get_public_key;
        $pk && $pk->cork && $pk->cork->size * 8 };
   if(defined $dkim->signature and defined $key_size) {
-    return ($dkim->result, $dkim->signature->domain, $key_size);
+    return ($dkim->result, $dkim->signature->domain, $key_size, $dkim->signature->get_tag('b'));
   } else {
-    return ($dkim->result, undef, 0);
+    return ($dkim->result, undef, 0, undef);
   }
 }
 
