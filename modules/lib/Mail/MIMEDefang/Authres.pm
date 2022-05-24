@@ -69,15 +69,13 @@ sub md_authres {
   $spfmail =~ s/^<//;
   $spfmail =~ s/>$//;
   if(defined $spfmail and $spfmail =~ /\@/) {
-    if(is_public_ip4_address($relayip) or is_public_ip6_address($relayip)) {
-      my $spf_server  = Mail::SPF::Server->new();
-      my $request     = Mail::SPF::Request->new(
-        scope           => 'mfrom',
-        identity        => $spfmail,
-        ip_address      => $relayip,
-      );
-      $spfres = $spf_server->process($request);
-    }
+    my $spf_server  = Mail::SPF::Server->new();
+    my $request     = Mail::SPF::Request->new(
+      scope           => 'mfrom',
+      identity        => $spfmail,
+      ip_address      => $relayip,
+    );
+    $spfres = $spf_server->process($request);
   }
   if(defined $spfres or $ksize > 0) {
     $authres = "$serverdomain (MIMEDefang);";
