@@ -8,6 +8,7 @@ requires 'IO::Socket::SSL';
 requires 'JSON';
 requires 'LWP::UserAgent';
 requires 'Mail::DKIM';
+requires 'Mail::SPF';
 requires 'Sys::Syslog';
 requires 'ExtUtils::Embed';
 requires 'Test::Most';
