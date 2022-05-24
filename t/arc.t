@@ -1,4 +1,4 @@
-package Mail::MIMEDefang::Unit::DKIM;
+package Mail::MIMEDefang::Unit::DKIM::ARC;
 use strict;
 use warnings;
 use lib qw(modules/lib);
