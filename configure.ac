@@ -208,6 +208,15 @@ else
     fi
     AC_MSG_RESULT($HAVE_LWP)
 
+    AC_MSG_CHECKING([for Perl module Mail::SPF])
+    (echo "use Mail::SPF;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_SPF=no
+    else
+	HAVE_SPF=yes
+    fi
+    AC_MSG_RESULT($HAVE_SPF)
+
     AC_MSG_CHECKING([for Perl module Mail::DKIM])
     (echo "use Mail::DKIM;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
     if test $? != 0 ; then
@@ -220,7 +229,7 @@ else
     AC_MSG_CHECKING([for Perl module Mail::DKIM version])
     dkimver=`echo 'use Mail::DKIM; my $m = Mail::DKIM; print ($m->VERSION * 100000000)' | $PERL 2>/dev/null`
     dkimdotver=`echo 'use Mail::DKIM; my $m = Mail::DKIM; print $m->VERSION' | $PERL 2>/dev/null`
-    if test $dkimver -gt 1202000000 ; then
+    if test $dkimver -gt 120200000 ; then
 	HAVE_WORKING_ARC=yes
     else
 	HAVE_WORKING_ARC=no
@@ -1134,10 +1143,17 @@ if test "$HAVE_LWP" = "no" ; then
    fi
 fi
 
+if test "$HAVE_SPF" = "no" ; then
+   echo ""
+   echo "Could not find Mail::SPF Perl module... do not use"
+   echo "md_authres function in your filter."
+   echo ""
+fi
+
 if test "$HAVE_DKIM" = "no" ; then
    echo ""
    echo "Could not find Mail::DKIM Perl module... do not use"
-   echo "md_dkim_sign function in your filter."
+   echo "md_dkim_sign, md_dkim_verify or md_authres functions in your filter."
    echo ""
 fi
 

@@ -4329,6 +4329,17 @@ printf %s "checking for Perl module LWP::UserAgent... " >&6; }
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $HAVE_LWP" >&5
 printf "%s\n" "$HAVE_LWP" >&6; }
 
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl module Mail::SPF" >&5
+printf %s "checking for Perl module Mail::SPF... " >&6; }
+    (echo "use Mail::SPF;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_SPF=no
+    else
+	HAVE_SPF=yes
+    fi
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $HAVE_SPF" >&5
+printf "%s\n" "$HAVE_SPF" >&6; }
+
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl module Mail::DKIM" >&5
 printf %s "checking for Perl module Mail::DKIM... " >&6; }
     (echo "use Mail::DKIM;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
@@ -4344,7 +4355,7 @@ printf "%s\n" "$HAVE_DKIM" >&6; }
 printf %s "checking for Perl module Mail::DKIM version... " >&6; }
     dkimver=`echo 'use Mail::DKIM; my $m = Mail::DKIM; print ($m->VERSION * 100000000)' | $PERL 2>/dev/null`
     dkimdotver=`echo 'use Mail::DKIM; my $m = Mail::DKIM; print $m->VERSION' | $PERL 2>/dev/null`
-    if test $dkimver -gt 1202000000 ; then
+    if test $dkimver -gt 120200000 ; then
 	HAVE_WORKING_ARC=yes
     else
 	HAVE_WORKING_ARC=no
@@ -8373,10 +8384,17 @@ if test "$HAVE_LWP" = "no" ; then
    fi
 fi
 
+if test "$HAVE_SPF" = "no" ; then
+   echo ""
+   echo "Could not find Mail::SPF Perl module... do not use"
+   echo "md_authres function in your filter."
+   echo ""
+fi
+
 if test "$HAVE_DKIM" = "no" ; then
    echo ""
    echo "Could not find Mail::DKIM Perl module... do not use"
-   echo "md_dkim_sign function in your filter."
+   echo "md_dkim_sign, md_dkim_verify or md_authres functions in your filter."
    echo ""
 fi
 
