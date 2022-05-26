@@ -81,7 +81,7 @@ sub md_authres {
     my $dkimb = substr($dkimpk, 0, 8);
     $authres = "$serverdomain (MIMEDefang);";
     if($ksize > 0) {
-      $authres .= "\r\ndkim=$dkimres ($ksize-bit key) header.d=$dkimdom";
+      $authres .= "\r\n\tdkim=$dkimres ($ksize-bit key) header.d=$dkimdom";
       if(defined($dkimb)) {
         $authres .= " header.b=$dkimb";
       }
@@ -89,11 +89,11 @@ sub md_authres {
     }
     if(defined $spfres) {
       if($spfres->code eq 'fail') {
-        $authres .= "\r\nspf=" . $spfres->code . " ($serverdomain: domain of $spfmail does not designate $relayip as permitted sender) smtp.mailfrom=$spfmail;";
+        $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail does not designate $relayip as permitted sender) smtp.mailfrom=$spfmail;";
       } elsif($spfres->code eq 'pass') {
-        $authres .= "\r\nspf=" . $spfres->code . " ($serverdomain: domain of $spfmail designates $relayip as permitted sender) smtp.mailfrom=$spfmail;";
+        $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail designates $relayip as permitted sender) smtp.mailfrom=$spfmail;";
       } elsif($spfres->code eq 'none') {
-        $authres .= "\r\nspf=" . $spfres->code . " ($serverdomain: domain of $spfmail doesn't specify if $relayip is a permitted sender) smtp.mailfrom=$spfmail;";
+        $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail doesn't specify if $relayip is a permitted sender) smtp.mailfrom=$spfmail;";
       }
     }
     $authres =~ s/\r//gs;
