@@ -98,9 +98,9 @@ sub md_dkim_sign {
 
   my ($keyfile, $algorithm, $method, $domain, $selector, $headers) = @_;
 
-  $algorithm //= 'rsa-sha1';
-  $method //= 'relaxed';
-  $selector //= 'default';
+  $algorithm = defined $algorithm ? $algorithm : 'rsa-sha1';
+  $method = defined $method ? $method : 'relaxed';
+  $selector = defined $selector ? $selector : 'default';
 
   if(not -f $keyfile) {
     md_syslog('err', "Could not open private DKIM key in md_dkim_sign: $!");

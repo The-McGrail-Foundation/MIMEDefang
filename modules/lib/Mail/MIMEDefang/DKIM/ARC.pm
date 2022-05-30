@@ -85,9 +85,9 @@ sub md_arc_sign {
 
   my ($keyfile, $algorithm, $chain, $domain, $srvid, $selector, $headers) = @_;
 
-  $algorithm //= 'rsa-sha256';
-  $selector //= 'default';
-  $srvid //= $domain;
+  $algorithm = defined $algorithm ? $algorithm : 'rsa-sha256';
+  $selector = defined $selector ? $selector : 'default';
+  $srvid = defined $srvid ? $srvid : $domain;
 
   my (%headers, %err);
 
