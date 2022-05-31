@@ -876,7 +876,7 @@ sub send_quarantine_notifications {
  	  my $donemsg = 0;
 	  my $i;
 	  for ($i=0; $i<=$QuarantineCount; $i++) {
-	    if (open(IN, "<$QuarantineSubdir/MSG.$i")) {
+	    if (open(IN, "<", "$QuarantineSubdir/MSG.$i")) {
 		    if (!$donemsg) {
 		      $body .= "Quarantine Messages:\n";
 		      $donemsg = 1;
@@ -891,7 +891,7 @@ sub send_quarantine_notifications {
 	    $body .= "\n";
 	  }
 
-	  if (open(IN, "<$QuarantineSubdir/HEADERS")) {
+	  if (open(IN, "<", "$QuarantineSubdir/HEADERS")) {
 	    $body .= "\n----------\nHere are the message headers:\n";
 	    while(<IN>) {
 		    $body .= $_;
@@ -899,7 +899,7 @@ sub send_quarantine_notifications {
 	    close(IN);
 	  }
 	  for ($i=1; $i<=$QuarantineCount; $i++) {
-	    if (open(IN, "<$QuarantineSubdir/PART.$i.HEADERS")) {
+	    if (open(IN, "<", "$QuarantineSubdir/PART.$i.HEADERS")) {
 		    $body .= "\n----------\nHere are the headers for quarantined part $i:\n";
 		    while(<IN>) {
 		      $body .= $_;
@@ -954,7 +954,7 @@ sub signal_complete {
 	    }
 	    $body .= "\n\n";
 	  }
-	  if (open(FILE, "<NOTIFICATION")) {
+	  if (open(FILE, "<", "NOTIFICATION")) {
 	    unless($NotifyNoPreamble) {
 		    $body .= "Here are the details of the modification:\n\n";
 	    }
@@ -969,7 +969,7 @@ sub signal_complete {
   # Send notification to administrator, if required
   if (-r "ADMIN_NOTIFICATION") {
 	my $body = "";
-	  if (open(FILE, "<ADMIN_NOTIFICATION")) {
+	  if (open(FILE, "<", "ADMIN_NOTIFICATION")) {
 	    $body .= join('', <FILE>);
 	    close(FILE);
 	    send_admin_mail($NotifyAdministratorSubject, $body);

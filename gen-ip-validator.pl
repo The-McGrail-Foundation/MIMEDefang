@@ -27,7 +27,7 @@ sub read_urandom($) {
   my $junk;
 
   if (-r "/dev/urandom") {
-    open(IN, "</dev/urandom");
+    open(IN, "<", "/dev/urandom");
     read(IN, $junk, $len);
     close(IN);
   }

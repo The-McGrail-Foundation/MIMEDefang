@@ -310,7 +310,7 @@ sub action_delete_all_headers {
     $header .= ":";
     $header = lc($header);
 
-    return undef unless(open(HDRS, "<HEADERS"));
+    return undef unless(open(HDRS, "<", "HEADERS"));
 
     $count = 0;
     while(<HDRS>) {
@@ -646,13 +646,13 @@ sub action_quarantine {
     copy_or_link($body->path, "$QuarantineSubdir/PART.$QuarantineCount.BODY");
 
     # Save the part's headers
-    if (open(OUT, ">$QuarantineSubdir/PART.$QuarantineCount.HEADERS")) {
+    if (open(OUT, ">", "$QuarantineSubdir/PART.$QuarantineCount.HEADERS")) {
 	$entity->head->print(\*OUT);
 	close(OUT);
     }
 
     # Save the messages
-    if (open(OUT, ">$QuarantineSubdir/MSG.$QuarantineCount")) {
+    if (open(OUT, ">", "$QuarantineSubdir/MSG.$QuarantineCount")) {
 	print OUT "$msg\n";
 	close(OUT);
     }
@@ -722,16 +722,16 @@ sub get_quarantine_dir {
     }
 
     # Write the sender and recipient info
-    if (open(OUT, ">$QuarantineSubdir/SENDER")) {
+    if (open(OUT, ">", "$QuarantineSubdir/SENDER")) {
 	print OUT "$Sender\n";
 	close(OUT);
     }
-    if (open(OUT, ">$QuarantineSubdir/SENDMAIL-QID")) {
+    if (open(OUT, ">", "$QuarantineSubdir/SENDMAIL-QID")) {
 	print OUT "$QueueID\n";
 	close(OUT);
     }
 
-    if (open(OUT, ">$QuarantineSubdir/RECIPIENTS")) {
+    if (open(OUT, ">", "$QuarantineSubdir/RECIPIENTS")) {
 	my($s);
 	foreach $s (@Recipients) {
 	    print OUT "$s\n";
@@ -740,8 +740,8 @@ sub get_quarantine_dir {
     }
 
     # Copy message headers
-    if (open(OUT, ">$QuarantineSubdir/HEADERS")) {
-	if (open(IN, "<HEADERS")) {
+    if (open(OUT, ">", "$QuarantineSubdir/HEADERS")) {
+	if (open(IN, "<", "HEADERS")) {
 	    while(<IN>) {
 		print OUT;
 	    }
@@ -786,7 +786,7 @@ sub action_quarantine_entire_message {
 
     $Actions{'quarantine_entire_message'}++;
     if (defined($msg) && ($msg ne "")) {
-	if (open(OUT, ">$QuarantineSubdir/MSG.0")) {
+	if (open(OUT, ">", "$QuarantineSubdir/MSG.0")) {
 	    print OUT "$msg\n";
 	    close(OUT);
 	}
@@ -885,7 +885,7 @@ sub action_notify_sender {
 	return 0;
     }
 
-    if (open(FILE, ">>NOTIFICATION")) {
+    if (open(FILE, ">>", "NOTIFICATION")) {
 	print FILE $msg;
 	close(FILE);
 	$Actions{'notify_sender'}++;
@@ -917,7 +917,7 @@ sub action_notify_administrator {
 	send_admin_mail($NotifyAdministratorSubject, $msg);
 	return 1;
     }
-    if (open(FILE, ">>ADMIN_NOTIFICATION")) {
+    if (open(FILE, ">>", "ADMIN_NOTIFICATION")) {
 	print FILE $msg;
 	close(FILE);
 	$Actions{'notify_administrator'}++;
@@ -1056,7 +1056,7 @@ sub action_replace_with_url {
     return 0 unless defined($entity->bodyhandle);
     $path = $entity->bodyhandle->path;
     return 0 unless defined($path);
-    open(IN, "<$path") or return 0;
+    open(IN, "<", "$path") or return 0;
 
     $ctx = Digest::SHA->new;
     $ctx->addfile(*IN);
@@ -1089,7 +1089,7 @@ sub action_replace_with_url {
 
     # save optional Content-Disposition data
     if (defined($cd_data) and ($cd_data ne "")) {
-	if (open CDF, ">$doc_root/.$name") {
+	if (open CDF, ">", "$doc_root/.$name") {
 	    print CDF $cd_data;
 	    close CDF;
 	    chmod 0644, "$doc_root/.$name";

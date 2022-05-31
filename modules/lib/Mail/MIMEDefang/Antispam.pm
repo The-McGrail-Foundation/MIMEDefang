@@ -203,7 +203,7 @@ sub spam_assassin_mail {
 	return undef;
     }
 
-    open(IN, "<./INPUTMSG") or return undef;
+    open(IN, "<", "./INPUTMSG") or return undef;
     my @msg = <IN>;
     close(IN);
 

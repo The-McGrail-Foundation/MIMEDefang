@@ -95,7 +95,7 @@ sub resend_message_specifying_mode {
   }
 
   if ($pid) {   # In the parent -- pipe mail message to the child
-	  unless (open(IN, "<INPUTMSG")) {
+	  unless (open(IN, "<", "INPUTMSG")) {
 	    md_syslog('err', "Could not open INPUTMSG in resend_message: $!");
 	    return 0;
 	  }
@@ -221,7 +221,7 @@ sub pretty_print_mail {
 	  return $chunk unless (defined($body));
 	  my($path) = $body->path;
 	  return $chunk unless (defined($path));
-	  return $chunk unless (open(IN, "<$path"));
+	  return $chunk unless (open(IN, "<", "$path"));
 	  while (<IN>) {
 	    $chunk .= $_;
 	    last if (length($chunk) >= $size);

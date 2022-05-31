@@ -323,7 +323,7 @@ sub main {
     }
 
     $ValidateIPHeader = "";
-    if (open(IN, '<@CONFDIR_EVAL@/mimedefang-ip-key')) {
+    if (open(IN, '<', '@CONFDIR_EVAL@/mimedefang-ip-key')) {
 	$ValidateIPHeader = <IN>;
 	chomp($ValidateIPHeader);
 	close(IN);
@@ -840,7 +840,7 @@ sub do_scan {
     $parser->filer($filer);
 
     # Parse the input stream:
-    if (!open(FILE, $file)) {
+    if (!open(FILE, '<', $file)) {
 	fatal("couldn't open $file: $!");
 	signal_complete();
 	return -1;
@@ -987,7 +987,7 @@ sub do_scan {
     }
 
     if ($Changed || $Rebuild) {
-	if (!open(OUT, ">NEWBODY")) {
+	if (!open(OUT, ">", "NEWBODY")) {
 	    fatal("Can't open NEWBODY: $!");
 	    signal_complete();
 	    return -1;
@@ -1102,7 +1102,7 @@ sub read_commands_file {
     my $needF = shift;
     $needF = 0 unless defined($needF);
 
-    if (!open(IN, "<COMMANDS")) {
+    if (!open(IN, "<", "COMMANDS")) {
 	fatal("Cannot open COMMANDS file from mimedefang: $!");
 	return 0;
     }

@@ -167,7 +167,7 @@ sub append_to_part {
   return 0 unless defined($part->bodyhandle);
   my($path) = $part->bodyhandle->path;
   return 0 unless (defined($path));
-  return 0 unless (open(OUT, ">>$path"));
+  return 0 unless (open(OUT, ">>", "$path"));
   print OUT "\n$boilerplate\n";
   close(OUT);
   $Changed = 1;
@@ -295,8 +295,8 @@ sub append_to_html_part {
   return 0 unless defined($part->bodyhandle);
   my($path) = $part->bodyhandle->path;
   return 0 unless (defined($path));
-  return 0 unless (open(IN, "<$path"));
-  if (!open(OUT, ">$path.tmp")) {
+  return 0 unless (open(IN, "<", "$path"));
+  if (!open(OUT, ">", "$path.tmp")) {
 	  close(IN);
 	  return(0);
   }
@@ -503,8 +503,8 @@ sub _anonymize_html_uri {
   return 0 unless defined($part->bodyhandle);
   my($path) = $part->bodyhandle->path;
   return 0 unless (defined($path));
-  return 0 unless (open(IN, "<$path"));
-  if (!open(OUT, ">$path.tmp")) {
+  return 0 unless (open(IN, "<", "$path"));
+  if (!open(OUT, ">", "$path.tmp")) {
           close(IN);
           return(0);
   }

@@ -893,7 +893,7 @@ sub scan_file_using_carrier_scan {
 	    $sock->close;
 	    return (999, 'swerr', 'tempfail');
 	}
-	unless(open(IN, "<$fname")) {
+	unless(open(IN, "<", "$fname")) {
 	    md_syslog('warning', "Cannot open $fname: $!");
 	    $sock->close;
 	    return(999, 'swerr', 'tempfail');
@@ -3010,7 +3010,7 @@ sub run_virus_scanner {
     $retcode = $? / 256;
 
     # Some daemons are instructed to save output in a file
-    if (open(REPORT, "DAEMON.RPT")) {
+    if (open(REPORT, "<", "DAEMON.RPT")) {
 	while(<REPORT>) {
 	    $msg .= $_ if /$match/i;
 	}

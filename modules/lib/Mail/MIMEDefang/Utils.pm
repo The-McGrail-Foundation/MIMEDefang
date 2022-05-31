@@ -147,8 +147,8 @@ sub copy_or_link {
     return 1 if link($src, $dst);
 
     # Link failed; do it the hard way
-    open(IN, "<$src") or return 0;
-    if (!open(OUT, ">$dst")) {
+    open(IN, "<", "$src") or return 0;
+    if (!open(OUT, ">", "$dst")) {
         close(IN);
         return 0;
     }
@@ -434,8 +434,8 @@ as a valid mbox file.
 #***********************************************************************
 sub md_copy_orig_msg_to_work_dir_as_mbox_file {
   return if (!in_message_context("md_copy_orig_msg_to_work_dir_as_mbox_file"));
-  open(IN, "<INPUTMSG") or return 0;
-  unless (open(OUT, ">Work/INPUTMBOX")) {
+  open(IN, "<", "INPUTMSG") or return 0;
+  unless (open(OUT, ">", "Work/INPUTMBOX")) {
 	  close(IN);
 	  return 0;
   }
