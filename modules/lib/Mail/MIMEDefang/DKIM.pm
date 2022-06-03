@@ -20,9 +20,6 @@ from F<mimedefang-filter> to operate with DKIM.
 
 package Mail::MIMEDefang::DKIM;
 
-use strict;
-use warnings;
-
 require Exporter;
 
 use Mail::DKIM::Signer;
@@ -105,8 +102,6 @@ sub md_dkim_sign {
   $method = defined $method ? $method : 'relaxed';
   $selector = defined $selector ? $selector : 'default';
 
-  my ($fh, $h, $v);
-
   if(not -f $keyfile) {
     md_syslog('err', "Could not open private DKIM key in md_dkim_sign: $!");
     return;
@@ -121,13 +116,13 @@ sub md_dkim_sign {
                        KeyFile => $keyfile,
                        Headers => $headers,
                   );
-  unless (open($fh, '<', "./INPUTMSG")) {
+  unless (open(IN, '<', "./INPUTMSG")) {
     md_syslog('err', "Could not open INPUTMSG in md_dkim_sign: $!");
     return;
   }
 
   # or read an email and pass it into the signer, one line at a time
-  while (<$fh>) {
+  while (<IN>) {
     # remove local line terminators
     chomp;
     s/\015$//;
@@ -136,9 +131,10 @@ sub md_dkim_sign {
     $dkim->PRINT("$_\015\012");
   }
   $dkim->CLOSE;
-  close($fh);
+  close(IN);
 
   my $signature = $dkim->signature;
+  my ($h, $v);
   if($signature->as_string =~ /^(.*):\s(.*)$/s) {
     $h = $1;
     $v = $2;
@@ -164,14 +160,12 @@ sub md_dkim_verify {
 
   my $dkim = Mail::DKIM::Verifier->new();
 
-  my $fh;
-
-  unless (open($fh, '<', "./INPUTMSG")) {
+  unless (open(IN, '<', "./INPUTMSG")) {
     md_syslog('err', "Could not open INPUTMSG in md_dkim_verify: $!");
     return;
   }
 
-  while (<$fh>) {
+  while (<IN>) {
     # remove local line terminators
     chomp;
     s/\015$//;
@@ -180,7 +174,7 @@ sub md_dkim_verify {
     $dkim->PRINT("$_\015\012");
   }
   $dkim->CLOSE;
-  close($fh);
+  close(IN);
 
   my $key_size;
   $key_size = eval {

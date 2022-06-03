@@ -20,9 +20,6 @@ headers from F<mimedefang-filter>.
 
 package Mail::MIMEDefang::Authres;
 
-use strict;
-use warnings;
-
 require Exporter;
 
 use Mail::SPF;
