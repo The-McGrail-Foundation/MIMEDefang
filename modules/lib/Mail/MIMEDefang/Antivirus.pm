@@ -908,11 +908,13 @@ sub scan_file_using_carrier_scan {
 	    unless(defined($nread)) {
 		md_syslog('warning', "Error reading $fname: $!");
 		$sock->close;
+                close(IN);
 		return(999, 'swerr', 'tempfail');
 	    }
 	    last if ($nread == 0);
 	    if (!$sock->print($chunk)) {
 		$sock->close;
+                close(IN);
 		return (999, 'swerr', 'tempfail');
 	    }
 	    $size -= $nread;
@@ -920,11 +922,13 @@ sub scan_file_using_carrier_scan {
 	if ($size > 0) {
 	    md_syslog('warning', "Error reading $fname: $!");
 	    $sock->close;
+            close(IN);
 	    return(999, 'swerr', 'tempfail');
 	}
     }
     if (!$sock->flush) {
 	$sock->close;
+        close(IN);
 	return (999, 'swerr', 'tempfail');
     }
 
@@ -934,6 +938,7 @@ sub scan_file_using_carrier_scan {
     unless ($line =~ /^230/) {
 	md_syslog('warning', "Unexpected response to AVSCAN or AVSCANLOCAL command: $line");
 	$sock->close;
+        close(IN);
 	return(999, 'swerr', 'tempfail');
     }
     # Get infection status
@@ -941,6 +946,7 @@ sub scan_file_using_carrier_scan {
     $line =~ s/\r//g;
     if ($line == 0) {
 	$sock->close;
+        close(IN);
 	return (0, 'ok', 'ok');
     }
 
@@ -953,6 +959,7 @@ sub scan_file_using_carrier_scan {
     # Get virus name
     chomp($line = $sock->getline);
     $line =~ s/\r//g;
+    close(IN);
     $sock->close;
 
     $VirusName = $line;
