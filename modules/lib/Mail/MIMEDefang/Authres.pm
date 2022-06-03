@@ -80,7 +80,7 @@ sub md_authres {
     );
     $spfres = $spf_server->process($request);
   }
-  if(defined $spfres or $ksize > 0) {
+  if(defined $spfres or ((defined $dkimpk) and ($ksize > 0))) {
     my $dkimb = substr($dkimpk, 0, 8);
     $authres = "$serverdomain (MIMEDefang);";
     if($ksize > 0) {
