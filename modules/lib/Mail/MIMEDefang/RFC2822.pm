@@ -84,7 +84,7 @@ sub header_timezone
 {
   my ($CachedTimezone, $now) = @_;
 
-    return $CachedTimezone if ($CachedTimezone ne "");
+    return $CachedTimezone if ((defined $CachedTimezone) and ($CachedTimezone ne ""));
 
     my($sec, $min, $hr, $mday, $mon, $year, $wday, $yday, $isdst) = localtime($now);
     my $a = timelocal($sec, $min, $hr, $mday, $mon, $year);
