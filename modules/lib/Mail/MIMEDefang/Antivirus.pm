@@ -90,9 +90,9 @@ sub message_contains_virus {
 	  return (wantarray ? (0, 'ok', 'ok') : 0);
   }
 
-  my ($scode, $scat, $sact);
+  my ($scanner, $scode, $scat, $sact);
   push_status_tag("Running virus scanner");
-  foreach my $scanner (@VirusScannerMessageRoutines) {
+  foreach $scanner (@VirusScannerMessageRoutines) {
 	  ($scode, $scat, $sact) = &$scanner();
 	  if ($scat eq "virus") {
 	    return (wantarray ? ($scode, $scat, $sact) : $scode);
@@ -134,9 +134,9 @@ sub entity_contains_virus {
 	  return (wantarray ? (0, 'ok', 'ok') : 0);
   }
 
-  my ($scode, $scat, $sact);
+  my ($scanner, $scode, $scat, $sact);
   push_status_tag("Running virus scanner");
-  foreach my $scanner (@VirusScannerEntityRoutines) {
+  foreach $scanner (@VirusScannerEntityRoutines) {
 	  ($scode, $scat, $sact) = &$scanner($e);
 	  if ($scat eq "virus") {
 	    return (wantarray ? ($scode, $scat, $sact) : $scode);
@@ -893,7 +893,7 @@ sub scan_file_using_carrier_scan {
 	    $sock->close;
 	    return (999, 'swerr', 'tempfail');
 	}
-	unless(open(my $in, "<", "$fname")) {
+	unless(open(IN, "<", "$fname")) {
 	    md_syslog('warning', "Cannot open $fname: $!");
 	    $sock->close;
 	    return(999, 'swerr', 'tempfail');
@@ -904,7 +904,7 @@ sub scan_file_using_carrier_scan {
 	    } else {
 		$chunksize = 8192;
 	    }
-	    $nread = read($in, $chunk, $chunksize);
+	    $nread = read(IN, $chunk, $chunksize);
 	    unless(defined($nread)) {
 		md_syslog('warning', "Error reading $fname: $!");
 		$sock->close;
@@ -913,7 +913,6 @@ sub scan_file_using_carrier_scan {
 	    last if ($nread == 0);
 	    if (!$sock->print($chunk)) {
 		$sock->close;
-                close($in);
 		return (999, 'swerr', 'tempfail');
 	    }
 	    $size -= $nread;
@@ -921,13 +920,11 @@ sub scan_file_using_carrier_scan {
 	if ($size > 0) {
 	    md_syslog('warning', "Error reading $fname: $!");
 	    $sock->close;
-            close($in);
 	    return(999, 'swerr', 'tempfail');
 	}
     }
     if (!$sock->flush) {
 	$sock->close;
-        close($in);
 	return (999, 'swerr', 'tempfail');
     }
 
@@ -937,7 +934,6 @@ sub scan_file_using_carrier_scan {
     unless ($line =~ /^230/) {
 	md_syslog('warning', "Unexpected response to AVSCAN or AVSCANLOCAL command: $line");
 	$sock->close;
-        close($in);
 	return(999, 'swerr', 'tempfail');
     }
     # Get infection status
@@ -945,7 +941,6 @@ sub scan_file_using_carrier_scan {
     $line =~ s/\r//g;
     if ($line == 0) {
 	$sock->close;
-        close($in);
 	return (0, 'ok', 'ok');
     }
 
@@ -959,7 +954,6 @@ sub scan_file_using_carrier_scan {
     chomp($line = $sock->getline);
     $line =~ s/\r//g;
     $sock->close;
-    close($in);
 
     $VirusName = $line;
     return (1, 'virus', 'quarantine');
@@ -1019,8 +1013,8 @@ sub message_contains_virus_fprotd_v6
     @files = grep { -f "./Work/$_" } readdir(DIR);
     closedir(DIR);
 
-    my($code, $category, $action);
-    foreach my $file (@files) {
+    my($file, $code, $category, $action);
+    foreach $file (@files) {
 	($code, $category, $action) =
 	    scan_file_using_fprotd_v6("Work/$file", $host);
 	if ($code != 0) {
@@ -1054,8 +1048,8 @@ sub message_contains_virus_carrier_scan {
     @files = grep { -f "./Work/$_" } readdir(DIR);
     closedir(DIR);
 
-    my($code, $category, $action);
-    foreach my $file (@files) {
+    my($file, $code, $category, $action);
+    foreach $file (@files) {
 	($code, $category, $action) =
 	    scan_file_using_carrier_scan("Work/$file", $host);
 	if ($code != 0) {
@@ -2997,7 +2991,7 @@ sub run_virus_scanner {
     my($cmd, $match) = @_;
     return (999, 'wrong-context', 'tempfail')
 	if (!in_message_context("run_virus_scanner"));
-    my($report, $retcode);
+    my($retcode);
     my($msg) = "";
     $CurrentVirusScannerMessage = "";
 
@@ -3016,11 +3010,11 @@ sub run_virus_scanner {
     $retcode = $? / 256;
 
     # Some daemons are instructed to save output in a file
-    if (open($report, "<", "DAEMON.RPT")) {
-	while(<$report>) {
+    if (open(REPORT, "<", "DAEMON.RPT")) {
+	while(<REPORT>) {
 	    $msg .= $_ if /$match/i;
 	}
-	close($report);
+	close(REPORT);
 	unlink("DAEMON.RPT");
     }
 
