@@ -79,6 +79,8 @@ sub resend_message_specifying_mode {
   my($deliverymode, $recips) = @_;
   return 0 if (!in_message_context("resend_message_specifying_mode"));
 
+  my $in;
+
   $deliverymode = "-odd" unless defined($deliverymode);
   if ($deliverymode ne "-odb" &&
 	  $deliverymode ne "-odq" &&
@@ -95,7 +97,7 @@ sub resend_message_specifying_mode {
   }
 
   if ($pid) {   # In the parent -- pipe mail message to the child
-	  unless (open(IN, "<", "INPUTMSG")) {
+	  unless (open($in, "<", "INPUTMSG")) {
 	    md_syslog('err', "Could not open INPUTMSG in resend_message: $!");
 	    return 0;
 	  }
@@ -109,10 +111,10 @@ sub resend_message_specifying_mode {
 	  print CHILD synthesize_received_header();
 
 	  # Copy message over
-	  while(<IN>) {
+	  while(<$in>) {
 	    print CHILD;
 	  }
-	  close(IN);
+	  close($in);
 	  if (!close(CHILD)) {
 	    if ($!) {
 		    md_syslog('err', "sendmail failure in resend_message: $!");
@@ -203,6 +205,7 @@ sub pretty_print_mail {
   $chunk = "" unless defined($chunk);
   $depth = 0 unless defined($depth);
 
+  my $in;
   my(@parts) = $e->parts;
   my($type) = $e->mime_type;
   my($fname) = takeStabAtFilename($e);
@@ -210,8 +213,7 @@ sub pretty_print_mail {
   my($spaces) = "  " x $depth;
   $chunk .= "\n$spaces" . "[Part: ${type}${fname}]\n\n";
   if ($#parts >= 0) {
-	  my($part);
-	  foreach $part (@parts) {
+	  foreach my $part (@parts) {
 	    $chunk = pretty_print_mail($part, $size, $chunk, $depth+1);
 	    last if (length($chunk) >= $size);
 	  }
@@ -221,12 +223,12 @@ sub pretty_print_mail {
 	  return $chunk unless (defined($body));
 	  my($path) = $body->path;
 	  return $chunk unless (defined($path));
-	  return $chunk unless (open(IN, "<", "$path"));
-	  while (<IN>) {
+	  return $chunk unless (open($in, "<", "$path"));
+	  while (<$in>) {
 	    $chunk .= $_;
 	    last if (length($chunk) >= $size);
 	  }
-	  close(IN);
+	  close($in);
   }
   return $chunk;
 }
