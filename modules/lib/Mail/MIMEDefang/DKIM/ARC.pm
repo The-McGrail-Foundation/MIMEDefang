@@ -20,6 +20,9 @@ from F<mimedefang-filter> to operate with ARC signatures.
 
 package Mail::MIMEDefang::DKIM::ARC;
 
+use strict;
+use warnings;
+
 require Exporter;
 
 use Mail::DKIM::ARC::Signer;
@@ -89,7 +92,7 @@ sub md_arc_sign {
   $selector = defined $selector ? $selector : 'default';
   $srvid = defined $srvid ? $srvid : $domain;
 
-  my (%headers, %err);
+  my (%headers, %err, $fh, $h, $v);
 
   if(not -f $keyfile) {
     md_syslog('err', "Could not open private ARC key in md_arc_sign: $!");
@@ -113,13 +116,13 @@ sub md_arc_sign {
                        KeyFile => $keyfile,
                        Headers => $headers,
                   );
-  unless (open(IN, '<', "./INPUTMSG")) {
+  unless (open($fh, '<', "./INPUTMSG")) {
     md_syslog('err', "Could not open INPUTMSG in md_arc_sign: $!");
     return;
   }
 
   # or read an email and pass it into the signer, one line at a time
-  while (<IN>) {
+  while (<$fh>) {
     # remove local line terminators
     chomp;
     s/\015$//;
@@ -128,7 +131,7 @@ sub md_arc_sign {
     $arc->PRINT("$_\015\012");
   }
   $arc->CLOSE;
-  close(IN);
+  close($fh);
 
   if($arc->result eq "sealed") {
     my @pre_headers = $arc->as_strings();
