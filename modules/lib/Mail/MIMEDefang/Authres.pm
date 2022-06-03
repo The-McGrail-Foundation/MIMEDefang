@@ -81,14 +81,16 @@ sub md_authres {
     $spfres = $spf_server->process($request);
   }
   if(defined $spfres or ((defined $dkimpk) and ($ksize > 0))) {
-    my $dkimb = substr($dkimpk, 0, 8);
     $authres = "$serverdomain (MIMEDefang);";
-    if($ksize > 0) {
-      $authres .= "\r\n\tdkim=$dkimres ($ksize-bit key) header.d=$dkimdom";
-      if(defined($dkimb)) {
-        $authres .= " header.b=$dkimb";
+    if(defined $dkimpk) {
+      my $dkimb = substr($dkimpk, 0, 8);
+      if($ksize > 0) {
+        $authres .= "\r\n\tdkim=$dkimres ($ksize-bit key) header.d=$dkimdom";
+        if(defined($dkimb)) {
+          $authres .= " header.b=$dkimb";
+        }
+        $authres .= ";";
       }
-      $authres .= ";";
     }
     if(defined $spfres) {
       if($spfres->code eq 'fail') {
