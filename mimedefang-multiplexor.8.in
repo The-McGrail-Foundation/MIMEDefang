@@ -366,7 +366,7 @@ to handle RCPT commands for other domains.
 
 The \fB\-a\fR, \fB\-N\fR and \fB\-O\fR options takes a socket as an
 argument.
-The format of the socket parameter is determined by the Sendmail Milter library,
+The format of the socket parameter is similar to that of the Sendmail Milter library,
 and is one of the following:
 
 .TP
