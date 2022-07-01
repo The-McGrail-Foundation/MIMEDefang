@@ -384,7 +384,6 @@ matches regexp.
 # %DESCRIPTION:
 #  A helper function for filter.
 #***********************************************************************
-no strict 'subs';
 sub dummy_zip_error_handler {} ;
 
 sub md_init {
