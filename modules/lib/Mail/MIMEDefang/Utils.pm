@@ -387,10 +387,12 @@ matches regexp.
 sub dummy_zip_error_handler {} ;
 
 sub md_init {
+  my $use_zip = 0;
   if (!defined($Features{"Archive::Zip"}) or ($Features{"Archive::Zip"} eq 1)) {
-    (eval 'use Archive::Zip qw( :ERROR_CODES ); $Features{"Archive::Zip"} = 1;')
-    or $Features{"Archive::Zip"} = 0;
+    (eval 'use Archive::Zip qw( :ERROR_CODES ); $use_zip = 1;')
+    or $use_zip = 0;
   }
+  $Features{"Archive::Zip"} = $use_zip;
 }
 
 sub re_match_in_zip_directory {
