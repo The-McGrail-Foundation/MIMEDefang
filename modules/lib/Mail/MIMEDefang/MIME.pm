@@ -20,6 +20,9 @@ from F<mimedefang-filter> to operate on MIME objects.
 
 package Mail::MIMEDefang::MIME;
 
+use strict;
+use warnings;
+
 require Exporter;
 
 use MIME::Parser;
@@ -64,12 +67,11 @@ Method that adds parts to the array C<@FlatParts> for flattening.
 sub collect_parts {
   my($entity, $skip_pgp_mime) = @_;
   my(@parts) = $entity->parts;
-  my($part);
   if ($#parts >= 0) {
 	  if (! $skip_pgp_mime ||
 	    (lc($entity->head->mime_type) ne "multipart/signed" and
 	     lc($entity->head->mime_type) ne "multipart/encrypted")) {
-	    foreach $part (@parts) {
+	    foreach my $part (@parts) {
 		    collect_parts($part, $skip_pgp_mime);
 	    }
 	  }
@@ -122,28 +124,27 @@ C<undef> if none exists.
 sub find_part {
   my($entity, $content_type, $skip_pgp_mime) = @_;
   my(@parts);
-  my($part);
   my($ans);
   if (!($entity->is_multipart)) {
   	if (lc($entity->head->mime_type) eq lc($content_type)) {
 	    return $entity;
 	  } else {
-	    return undef;
+	    return;
 	  }
   }
 
   if ($skip_pgp_mime &&
 	  (lc($entity->head->mime_type) eq "multipart/signed" or
 	   lc($entity->head->mime_type) eq "multipart/encrypted")) {
-	  return undef;
+	  return;
   }
 
   @parts = $entity->parts;
-  foreach $part (@parts) {
+  foreach my $part (@parts) {
 	  $ans = find_part($part, $content_type, $skip_pgp_mime);
 	    return $ans if defined($ans);
   }
-  return undef;
+  return;
 }
 
 =item append_to_part
@@ -203,14 +204,14 @@ sub remove_redundant_html_parts {
   # Don't recurse into multipart/signed or multipart/encrypted
   return 0 if ($type eq "multipart/signed" or
     $type eq "multipart/encrypted");
-  my(@keep, $part);
+  my(@keep);
   my($didsomething);
   $didsomething = 0;
   my($have_text_plain);
   if ($type eq "multipart/alternative" && $#parts >= 0) {
 	  # First look for a text/plain part
 	  $have_text_plain = 0;
-	  foreach $part (@parts) {
+	  foreach my $part (@parts) {
 	    $type = lc($part->mime_type);
 	    if ($type eq "text/plain") {
 	 	    $have_text_plain = 1;
@@ -220,7 +221,7 @@ sub remove_redundant_html_parts {
 
 	  # If we have a text/plain part, delete any text/html part
 	  if ($have_text_plain) {
-	    foreach $part (@parts) {
+	    foreach my $part (@parts) {
 		    $type = lc($part->mime_type);
 		    if ($type ne "text/html") {
 		      push(@keep, $part);
@@ -236,7 +237,7 @@ sub remove_redundant_html_parts {
 	  }
   }
   if ($#parts >= 0) {
-	  foreach $part (@parts) {
+	  foreach my $part (@parts) {
 	    $didsomething = 1 if (remove_redundant_html_parts($part));
 	  }
   }
@@ -360,7 +361,7 @@ sub append_text_boilerplate {
   @FlatParts = ();
   my($ok) = 0;
   collect_parts($msg, 1);
-  foreach $part (@FlatParts) {
+  foreach my $part (@FlatParts) {
 	  if (lc($part->head->mime_type) eq "text/plain") {
 	    if (append_to_part($part, $boilerplate)) {
 		    $ok = 1;
@@ -409,7 +410,7 @@ sub append_html_boilerplate {
   @FlatParts = ();
   my($ok) = 0;
   collect_parts($msg, 1);
-  foreach $part (@FlatParts) {
+  foreach my $part (@FlatParts) {
 	  if (lc($part->head->mime_type) eq "text/html") {
 	    if (append_to_html_part($part, $boilerplate)) {
 		    $ok = 1;
@@ -544,7 +545,7 @@ sub anonymize_uri {
   @FlatParts = ();
   my($ok) = 0;
   collect_parts($msg, 1);
-  foreach $part (@FlatParts) {
+  foreach my $part (@FlatParts) {
     if (lc($part->head->mime_type) =~ /text\/html/) {
       if (_anonymize_html_uri($part)) {
         $ok = 1;
