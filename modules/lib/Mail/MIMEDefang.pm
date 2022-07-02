@@ -336,10 +336,10 @@ Prints a message to syslog(3) using the specified facility
         sub _fac_to_num
 	{
 		my ($thing) = @_;
-		return undef if exists $blacklisted{$thing};
+		return if exists $blacklisted{$thing};
 		$thing = $special{$thing} if exists $special{$thing};
 		$thing = 'LOG_' . uc($thing);
-		return undef unless grep { $_ eq $thing } @ {$Unix::Syslog::EXPORT_TAGS{macros} };
+		return unless grep { $_ eq $thing } @ {$Unix::Syslog::EXPORT_TAGS{macros} };
 		return eval "Unix::Syslog::$thing()";
 	}
 }
@@ -869,8 +869,7 @@ sub send_quarantine_notifications {
 	    $body .= "The entire message was quarantined in $QuarantineSubdir/ENTIRE_MESSAGE\n\n";
 	  }
 
-	  my($recip);
-	  foreach $recip (@Recipients) {
+	  foreach my $recip (@Recipients) {
 	    $body .= "Recipient: $recip\n";
 	  }
  	  my $donemsg = 0;
@@ -948,8 +947,7 @@ sub signal_complete {
 	    $body .= "An e-mail you sent with message-id $MessageID\n";
 	    $body .= "was modified by our mail scanning software.\n\n";
 	    $body .= "The recipients were:";
-	    my($recip);
-	    foreach $recip (@Recipients) {
+	    foreach my $recip (@Recipients) {
 		    $body .= " $recip";
 	    }
 	    $body .= "\n\n";
@@ -978,8 +976,8 @@ sub signal_complete {
 
   # Syslog some info if any actions were taken
   my($msg) = "";
-  my($key, $num);
-  foreach $key (sort keys(%Actions)) {
+  my($num);
+  foreach my $key (sort keys(%Actions)) {
 	  $num = $Actions{$key};
 	  $msg .= " $key=$num";
   }
