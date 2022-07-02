@@ -1382,9 +1382,13 @@ sub delete_ip_validation_header {
     return 1;
 }
 
+=over 4
+
 =item read_config(file_path)
 
 Loads a config file where global variables can be stored.
+
+=back
 
 =cut
 
@@ -1423,10 +1427,14 @@ sub read_config
   return 0;
 }
 
+=over 4
+
 =item rebuild_entity
 
 Method that descends through input entity and rebuilds an output entity.
 The various parts of the input entity may be modified (or even deleted).
+
+=back
 
 =cut
 
