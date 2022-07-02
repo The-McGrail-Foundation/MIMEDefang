@@ -210,8 +210,7 @@ sub pretty_print_mail {
   my($spaces) = "  " x $depth;
   $chunk .= "\n$spaces" . "[Part: ${type}${fname}]\n\n";
   if ($#parts >= 0) {
-	  my($part);
-	  foreach $part (@parts) {
+	  foreach my $part (@parts) {
 	    $chunk = pretty_print_mail($part, $size, $chunk, $depth+1);
 	    last if (length($chunk) >= $size);
 	  }

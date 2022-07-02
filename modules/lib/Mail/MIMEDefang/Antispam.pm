@@ -56,7 +56,7 @@ message has been detected as spam.
 sub spam_assassin_is_spam {
 
     my($hits, $req, $tests, $report) = spam_assassin_check(@_);
-    return undef if (!defined($hits));
+    return if (!defined($hits));
 
     return ($hits >= $req);
 }
@@ -96,7 +96,7 @@ elements,
 sub spam_assassin_check {
 
     my($status) = spam_assassin_status(@_);
-    return undef if (!defined($status));
+    return if (!defined($status));
 
     my $hits = $status->get_hits;
     my $req = $status->get_required_hits();
@@ -129,10 +129,10 @@ The caller is responsible for calling the C<finish> method.
 sub spam_assassin_status {
 
     my $object = spam_assassin_init(@_);
-    return undef unless $object;
+    return unless $object;
 
     my $mail = spam_assassin_mail();
-    return undef unless $mail;
+    return unless $mail;
 
     my $status;
     push_status_tag("Running SpamAssassin");
@@ -162,23 +162,19 @@ sub spam_assassin_init {
 
     unless ($Features{"SpamAssassin"}) {
 	md_syslog('err', "Attempt to call SpamAssassin function, but SpamAssassin is not installed.");
-	return undef;
+	return;
     }
 
     if (!defined($SASpamTester)) {
-
 	push_status_tag("Creating SpamAssasin Object");
-
 	my $sa_args = {
 		local_tests_only   => $SALocalTestsOnly,
 		dont_copy_prefs    => 1,
 		user_dir           => $Features{'Path:QUARANTINEDIR'},
 	};
-
 	$SASpamTester = Mail::SpamAssassin->new( $sa_args );
 	pop_status_tag();
     }
-
     return $SASpamTester;
 }
 
@@ -200,10 +196,10 @@ sub spam_assassin_mail {
 
     unless ($Features{"SpamAssassin"}) {
 	md_syslog('err', "Attempt to call SpamAssassin function, but SpamAssassin is not installed.");
-	return undef;
+	return;
     }
 
-    open(IN, "<", "./INPUTMSG") or return undef;
+    open(IN, "<", "./INPUTMSG") or return;
     my @msg = <IN>;
     close(IN);
 
@@ -220,7 +216,7 @@ sub spam_assassin_mail {
     unshift (@msg, @sahdrs);
     if (!defined($SASpamTester)) {
 	spam_assassin_init(@_);
-	return undef unless $SASpamTester;
+	return unless $SASpamTester;
     }
     return $SASpamTester->parse(\@msg);
 }
@@ -282,7 +278,7 @@ sub rspamd_check {
 
     unless ($Features{"Path:RSPAMC"} or $rspamc = 1) {
         md_syslog('err', "Attempt to call Rspamd function, but Rspamd is not installed or JSON and LWP modules not available.");
-        return undef;
+        return;
     }
     # forking method is deprecated
     if($Features{"Path:RSPAMC"} and ($rspamc eq 0)) {
@@ -295,7 +291,7 @@ sub rspamd_check {
       $ua->agent("MIMEDefang");
 
       # slurp the mail message
-      open my $fh, '<', "./INPUTMSG" or return undef;
+      open my $fh, '<', "./INPUTMSG" or return;
       $/ = undef;
       my $mail = <$fh>;
       close $fh;

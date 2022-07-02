@@ -90,9 +90,9 @@ sub message_contains_virus {
 	  return (wantarray ? (0, 'ok', 'ok') : 0);
   }
 
-  my ($scanner, $scode, $scat, $sact);
+  my ($scode, $scat, $sact);
   push_status_tag("Running virus scanner");
-  foreach $scanner (@VirusScannerMessageRoutines) {
+  foreach my $scanner (@VirusScannerMessageRoutines) {
 	  ($scode, $scat, $sact) = &$scanner();
 	  if ($scat eq "virus") {
 	    return (wantarray ? ($scode, $scat, $sact) : $scode);
@@ -134,9 +134,9 @@ sub entity_contains_virus {
 	  return (wantarray ? (0, 'ok', 'ok') : 0);
   }
 
-  my ($scanner, $scode, $scat, $sact);
+  my ($scode, $scat, $sact);
   push_status_tag("Running virus scanner");
-  foreach $scanner (@VirusScannerEntityRoutines) {
+  foreach my $scanner (@VirusScannerEntityRoutines) {
 	  ($scode, $scat, $sact) = &$scanner($e);
 	  if ($scat eq "virus") {
 	    return (wantarray ? ($scode, $scat, $sact) : $scode);
@@ -1020,8 +1020,8 @@ sub message_contains_virus_fprotd_v6
     @files = grep { -f "./Work/$_" } readdir(DIR);
     closedir(DIR);
 
-    my($file, $code, $category, $action);
-    foreach $file (@files) {
+    my($code, $category, $action);
+    foreach my $file (@files) {
 	($code, $category, $action) =
 	    scan_file_using_fprotd_v6("Work/$file", $host);
 	if ($code != 0) {
@@ -1055,8 +1055,8 @@ sub message_contains_virus_carrier_scan {
     @files = grep { -f "./Work/$_" } readdir(DIR);
     closedir(DIR);
 
-    my($file, $code, $category, $action);
-    foreach $file (@files) {
+    my($code, $category, $action);
+    foreach my $file (@files) {
 	($code, $category, $action) =
 	    scan_file_using_carrier_scan("Work/$file", $host);
 	if ($code != 0) {
