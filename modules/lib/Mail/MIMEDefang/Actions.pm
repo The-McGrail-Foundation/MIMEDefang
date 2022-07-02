@@ -62,7 +62,7 @@ unchanged.
 #  unchanged.
 #***********************************************************************
 sub action_rebuild {
-    return undef unless (in_message_context("action_rebuild") && !in_filter_wrapup("action_rebuild"));
+    return unless (in_message_context("action_rebuild") && !in_filter_wrapup("action_rebuild"));
     $Rebuild = 1;
 }
 
@@ -90,7 +90,7 @@ sub action_add_entity
 {
 	my($entity, $offset) = @_;
 
-	return undef unless (in_message_context("action_add_part") && !in_filter_wrapup("action_add_part"));
+	return unless (in_message_context("action_add_part") && !in_filter_wrapup("action_add_part"));
 	$offset = -1 unless defined($offset);
 	push(@AddedParts, [$entity, $offset]);
 	action_rebuild();
@@ -131,7 +131,7 @@ sub action_add_part {
     my ($disposition) = shift;
     my ($offset)      = shift;
 
-    return undef unless (in_message_context("action_add_part") && !in_filter_wrapup("action_add_part"));
+    return unless (in_message_context("action_add_part") && !in_filter_wrapup("action_add_part"));
 
     $offset = -1 unless defined($offset);
 
@@ -181,8 +181,7 @@ sub process_added_parts {
     } else {
 	$entity = $rebuilt;
     }
-    my $thing;
-    foreach $thing (@AddedParts) {
+    foreach my $thing (@AddedParts) {
 	$entity->add_part($thing->[0], $thing->[1]);
     }
     return $entity;
@@ -310,7 +309,7 @@ sub action_delete_all_headers {
     $header .= ":";
     $header = lc($header);
 
-    return undef unless(open(HDRS, "<", "HEADERS"));
+    return unless(open(HDRS, "<", "HEADERS"));
 
     $count = 0;
     while(<HDRS>) {
@@ -732,8 +731,7 @@ sub get_quarantine_dir {
     }
 
     if (open(OUT, ">", "$QuarantineSubdir/RECIPIENTS")) {
-	my($s);
-	foreach $s (@Recipients) {
+	foreach my $s (@Recipients) {
 	    print OUT "$s\n";
 	}
 	close(OUT);
