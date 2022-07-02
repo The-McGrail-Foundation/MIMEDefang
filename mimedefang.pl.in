@@ -224,9 +224,7 @@ sub stream_by_recipient {
 	return 0;
     }
 
-    my($recip);
-
-    foreach $recip (@Recipients) {
+    foreach my $recip (@Recipients) {
 	if (!resend_message_one_recipient($recip)) {
 	    md_syslog('crit', 'stream_by_recipient: COULD NOT RESEND MESSAGE - PLEASE INVESTIGATE');
 	    action_bounce("Unable to stream message");
@@ -253,11 +251,11 @@ sub stream_by_recipient {
 #  and ONLY if locally-submitted mail goes via SMTP.
 #***********************************************************************
 sub stream_by_domain {
-    my(%Domains, $recip, $dom, $nkeys, $key);
+    my(%Domains, $dom, $nkeys);
     return 0 if (!in_message_context("stream_by_domain"));
 
     # Grab list of domains of recipients
-    foreach $recip (@Recipients) {
+    foreach my $recip (@Recipients) {
 	$dom = $recip;
 	# Remove angle brackets
 	$dom =~ s/[<>]//g;
@@ -274,7 +272,7 @@ sub stream_by_domain {
     $nkeys = keys(%Domains);
     if ($nkeys > 1) {
 	# More than one domain.  Cancel and resend
-	foreach $key (keys %Domains) {
+	foreach my $key (keys %Domains) {
 	    if (!resend_message(@{$Domains{$key}})) {
 		md_syslog('crit', 'stream_by_domain: COULD NOT RESEND MESSAGE - PLEASE INVESTIGATE');
 		action_bounce("Unable to stream message");
@@ -398,13 +396,13 @@ sub main {
 
     if ($workdir eq "-features") {
 	# Print available features
-	my($thing, $ans);
+	my($ans);
 
 	# Print MIMEDefang version
 	my $ver = md_version();
 	print("MIMEDefang version $ver\n\n");
 	# Print the features we have first
-	foreach $thing (sort keys %Features) {
+	foreach my $thing (sort keys %Features) {
 	    my($feat);
 	    $feat = $Features{$thing};
 	    $ans = $feat ? "yes" : "no";
@@ -418,7 +416,7 @@ sub main {
 	}
 
 	# And now print the ones we don't have
-	foreach $thing (sort keys %Features) {
+	foreach my $thing (sort keys %Features) {
 	    my($feat);
 	    $feat = $Features{$thing};
 	    $ans = $feat ? "yes" : "no";
@@ -430,7 +428,7 @@ sub main {
 	# And print Perl module versions
 	print("\n");
 	my($version);
-	foreach $thing (qw(Archive::Zip Digest::SHA HTML::Parser IO::Socket MIME::Base64 MIME::Tools MIME::Words Mail::Mailer Mail::SpamAssassin Net::DNS Unix::Syslog )) {
+	foreach my $thing (qw(Archive::Zip Digest::SHA HTML::Parser IO::Socket MIME::Base64 MIME::Tools MIME::Words Mail::Mailer Mail::SpamAssassin Net::DNS Unix::Syslog )) {
 	    unless (eval "require $thing") {
 		printf("%-30s: missing\n", $thing);
 		next;
@@ -1026,8 +1024,8 @@ sub do_scan {
 	}
 	# Write out all the other MIME headers associated with the rebuilt
 	# entity.
-	my($tag, $hdr);
-	foreach $tag (grep {/^content-/i} $rebuilt->head->tags) {
+	my($hdr);
+	foreach my $tag (grep {/^content-/i} $rebuilt->head->tags) {
 	    # Already done content-type
 	    next if ($tag =~ /^content-type$/i);
 	    if ($tag =~ /^content-transfer-encoding$/i) {
