@@ -422,24 +422,29 @@ like SpamAssassin, rbl checks, zip file listing and HTML parsing.
 # $Features{"AutoDetectPerlModules"} = 0;
 
 sub detect_and_load_perl_modules() {
+    my ($use_sa, $use_html, $use_zip, $use_dns);
     if (!defined($Features{"AutoDetectPerlModules"}) or
       $Features{"AutoDetectPerlModules"}) {
       if (!defined($Features{"SpamAssassin"}) or ($Features{"SpamAssassin"} eq 1)) {
-        (eval 'use Mail::SpamAssassin (); $Features{"SpamAssassin"} = 1;')
-        or $Features{"SpamAssassin"} = 0;
+        (eval 'use Mail::SpamAssassin (); $use_sa = 1;')
+        or $use_sa = 0;
       }
+      $Features{"SpamAssassin"} = $use_sa;
       if (!defined($Features{"HTML::Parser"}) or ($Features{"HTML::Parser"} eq 1)) {
-        (eval 'use HTML::Parser; $Features{"HTML::Parser"} = 1;')
-        or $Features{"HTML::Parser"} = 0;
+        (eval 'use HTML::Parser; $use_html = 1;')
+        or $use_html = 0;
       }
+      $Features{"HTML::Parser"} = $use_html;
       if (!defined($Features{"Archive::Zip"}) or ($Features{"Archive::Zip"} eq 1)) {
-        (eval 'use Archive::Zip; $Features{"Archive::Zip"} = 1;')
-        or $Features{"Archive::Zip"} = 0;
+        (eval 'use Archive::Zip; $use_zip = 1;')
+        or $use_zip = 0;
       }
+      $Features{"Archive::Zip"} = $use_zip;
       if (!defined($Features{"Net::DNS"}) or ($Features{"Net::DNS"} eq 1)) {
-        (eval 'use Net::DNS; $Features{"Net::DNS"} = 1;')
-        or $Features{"Net::DNS"} = 0;
+        (eval 'use Net::DNS; $use_dns = 1;')
+        or $use_dns = 0;
       }
+      $Features{"Net::DNS"} = $use_dns;
       if(exists &Mail::MIMEDefang::Actions::md_init) {
         Mail::MIMEDefang::Action::md_init();
       }
