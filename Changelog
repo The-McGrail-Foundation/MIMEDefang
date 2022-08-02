@@ -3683,7 +3683,7 @@ affect your filter.
 2000-10-29  Dianne Skoll  <dfs@roaringpenguin.com>
 
 	* configure.in: Added /usr/lib/libmilter to search path for
-	libmilter.a (thanks to Jörgen Hägg).
+	libmilter.a (thanks to JÃ¶rgen HÃ¤gg).
 
 2000-10-27  Dianne Skoll  <dfs@roaringpenguin.com>
 
