@@ -42,16 +42,21 @@ sub dkim_verify : Test(3)
 {
   my ($result, $domain, $ksize);
 
-  copy('t/data/dkim1.eml', './INPUTMSG');
-  ($result, $domain, $ksize) = md_dkim_verify();
-  is($result, "pass");
-  is($ksize, 768);
-  unlink('./INPUTMSG');
+  SKIP: {
+    if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
+      skip "Net test disabled", 1
+    }
+    copy('t/data/dkim1.eml', './INPUTMSG');
+    ($result, $domain, $ksize) = md_dkim_verify();
+    is($result, "pass");
+    is($ksize, 768);
+    unlink('./INPUTMSG');
 
-  copy('t/data/dkim2.eml', './INPUTMSG');
-  ($result, $domain, $ksize) = md_dkim_verify();
-  is($result, "fail");
-  unlink('./INPUTMSG');
+    copy('t/data/dkim2.eml', './INPUTMSG');
+    ($result, $domain, $ksize) = md_dkim_verify();
+    is($result, "fail");
+    unlink('./INPUTMSG');
+  };
 }
 
 __PACKAGE__->runtests();
