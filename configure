@@ -4257,6 +4257,8 @@ printf "%s\n" "$as_me: WARNING: *** MIME::Tools version 5.410 or higher (5.411a 
 printf "%s\n" "$as_me: WARNING: *** MIME::WordDecoder" >&2;}
 	    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: *** Digest::SHA" >&5
 printf "%s\n" "$as_me: WARNING: *** Digest::SHA" >&2;}
+	    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: *** FindBin" >&5
+printf "%s\n" "$as_me: WARNING: *** FindBin" >&2;}
 	    exit 1
 	fi
 	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: ok" >&5
