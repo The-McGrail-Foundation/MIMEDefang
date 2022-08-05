@@ -28,4 +28,4 @@ mkdir -p /root/.spamassassin
 touch /root/.spamassassin/user_prefs
 
 echo "Starting regression tests inside Docker..."
-make test
+make test SMTP_TEST=yes

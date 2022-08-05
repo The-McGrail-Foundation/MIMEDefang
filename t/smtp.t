@@ -8,10 +8,7 @@ use Test::Most;
 sub t0_smtp_sa : Test(1)
 {
   SKIP: {
-    if ( ! -f "/.dockerenv" ) {
-      skip "Smtp test should run inside Docker", 1
-    }
-    if ( (defined $ENV{'SMTP_TEST'}) and ($ENV{'SMTP_TEST'} eq 'no' )) {
+    if ( (not defined $ENV{'SMTP_TEST'}) or ($ENV{'SMTP_TEST'} ne 'yes' )) {
       skip "Smtp test disabled", 1
     }
     my $from = 'defang';
@@ -25,10 +22,7 @@ sub t0_smtp_sa : Test(1)
 sub t1_smtp : Test(1)
 {
   SKIP: {
-    if ( ! -f "/.dockerenv" ) {
-      skip "Smtp test should run inside Docker", 1
-    }
-    if ( (defined $ENV{'SMTP_TEST'}) and ($ENV{'SMTP_TEST'} eq 'no' )) {
+    if ( (not defined $ENV{'SMTP_TEST'}) or ($ENV{'SMTP_TEST'} ne 'yes' )) {
       skip "Smtp test disabled", 1
     }
     my $from = 'defang';
