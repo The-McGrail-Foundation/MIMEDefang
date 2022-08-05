@@ -11,6 +11,8 @@ use MIME::Parser;
 use Mail::MIMEDefang;
 use Mail::MIMEDefang::Utils;
 
+use constant HAS_ARCHIVEZIP => eval { require Archive::Zip; };
+
 sub t_percent_encode : Test(1)
 {
   my $pe = percent_encode("foo\r\nbar\tbl%t");
@@ -78,36 +80,40 @@ sub t_re_match_zip : Test(2)
 {
   my ($done, @parts);
 
-  # Set up temporary dir
-  system('rm', '-rf', 't/tmp');
-  mkdir('t/tmp', 0755);
+  SKIP: {
+    skip "Archive::Zip is needed for this test to work", 1 unless (HAS_ARCHIVEZIP);
 
-  # Make a parser
-  my $parser = MIME::Parser->new();
-  $parser->extract_nested_messages(1);
-  $parser->extract_uuencode(1);
-  $parser->output_to_core(0);
-  $parser->tmp_to_core(0);
-  my $filer = MIME::Parser::FileInto->new('t/tmp');
-  $filer->ignore_filename(1);
-  $parser->filer($filer);
+    # Set up temporary dir
+    system('rm', '-rf', 't/tmp');
+    mkdir('t/tmp', 0755);
 
-  detect_and_load_perl_modules();
-  my $entity = $parser->parse_open("t/data/zip.eml");
-  @parts = $entity->parts();
-  foreach my $part (@parts) {
-    my $bh = $part->bodyhandle();
-    if (defined($bh)) {
-      my $path = $bh->path();
-      if (defined($path)) {
-        $done = re_match_in_zip_directory($path, "\.bin");
-        is($done, 0);
-        $done = re_match_in_zip_directory($path, "\.txt");
-        is($done, 1);
+    # Make a parser
+    my $parser = MIME::Parser->new();
+    $parser->extract_nested_messages(1);
+    $parser->extract_uuencode(1);
+    $parser->output_to_core(0);
+    $parser->tmp_to_core(0);
+    my $filer = MIME::Parser::FileInto->new('t/tmp');
+    $filer->ignore_filename(1);
+    $parser->filer($filer);
+
+    detect_and_load_perl_modules();
+    my $entity = $parser->parse_open("t/data/zip.eml");
+    @parts = $entity->parts();
+    foreach my $part (@parts) {
+      my $bh = $part->bodyhandle();
+      if (defined($bh)) {
+        my $path = $bh->path();
+        if (defined($path)) {
+          $done = re_match_in_zip_directory($path, "\.bin");
+          is($done, 0);
+          $done = re_match_in_zip_directory($path, "\.txt");
+          is($done, 1);
+        }
       }
     }
-  }
-  system('rm', '-rf', 't/tmp');
+    system('rm', '-rf', 't/tmp');
+  };
 }
 
 __PACKAGE__->runtests();
