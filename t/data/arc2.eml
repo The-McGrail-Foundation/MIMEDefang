@@ -1,4 +1,4 @@
-Authentication-Results: sa-test.spamassassin.org (MIMEDefang);
+Authentication-Results: sa-test.spamassassin.org;
 	dkim=pass (768-bit key) header.d=sa-test.spamassassin.org header.b=oRxHoP0Y;
 	spf=none (domain of test@sa-test.spamassassin.org doesn't specify if 1.2.3.4 is a permitted sender) smtp.mailfrom=test@sa-test.spamassassin.org;
 DKIM-Signature: v=1; a=rsa-sha1; d=sa-test.spamassassin.org; h=from:to

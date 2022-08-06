@@ -11,7 +11,6 @@ Mail::MIMEDefang::DKIM::ARC - ARC interface for MIMEDefang
 
 Mail::MIMEDefang::DKIM::ARC is a module with a set of ARC related methods called
 from F<mimedefang-filter> to operate with ARC signatures.
-Mail::DKIM > 1.20200513 is needed for the sub to work properly.
 
 =head1 METHODS
 

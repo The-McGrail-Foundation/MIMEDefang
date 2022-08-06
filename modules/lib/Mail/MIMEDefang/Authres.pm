@@ -62,11 +62,17 @@ The domain name of the server where MIMEDefang is running on
 sub md_authres {
 
   my ($spfmail, $relayip, $serverdomain) = @_;
+  my $dkimoldver = 1;
 
   if(not defined $spfmail and not defined $relayip and not defined $serverdomain) {
     md_syslog('err', "Cannot calculate Authentication-Results header without email address, relay ip and server domain name");
     return;
   }
+
+  if (version->parse(Mail::DKIM->VERSION) > version->parse(1.2)) {
+    $dkimoldver = 0;
+  }
+
   my ($authres, $spfres);
   my ($dkimres, $dkimdom, $ksize, $dkimpk) = md_dkim_verify();
   $spfmail =~ s/^<//;
@@ -81,7 +87,13 @@ sub md_authres {
     $spfres = $spf_server->process($request);
   }
   if((defined $spfres and defined $spfres->code) or ((defined $dkimpk) and ($ksize > 0))) {
-    $authres = "$serverdomain (MIMEDefang);";
+    # Mail::DKIM::ARC::Signer v0.54 doesn't correctly parse Authentication-Results headers,
+    # add a workaround to make md_arc_sign work with our own headers.
+    if($dkimoldver) {
+      $authres = "$serverdomain;";
+    } else {
+      $authres = "$serverdomain (MIMEDefang);";
+    }
     if(defined $dkimpk) {
       my $dkimb = substr($dkimpk, 0, 8);
       if($ksize > 0) {
