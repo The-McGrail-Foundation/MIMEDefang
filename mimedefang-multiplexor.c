@@ -2,7 +2,7 @@
 *
 * mimedefang-multiplexor.c
 *
-* Master program which manages a pool of e-mail scanning processes.
+* Main program which manages a pool of e-mail scanning processes.
 *
 * Copyright (C) 2001-2005 Roaring Penguin Software Inc.
 * http://www.roaringpenguin.com
