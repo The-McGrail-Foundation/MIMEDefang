@@ -39,7 +39,7 @@ our @EXPORT_OK;
   action_bounce action_accept action_defang action_discard action_add_part
   action_tempfail action_add_header action_add_entity action_quarantine
   action_quarantine_entire_message action_change_header action_delete_header
-  action_external_filter get_quarantine_dir
+  action_external_filter get_quarantine_dir action_sm_quarantine
   action_replace_with_url action_drop_with_warning action_delete_all_headers
   message_rejected process_added_parts add_recipient delete_recipient change_sender
 };
