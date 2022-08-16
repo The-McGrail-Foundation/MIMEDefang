@@ -37,8 +37,6 @@ require Exporter;
 use Errno qw(ENOENT EACCES);
 use File::Spec;
 
-my $_syslogopen = undef;
-
 our @ISA = qw(Exporter);
 our @EXPORT;
 our @EXPORT_OK;
