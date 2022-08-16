@@ -34,6 +34,7 @@ package Mail::MIMEDefang;
 
 require Exporter;
 
+use Carp;
 use Errno qw(ENOENT EACCES);
 use File::Spec;
 
@@ -213,7 +214,7 @@ Prints a message to syslog(3) using the specified facility
 				if(!$@) {
 					($_openlogsub, $_syslogsub) = _wrap_for_sys_syslog();
 				} else {
-					die q{Unable to detect either Unix::Syslog or Sys::Syslog};
+					croak q{Unable to detect either Unix::Syslog or Sys::Syslog};
 				}
 			}
 		}
@@ -252,9 +253,9 @@ Prints a message to syslog(3) using the specified facility
 		my $openlog = sub {
 			my ($id, $flags, $facility) = @_;
 
-			die q{first argument must be an identifier string} unless defined $id;
-			die q{second argument must be flag string} unless defined $flags;
-			die q{third argument must be a facility string} unless defined $facility;
+			croak q{first argument must be an identifier string} unless defined $id;
+			croak q{second argument must be flag string} unless defined $flags;
+			croak q{third argument must be a facility string} unless defined $facility;
 
 			return Unix::Syslog::openlog( $id, _convert_flags( $flags ), _convert_facility( $facility ) );
 		};
@@ -693,7 +694,7 @@ sub write_result_line
         if (!$results_fh) {
                 $results_fh = IO::File->new('>>RESULTS');
                 if (!$results_fh) {
-                        die("Could not open RESULTS file: $!");
+                        croak("Could not open RESULTS file: $!");
                 }
         }
 
@@ -705,7 +706,7 @@ sub write_result_line
                 $line = substr $line, 0, 16382;
         }
 
-        print $results_fh "$line\n" or die "Could not write RESULTS line: $!";
+        print $results_fh "$line\n" or croak "Could not write RESULTS line: $!";
 
         return;
 }
@@ -989,7 +990,7 @@ sub signal_complete {
   }
   write_result_line("F", "");
   if ($results_fh) {
-	  $results_fh->close() or die("Could not close RESULTS file: $!");
+	  $results_fh->close() or croak("Could not close RESULTS file: $!");
 	  undef $results_fh;
   }
 
