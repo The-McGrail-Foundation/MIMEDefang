@@ -23,6 +23,8 @@ package Mail::MIMEDefang::Antispam;
 use strict;
 use warnings;
 
+use Carp;
+
 use Mail::MIMEDefang;
 use Mail::MIMEDefang::Utils;
 
@@ -326,7 +328,7 @@ sub rspamd_check {
 
       if ( -f $Features{"Path:RSPAMC"} ) {
         open(RSPAMD_PIPE, "-|", @rs)
-                        || die "can't open rspamc: $!";
+                        || croak "can't open rspamc: $!";
         while(<RSPAMD_PIPE>) {
           $rp = $_;
           {

@@ -40,6 +40,7 @@ use Mail::MIMEDefang::Utils;
 use Mail::MIMEDefang::Actions;
 use Mail::MIMEDefang::Antispam;
 
+use Carp;
 use Socket;
 use IO::Socket;
 use IO::Select;
@@ -157,7 +158,7 @@ sub fatal {
     my($msg) = @_;
     md_syslog('err', "$msg");
     if (!$ServerMode) {
-	die($msg);
+	croak($msg);
     } else {
 	print_and_flush("error: $msg");
     }

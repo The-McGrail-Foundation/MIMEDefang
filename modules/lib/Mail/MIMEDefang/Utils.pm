@@ -23,6 +23,7 @@ package Mail::MIMEDefang::Utils;
 use strict;
 use warnings;
 
+use Carp;
 use MIME::Words qw(:all);
 
 use Mail::MIMEDefang;
@@ -300,7 +301,7 @@ sub re_match_in_rar_directory {
 
   if ( -f $rarname ) {
     open(UNRAR_PIPE, "-|", @unrar_args)
-                        || die "can't open @unrar_args|: $!";
+                        || croak "can't open @unrar_args|: $!";
     while(<UNRAR_PIPE>) {
       $rf = $_;
       if ( $beginmark and ( $rf !~ /^\-\-\-/ ) ) {
@@ -348,7 +349,7 @@ sub re_match_in_7zip_directory {
 
   if ( -f $zname ) {
     open(UNZ_PIPE, "-|", @unz_args)
-                        || die "can't open @unz_args|: $!";
+                        || croak "can't open @unz_args|: $!";
     while(<UNZ_PIPE>) {
       $rf = $_;
       if ( $beginmark and ( $rf !~ /^\-\-\-/ ) ) {
