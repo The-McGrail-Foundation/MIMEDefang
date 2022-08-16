@@ -341,12 +341,12 @@ a list of IP addresses as a dotted-quad.
 #***********************************************************************
 sub relay_is_blacklisted_multi {
   my($addr, $timeout, $answers_wanted, $domains, $res) = @_;
-  my($domain, $sock);
+  my $sock;
 
   my $ans = {};
   my $positive_answers = 0;
 
-  foreach $domain (@{$domains}) {
+  foreach my $domain (@{$domains}) {
     $ans->{$domain} = 'SERVFAIL';
   }
   unless ($Features{"Net::DNS"}) {
@@ -369,7 +369,7 @@ sub relay_is_blacklisted_multi {
   my $sel = IO::Select->new();
 
   # Send out the queries
-  foreach $domain (@{$domains}) {
+  foreach my $domain (@{$domains}) {
     $sock = $res->bgsend("$addr.$domain", 'A');
     $sock_to_domain{$sock} = $domain;
     $sel->add($sock);
@@ -384,25 +384,25 @@ sub relay_is_blacklisted_multi {
     $expire = 1 if ($expire < 1);
     my @ready;
     @ready = $sel->can_read($expire);
-    foreach $sock (@ready) {
-      my $pack = $res->bgread($sock);
+    foreach my $rsock (@ready) {
+      my $pack = $res->bgread($rsock);
       $sel->remove($sock);
-      $domain = $sock_to_domain{$sock};
-      undef($sock);
+      my $sdomain = $sock_to_domain{$rsock};
+      undef($rsock);
       my($rr, $rcode);
       $rcode = $pack->header->rcode;
       if ($rcode eq "SERVFAIL" or $rcode eq "NXDOMAIN") {
-        $ans->{$domain} = $rcode;
+        $ans->{$sdomain} = $rcode;
         next;
       }
       my $got_one = 0;
-      foreach $rr ($pack->answer) {
+      foreach my $rr ($pack->answer) {
         if ($rr->type eq 'A') {
           $got_one = 1;
-          if ($ans->{$domain} eq "SERVFAIL") {
-            $ans->{$domain} = ();
+          if ($ans->{$sdomain} eq "SERVFAIL") {
+            $ans->{$sdomain} = ();
           }
-          push(@{$ans->{$domain}}, $rr->address);
+          push(@{$ans->{$sdomain}}, $rr->address);
         }
       }
       $positive_answers++ if ($got_one);
@@ -442,8 +442,7 @@ sub relay_is_blacklisted_multi_count {
 					 $domains,
 					 $res);
   my $count = 0;
-  my $domain;
-  foreach $domain (keys(%$ans)) {
+  foreach my $domain (keys(%$ans)) {
 	  my $r = $ans->{$domain};
 	  if (ref($r) eq "ARRAY" and $#{$r} >= 0) {
 	    $count++;
@@ -480,8 +479,7 @@ sub relay_is_blacklisted_multi_list {
 					 $domains,
 					 $res);
   my $result = [];
-  my $domain;
-  foreach $domain (keys(%$ans)) {
+  foreach my $domain (keys(%$ans)) {
 	  my $r = $ans->{$domain};
 	  if (ref($r) eq "ARRAY" and $#{$r} >= 0) {
 	    push @$result, $domain;
