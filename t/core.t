@@ -44,7 +44,6 @@ sub t_read_config : Test(1)
 sub t_detect_and_load_perl_modules : Test(1)
 {
   my $dnsver;
-  $Features{"Net::DNS"} = 1;
   detect_and_load_perl_modules();
   $dnsver = Net::DNS->version;
   like($dnsver, qr/([0-9]+)\.([0-9]+)/, "Net::DNS correctly loaded, version is $dnsver");
