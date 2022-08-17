@@ -261,10 +261,9 @@ sub filter_end {
 
     # Spam checks if SpamAssassin is installed
     if ($Features{"SpamAssassin"}) {
-        if (-s "./INPUTMSG" < 100*1024) {
-            # Only scan messages smaller than 100kB.    Larger messages
-            # are extremely unlikely to be spam, and SpamAssassin is
-            # dreadfully slow on very large messages.
+        if (-s "./INPUTMSG" < 512*1024) {
+            # Only scan messages smaller than 512KB. Larger messages are 
+            # unlikely to be spam and SpamAssassin is slow on very large messages.
             my($hits, $req, $names, $report) = spam_assassin_check();
             my($score);
             if ($hits < 40) {
