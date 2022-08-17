@@ -294,7 +294,7 @@ sub filter_end {
     # # Check email messages with Rspamd
     #
     # my ($hits, $req, $names, $report, $action, $is_spam);
-    # if (-s "./INPUTMSG" < 100*1024) {
+    # if (-s "./INPUTMSG" < 512*1024) {
     #   ($hits, $req, $names, $report, $action, $is_spam) = rspamd_check();
     #   md_syslog("Warning", "Action: $action, Spam: $is_spam, Names: $names");
     #   if ($is_spam eq "true") {
