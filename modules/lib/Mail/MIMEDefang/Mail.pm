@@ -32,7 +32,8 @@ use Mail::MIMEDefang::Utils;
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw( resend_message_one_recipient resend_message_specifying_mode
-                  resend_message pretty_print_mail md_check_against_smtp_server );
+                  resend_message pretty_print_mail md_check_against_smtp_server
+                  get_smtp_extensions get_smtp_return_code );
 
 =item resend_message_one_recipient
 
