@@ -1005,7 +1005,7 @@ Sends a mail message using Sendmail.
 
 Invokes Sendmail without involving the shell, so that shell metacharacters won't cause security problems.
 
-Deliverimode parameter is the optional sendmail delivery mode arg (default "-odd").
+Delivery mode parameter is the optional sendmail delivery mode arg (default "-odd").
 
 =cut
 
