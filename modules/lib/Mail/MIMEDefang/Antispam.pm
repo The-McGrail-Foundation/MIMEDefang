@@ -168,10 +168,22 @@ sub spam_assassin_init {
     }
 
     if (!defined($SASpamTester)) {
+        if (!defined($config)) {
+            if (-r $Features{'Path:CONFDIR'} . '/sa-mimedefang.cf') {
+                $config = $Features{'Path:CONFDIR'} . '/sa-mimedefang.cf';
+            } elsif (-r $Features{'Path:CONFDIR'} . '/spamassassin/sa-mimedefang.cf') {
+                $config = $Features{'Path:CONFDIR'} . '/spamassassin/sa-mimedefang.cf';
+            } elsif (-r $Features{'Path:CONFDIR'} . '/spamassassin/local.cf') {
+                $config = $Features{'Path:CONFDIR'} . '/spamassassin/local.cf';
+            } else {
+                $config = $Features{'Path:CONFDIR'} . '/spamassassin.cf';
+            }
+        }
 	push_status_tag("Creating SpamAssasin Object");
 	my $sa_args = {
 		local_tests_only   => $SALocalTestsOnly,
 		dont_copy_prefs    => 1,
+		userprefs_filename => $config,
 		user_dir           => $Features{'Path:QUARANTINEDIR'},
 	};
 	$SASpamTester = Mail::SpamAssassin->new( $sa_args );
