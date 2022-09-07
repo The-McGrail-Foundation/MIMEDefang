@@ -44,7 +44,7 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdio.h>]], [[return 0;]])],
     [AC_MSG_RESULT(no)
      CFLAGS="$OLD_CFLAGS"])
 
-for thing in prefix siteprefix vendorprefix installarchlib installprivlib installbin installman1dir installman3dir installscript installsitearch installsitelib; do
+for thing in prefix siteprefix vendorprefix vendorlib installarchlib installprivlib installbin installman1dir installman3dir installscript installsitearch installsitelib; do
     AC_MSG_CHECKING([for Perl installation variable $thing])
     val=`$PERL -V:$thing | sed -e "s/^.*='//" -e "s/';$//"`
     AC_MSG_RESULT($val)
@@ -821,6 +821,7 @@ AC_SUBST(LDFLAGS)
 AC_SUBST(PERLPREFIX)
 AC_SUBST(PERLSITEPREFIX)
 AC_SUBST(PERLVENDORPREFIX)
+AC_SUBST(PERLVENDORLIB)
 AC_SUBST(PERLINSTALLARCHLIB)
 AC_SUBST(PERLINSTALLPRIVLIB)
 AC_SUBST(PERLINSTALLBIN)
