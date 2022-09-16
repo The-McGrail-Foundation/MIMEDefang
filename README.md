@@ -49,19 +49,22 @@ MIMEDefang has the following software requirements:
 2) Perl 5.8.0 or higher
 3) Required Perl modules:
 
+	Digest::SHA
+        FindBin
+	MailTools 1.1401  or higher
 	MIME::tools 5.413 or higher
 	MIME::Base64 3.03 or higher
-	MailTools 1.1401  or higher
-	Digest::SHA
-	IO::Socket::SSL
+        MIME::WordDecoder
 
 	These modules are available from http://www.cpan.org
 
 4) Optional Perl modules:
 
-	Mail::SpamAssassin (http://www.spamassassin.org/) - spam detector
-	HTML::Parser (CPAN) - Needed for append_html_boilerplate function
 	Crypt::OpenSSL::Random - Needed to generate a truly random ipheader file
+	HTML::Parser (CPAN) - Needed for append_html_boilerplate function
+	IO::Socket::SSL - Needed for md_check_against_smtp_server SSL checks
+	JSON and LWP::UserAgent - Needed for rspamd support
+	Mail::SpamAssassin (https://www.spamassassin.org/) - spam detector
 	Test::Class, Test::Most and tzdata files - Needed to run regression tests
 
 4) Sendmail 8.12.x, 8.13.x or Postfix.  Get the latest version.
