@@ -32,6 +32,9 @@ You're limited only by your imagination. If you can think of it and code it in P
 
 package Mail::MIMEDefang;
 
+use warnings;
+no warnings qw(once uninitialized);
+
 require Exporter;
 
 use Carp;
