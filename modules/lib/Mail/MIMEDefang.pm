@@ -855,7 +855,7 @@ sub send_quarantine_notifications {
 	  my($body);
 	  $body = "From: $DaemonName <$DaemonAddress>\n";
 	  $body .= "To: \"$AdminName\" <$AdminAddress>\n";
-	  $body .= gen_date_msgid_headers();
+	  $body .= Mail::MIMEDefang::RFC2822::gen_date_msgid_headers();
 	  $body .= "Auto-Submitted: auto-generated\n";
 	  $body .= "MIME-Version: 1.0\nContent-Type: text/plain\n";
 	  $body .= "Precedence: bulk\n";
@@ -868,7 +868,7 @@ sub send_quarantine_notifications {
 	  }
 
 	  $body .= " quarantined in the directory\n";
-	  $body .= "$QuarantineSubdir on " . get_host_name() . ".\n\n";
+	  $body .= "$QuarantineSubdir on " . Mail::MIMEDefang::Net::get_host_name() . ".\n\n";
 	  $body .= "The sender was '$Sender'.\n\n" if defined($Sender);
 	  $body .= "The Sendmail queue identifier was $QueueID.\n\n" if ($QueueID ne "NOQUEUE");
 	  $body .= "The relay machine was $RelayHostname ($RelayAddr).\n\n";
@@ -945,7 +945,7 @@ sub signal_complete {
 	  my($body);
 	  $body = "From: $DaemonName <$DaemonAddress>\n";
 	  $body .= "To: $Sender\n";
-	  $body .= gen_date_msgid_headers();
+	  $body .= Mail::MIMEDefang::RFC2822::gen_date_msgid_headers();
 	  $body .= "Auto-Submitted: auto-generated\n";
 	  $body .= "MIME-Version: 1.0\nContent-Type: text/plain\n";
 	  $body .= "Precedence: bulk\n";
@@ -1106,7 +1106,7 @@ sub send_admin_mail {
   my $mail;
   $mail = "From: $DaemonName <$DaemonAddress>\n";
   $mail .= "To: \"$AdminName\" <$AdminAddress>\n";
-  $mail .= gen_date_msgid_headers();
+  $mail .= Mail::MIMEDefang::RFC2822::gen_date_msgid_headers();
   $mail .= "Auto-Submitted: auto-generated\n";
   $mail .= "MIME-Version: 1.0\nContent-Type: text/plain\n";
   $mail .= "Precedence: bulk\n";
