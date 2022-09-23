@@ -1505,13 +1505,17 @@ handleWorkerStatusFD(EventSelector *es,
 		}
 	    }
 	}
-	close(s->workerStatusFD);
-	Event_DelHandler(s->es, s->statusHandler);
-	s->statusHandler = NULL;
-	s->workerStatusFD = -1;
+	if (s != NULL) {
+	  close(s->workerStatusFD);
+	  Event_DelHandler(s->es, s->statusHandler);
+	  s->statusHandler = NULL;
+	  s->workerStatusFD = -1;
+	}
   }
   if (changed) {
+	if (s != NULL) {
 	  notify_worker_status(s->es, WORKERNO(s), s->status_tag);
+	}
   }
 }
 
