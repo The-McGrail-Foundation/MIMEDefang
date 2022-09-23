@@ -535,7 +535,7 @@ If you send the \fBmimedefang-multiplexor\fR process a SIGTERM signal
 
 .SH AUTHOR
 \fBmimedefang-mulitplexor\fR was written by Dianne Skoll <dfs@roaringpenguin.com>.
-The \fBmimedefang\fR home page is \fIhttp://www.mimedefang.org/\fR.
+The \fBmimedefang\fR home page is \fIhttps://www.mimedefang.org/\fR.
 
 .SH SEE ALSO
 mimedefang.pl(8), mimedefang-filter(5), mimedefang(8), mimedefang-protocol(7)

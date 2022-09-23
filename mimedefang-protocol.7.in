@@ -389,7 +389,7 @@ workers after they have processed a given number of e-mail messages.
 
 .SH AUTHOR
 \fBmimedefang\fR was written by Dianne Skoll <dfs@roaringpenguin.com>.
-The \fBmimedefang\fR home page is \fIhttp://www.mimedefang.org/\fR.
+The \fBmimedefang\fR home page is \fIhttps://www.mimedefang.org/\fR.
 
 .SH SEE ALSO
 mimedefang.pl(8), mimedefang(8), mimedefang-multiplexor(8), mimedefang-filter(5)

@@ -1763,7 +1763,7 @@ otherwise.
 
 .PP
 If you have the Mail::SpamAssassin Perl module installed (see
-http://www.spamassassin.org) you may call any of the spam_assassin_*
+https://spamassassin.apache.org) you may call any of the spam_assassin_*
 functions.  They should only be called from \fBfilter_begin\fR or
 \fBfilter_end\fR because they operate on the entire message at once.
 Most functions use an optionally provided config file.  If no config
@@ -1962,7 +1962,7 @@ Sophos AntiVirus - http://www.sophos.com/
 Kaspersky AVP and aveclient (AVP5) - http://www.avp.ru/
 .TP
 .B clamav
-Clam AntiVirus - http://www.clamav.net/
+Clam AntiVirus - https://www.clamav.net/
 .TP
 .B f-prot
 F-RISK F-PROT - http://www.f-prot.com/
@@ -2428,7 +2428,7 @@ F-Secure fsav (http://www.f-secure.com)
 .TP
 .B o
 The clamscan and clamdscan command-line scanners and the clamd daemon from
-Clam AntiVirus (http://www.clamav.net/)
+Clam AntiVirus (https://www.clamav.net/)
 
 .TP
 .B o
@@ -2467,7 +2467,7 @@ ESET NOD32 (http://www.eset.com/)
 
 .SH AUTHORS
 \fBmimedefang\fR was written by Dianne Skoll <dfs@roaringpenguin.com>.
-The \fBmimedefang\fR home page is \fIhttp://www.mimedefang.org/\fR.
+The \fBmimedefang\fR home page is \fIhttps://www.mimedefang.org/\fR.
 
 .SH SEE ALSO
 mimedefang(8), mimedefang.pl(8), Mail::MIMEDefang(3)

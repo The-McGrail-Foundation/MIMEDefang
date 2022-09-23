@@ -70,7 +70,7 @@ If filter_validate does not exist, an error message is printed and
 
 .SH AUTHOR
 \fBmimedefang.pl\fR was written by Dianne Skoll <dfs@roaringpenguin.com>.
-The \fBmimedefang\fR home page is \fIhttp://www.mimedefang.org/\fR.
+The \fBmimedefang\fR home page is \fIhttps://www.mimedefang.org/\fR.
 
 .SH SEE ALSO
 mimedefang(8), mimedefang-filter(5), mimedefang-protocol(7)

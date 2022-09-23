@@ -273,7 +273,7 @@ needs to be run as \fIroot\fR or the same user as \fBmimedefang-multiplexor\fR.
 
 .SH AUTHOR
 \fBmd-mx-ctrl\fR was written by Dianne Skoll <dfs@roaringpenguin.com>.
-The \fBmimedefang\fR home page is \fIhttp://www.mimedefang.org/\fR.
+The \fBmimedefang\fR home page is \fIhttps://www.mimedefang.org/\fR.
 
 .SH SEE ALSO
 mimedefang.pl(8), mimedefang-filter(5), mimedefang(8), mimedefang-protocol(7),
