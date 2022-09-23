@@ -21,7 +21,6 @@ DEFS=-D_POSIX_PTHREAD_SEMANTICS \
 	@USEPOLL@ \
 	@ENABLE_DEBUGGING@ -DPERL_PATH=\"@PERL@\" \
 	-DMIMEDEFANG_PL=\"$(prefix)/bin/mimedefang.pl\" \
-	-DRM=\"@RM@\" \
 	-DVERSION=\"@VERSION@\" \
 	-DSPOOLDIR=\"@SPOOLDIR@\" \
 	-DQDIR=\"@QDIR@\" \

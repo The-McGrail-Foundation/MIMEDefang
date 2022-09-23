@@ -660,9 +660,6 @@ if test "$SENDMAILPROG" = "no" ; then
    AC_PATH_PROG(SENDMAILPROG, sendmail, no, $PATH:/sbin:/usr/sbin:/usr/lib:/usr/libexec)
 fi
 
-dnl rm
-AC_PATH_PROG(RM, rm, no, $PATH)
-
 AC_DEFUN([MD_MILTER_SFIO],[
     AC_MSG_CHECKING([whether libmilter requires -lsfio])
     RESULT=`$NM $LIBMILTER 2>/dev/null | grep sfsprintf; $NM -D $LIBMILTERSO 2>/dev/null | grep sfsprintf`
