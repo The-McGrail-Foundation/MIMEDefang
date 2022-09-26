@@ -2613,6 +2613,9 @@ main(int argc, char **argv)
         ValidateHeader[0] = 0;
       }
     } else {
+      if(errno != ENOENT) {
+        fprintf(stderr, "%s: cannot read key file %s, error: %s\n", argv[0], KEY_FILE, strerror(errno));
+      }
       ValidateHeader[0] = 0;
     }
     if (smfi_register(filterDescriptor) == MI_FAILURE) {
