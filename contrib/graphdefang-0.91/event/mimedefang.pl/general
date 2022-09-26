@@ -10,7 +10,7 @@
 
 $event{'mimedefang.pl'}{'general'} = 
 sub {
-	if ($text =~ m/^[A-Za-z0-9]{14}:\s*MDLOG,\S+?,(\S+?),(\S*?),(\S*?),(.*?),(.*?),(.*)$/ ) {
+	if ($text =~ m/(?:^[A-Za-z0-9]{9}|^[A-Za-z0-9]{14}):\s*MDLOG,\S+?,(\S+?),(\S*?),(\S*?),(.*?),(.*?),(.*)$/ ) {
 
 		# get values from regular expression
 
