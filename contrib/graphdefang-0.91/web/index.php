@@ -64,7 +64,8 @@ $view = $_GET['view'];
 if (!$view) $view="hourly";
 
 foreach($filename_array as $value) {
-	if (ereg($view,$value)) {
+ 	$view_pattern = '/' . $view . '/';
+ 	if (preg_match($view_pattern,$value)) {
 		$subvalue=explode($view,$value);
 		#print "$subvalue[1]";
 		print "<a href=\"index.php?view=$subvalue[1]\">";
