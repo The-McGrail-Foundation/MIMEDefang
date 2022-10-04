@@ -1161,7 +1161,12 @@ main(int argc, char *argv[], char **env)
 	if (lockfile) unlink(lockfile);
 	exit(EXIT_FAILURE);
     }
-    set_cloexec(sock);
+    if(set_cloexec(sock) < 0) {
+	REPORT_FAILURE("Could not set FD_CLOEXEC option on socket");
+	if (pidfile) unlink(pidfile);
+	if (lockfile) unlink(lockfile);
+	exit(EXIT_FAILURE);
+    }
 
     /* Set up an accept loop */
     if (!EventTcp_CreateAcceptor(es, sock, handleAccept)) {
@@ -1184,7 +1189,12 @@ main(int argc, char *argv[], char **env)
 	    if (lockfile) unlink(lockfile);
 	    exit(EXIT_FAILURE);
 	}
-	set_cloexec(unpriv_sock);
+	if(set_cloexec(unpriv_sock) < 0) {
+	    REPORT_FAILURE("Could not set FD_CLOEXEC option on socket");
+	    if (pidfile) unlink(pidfile);
+	    if (lockfile) unlink(lockfile);
+	    exit(EXIT_FAILURE);
+	}
 	if (!EventTcp_CreateAcceptor(es, unpriv_sock, handleUnprivAccept)) {
 	    REPORT_FAILURE("Could not make accept() handler");
 	    if (pidfile) unlink(pidfile);
@@ -1204,8 +1214,12 @@ main(int argc, char *argv[], char **env)
 	exit(EXIT_FAILURE);
     }
 
-    set_cloexec(Pipe[0]);
-    set_cloexec(Pipe[1]);
+    if((set_cloexec(Pipe[0]) < 0) || (set_cloexec(Pipe[1]) < 0)) {
+        REPORT_FAILURE("Could not set FD_CLOEXEC option on pipe");
+        if (pidfile) unlink(pidfile);
+        if (lockfile) unlink(lockfile);
+        exit(EXIT_FAILURE);
+    }
 
     /* Create event handler for pipe */
     if (!Event_AddHandler(es, Pipe[0],
@@ -1342,7 +1356,10 @@ main(int argc, char *argv[], char **env)
 	sock = make_listening_socket(Settings.mapSock, Settings.listenBacklog, 0);
 	umask(file_umask);
 	if (sock >= 0) {
-	    set_cloexec(sock);
+	    if(set_cloexec(sock) < 0) {
+		syslog(LOG_ERR, "Could not set FD_CLOEXEC option on socket");
+		close(sock);
+	    }
 	    if (!EventTcp_CreateAcceptor(es, sock, handleMapAccept)) {
 		syslog(LOG_ERR, "Could not listen for map requests: EventTcp_CreateAcceptor: %m");
 		close(sock);
@@ -3476,7 +3493,9 @@ statsReopenFile(void)
 	syslog(LOG_ERR, "Could not open stats file %s: %m",
 	       Settings.statsFile);
     } else {
-	set_cloexec(fileno(Settings.statsFP));
+	if(set_cloexec(fileno(Settings.statsFP)) < 0) {
+	    syslog(LOG_ERR, "Could not set FD_CLOEXEC option on socket");
+	}
     }
 }
 

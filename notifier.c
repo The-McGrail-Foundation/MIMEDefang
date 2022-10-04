@@ -69,7 +69,11 @@ make_notifier_socket(EventSelector *es, char const *name)
     if (sock < 0) {
 	return -1;
     }
-    set_cloexec(sock);
+    if(set_cloexec(sock) < 0) {
+	syslog(LOG_ERR, "Could not set FD_CLOEXEC option on socket");
+	close(sock);
+	return -1;
+    }
     if (!EventTcp_CreateAcceptor(es, sock, handle_notifier_accept)) {
 	syslog(LOG_ERR, "Could not listen for notifier requests: EventTcp_CreateAcceptor: %m");
 	close(sock);

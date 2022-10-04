@@ -62,15 +62,19 @@ static int adjust_pollfds(int num) {
 * %DESCRIPTION:
 *  Sets the FD_CLOEXEC flag on descriptor
 ***********************************************************************/
-void
+int
 set_cloexec(int fd)
 {
     int flags;
     flags = fcntl(fd, F_GETFD);
     if (flags >= 0) {
 	flags |= FD_CLOEXEC;
-	fcntl(fd, F_SETFD, flags);
+	if(fcntl(fd, F_SETFD, flags) == 0) {
+	    return 0;
+	}
+	return -1;
     }
+    return -1;
 }
 
 /**********************************************************************

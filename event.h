@@ -79,7 +79,7 @@ extern void Event_SetCallbackAndData(EventHandler *eh,
 
 extern int Event_EnableDebugging(char const *fname);
 
-extern void set_cloexec(int fd);
+extern int set_cloexec(int fd);
 extern int set_nonblocking(int fd);
 
 #ifdef DEBUG_EVENT

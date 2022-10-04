@@ -61,7 +61,10 @@ handle_accept(EventSelector *es,
 	conn = accept(fd, NULL, NULL);
 	if (conn < 0) return;
 	/* Set close-on-exec flag */
-	set_cloexec(conn);
+	if(set_cloexec(conn) < 0) {
+	    close(conn);
+	    return;
+	}
 
 	/* Make conn non-blocking */
 	if (set_nonblocking(conn) < 0) {
