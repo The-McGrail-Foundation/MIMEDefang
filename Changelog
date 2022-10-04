@@ -2,6 +2,10 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2022-09-26 Giovanni Bechis <g.bechis@snb.it>
+
+	* make graphdefang compatible with current php versions
+
 2022-08-22 Giovanni Bechis <g.bechis@snb.it>
 
 	* make more subs public
