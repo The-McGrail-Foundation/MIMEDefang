@@ -26,6 +26,7 @@ use warnings;
 use Digest::SHA;
 
 use Mail::MIMEDefang;
+use Mail::MIMEDefang::MIME;
 use Mail::MIMEDefang::Utils;
 
 require Exporter;
