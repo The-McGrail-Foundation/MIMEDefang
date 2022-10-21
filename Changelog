@@ -2,9 +2,17 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2022-10-21 Giovanni Bechis <g.bechis@snb.it>
+
+	* MIMEDefang 3.2 RELEASED
+
 2022-09-26 Giovanni Bechis <g.bechis@snb.it>
 
 	* make graphdefang compatible with current php versions
+
+2022-08-24 Giovanni Bechis <g.bechis@snb.it>
+
+	* MIMEDefang 3.1 RELEASED
 
 2022-08-22 Giovanni Bechis <g.bechis@snb.it>
 
@@ -13,6 +21,10 @@ affect your filter.
 2022-08-07 Giovanni Bechis <g.bechis@snb.it>
 
 	* make md_authres headers parsable by Mail::DKIM <= 0.54
+
+2022-06-14 Giovanni Bechis <g.bechis@snb.it>
+
+	* MIMEDefang 3.0 RELEASED
 
 2022-05-24 Giovanni Bechis <g.bechis@snb.it>
 
