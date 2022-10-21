@@ -138,8 +138,8 @@
 
 Summary:       Email filtering application using sendmail's milter interface
 Name:          mimedefang
-Version:       3.1
-Release:       0
+Version:       3.2
+Release:       1
 License:       GPL
 Group:         Networking/Mail
 Source0:       https://mimedefang.org/static/%{name}-%{version}%{?prerelease}.tar.gz
@@ -275,8 +275,8 @@ fi
 
 %package contrib
 Summary:	Contributed software that works with MIMEDefang
-Version:	3.1
-Release:	0
+Version:	3.2
+Release:	1
 Group:          Networking/Mail
 
 %description contrib
