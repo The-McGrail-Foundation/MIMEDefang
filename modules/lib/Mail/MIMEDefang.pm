@@ -853,9 +853,10 @@ sub send_quarantine_notifications {
   # If there are quarantined parts, e-mail a report
   if ($QuarantineCount > 0 || $EntireMessageQuarantined) {
 	  my($body);
+	  my $hostname = Mail::MIMEDefang::Net::get_host_name();
 	  $body = "From: $DaemonName <$DaemonAddress>\n";
 	  $body .= "To: \"$AdminName\" <$AdminAddress>\n";
-	  $body .= Mail::MIMEDefang::RFC2822::gen_date_msgid_headers();
+	  $body .= Mail::MIMEDefang::RFC2822::gen_date_msgid_headers($QueueID, $hostname);
 	  $body .= "Auto-Submitted: auto-generated\n";
 	  $body .= "MIME-Version: 1.0\nContent-Type: text/plain\n";
 	  $body .= "Precedence: bulk\n";
@@ -943,9 +944,10 @@ sub signal_complete {
   # Send notification to sender, if required
   if ($Sender ne '<>' && -r "NOTIFICATION") {
 	  my($body);
+	  my $hostname = Mail::MIMEDefang::Net::get_host_name();
 	  $body = "From: $DaemonName <$DaemonAddress>\n";
 	  $body .= "To: $Sender\n";
-	  $body .= Mail::MIMEDefang::RFC2822::gen_date_msgid_headers();
+	  $body .= Mail::MIMEDefang::RFC2822::gen_date_msgid_headers($QueueID, $hostname);
 	  $body .= "Auto-Submitted: auto-generated\n";
 	  $body .= "MIME-Version: 1.0\nContent-Type: text/plain\n";
 	  $body .= "Precedence: bulk\n";
@@ -1104,9 +1106,10 @@ sub send_admin_mail {
   my ($subject, $body) = @_;
 
   my $mail;
+  my $hostname = Mail::MIMEDefang::Net::get_host_name();
   $mail = "From: $DaemonName <$DaemonAddress>\n";
   $mail .= "To: \"$AdminName\" <$AdminAddress>\n";
-  $mail .= Mail::MIMEDefang::RFC2822::gen_date_msgid_headers();
+  $mail .= Mail::MIMEDefang::RFC2822::gen_date_msgid_headers($QueueID, $hostname);
   $mail .= "Auto-Submitted: auto-generated\n";
   $mail .= "MIME-Version: 1.0\nContent-Type: text/plain\n";
   $mail .= "Precedence: bulk\n";
