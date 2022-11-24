@@ -35,7 +35,7 @@ our @EXPORT = qw(time_str date_str hour_str
                  synthesize_received_header copy_or_link
                  re_match re_match_ext re_match_in_rar_directory re_match_in_zip_directory
                  md_copy_orig_msg_to_work_dir_as_mbox_file read_results);
-our @EXPORT_OK = qw(md_init);
+our @EXPORT_OK = qw(md_init gen_mx_id);
 
 =item time_str
 
@@ -455,6 +455,49 @@ sub md_copy_orig_msg_to_work_dir_as_mbox_file {
   close(IN);
   close(OUT);
   return 1;
+}
+
+=item gen_mx_id
+
+Method that generates a random indentifier used by MIMEDefang
+to create temporary files.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: gen_mx_id
+# %ARGUMENTS:
+#  None
+# %DESCRIPTION:
+#  Generates a random indentifier
+# %RETURNS:
+#  the random string.
+#***********************************************************************
+sub gen_mx_id {
+  my @out;
+  my $counter;
+
+  # Our identifiers are in base-60
+  use constant BASE => 60;
+  # Our time-based identifier is 5 base-60 characters.
+  use constant TIMESPAN => 60*60*60*60*60;
+  # Our identifier is 7 chars long
+  use constant MX_ID_LEN => 7;
+
+  $counter++;
+  my @char_map = split(//, "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX");
+  my $time_part = time % TIMESPAN;
+
+  for (my $i=4; $i>=0; $i--) {
+    $out[$i] = $char_map[$time_part % BASE];
+    $time_part /= BASE;
+  }
+  for (my $i=6; $i>=5; $i--) {
+    $out[$i] = $char_map[$counter % BASE];
+    $counter /= BASE;
+  }
+  $out[MX_ID_LEN - 1] = 0;
+  return join('', @out);
 }
 
 =back

@@ -116,4 +116,10 @@ sub t_re_match_zip : Test(2)
   };
 }
 
+sub t_gen_mx_id : Test(1)
+{
+  my $str = Mail::MIMEDefang::Utils::gen_mx_id();
+  is(length($str), 7);
+}
+
 __PACKAGE__->runtests();
