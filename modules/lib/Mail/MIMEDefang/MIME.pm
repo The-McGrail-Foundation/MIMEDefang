@@ -97,7 +97,6 @@ sub takeStabAtFilename
 	my $guess = $entity->head->recommended_filename();
 
 	if( defined $guess ) {
-		$guess =~ tr/\x00-\x7F/#/c;
 		return scalar( decode_mimewords( $guess ) );
 	}
 
