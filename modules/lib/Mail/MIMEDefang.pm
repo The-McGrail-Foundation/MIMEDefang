@@ -40,6 +40,7 @@ require Exporter;
 use Carp;
 use Errno qw(ENOENT EACCES);
 use File::Spec;
+use MIME::WordDecoder;
 
 our @ISA = qw(Exporter);
 our @EXPORT;
@@ -350,10 +351,19 @@ Prints a message to syslog(3) using the specified facility
 
 This is called to log events that occur during mimedefang processing.
 It should be called from mimedefang-filter with appropriate
-event names and values.  Possible examples:
+event names and values.
+
+Possible examples:
+
 C<md_graphdefang_log('virus',$VirusName,$filename);>
+
 C<md_graphdefang_log('spam',$hits);>
+
 C<md_graphdefang_log('bad_filename',$filename,$extension);>
+
+If you need to log UTF-8 strings you can call the sub as:
+
+C<md_graphdefang_log('spam',$hits, undef, 1);>
 
 =cut
 
@@ -364,6 +374,8 @@ C<md_graphdefang_log('bad_filename',$filename,$extension);>
 #           include virus, spam, mail, etc.
 #  value1 -- (optional) A value associated with the event being logged.
 #  value2 -- (optional) A value associated with the event being logged.
+#  utf8_decode -- (optional) A boolean value that indicates if we want to
+#                 decode UTF-8 encoded strings
 # %RETURNS:
 #  Nothing
 # %DESCRIPTION:
@@ -372,6 +384,7 @@ C<md_graphdefang_log('bad_filename',$filename,$extension);>
 #  event names and values.  Possible examples:
 #      md_graphdefang_log('virus',$VirusName,$filename);
 #      md_graphdefang_log('spam',$hits);
+#      md_graphdefang_log('spam',$hits, undef, 1);
 #      md_graphdefang_log('bad_filename',$filename,$extension);
 #***********************************************************************
 sub md_graphdefang_log
@@ -382,30 +395,37 @@ sub md_graphdefang_log
     my $event = shift;
     my $value1 = shift;
     my $value2 = shift;
+    my $utf8_decode = shift;
 
     $value1 = "" unless defined($value1);
     $value2 = "" unless defined($value2);
+    $utf8_decode //= 0;
 
     my $lcsender = percent_encode_for_graphdefang(lc($Sender));
 
     # Make values safe for graphdefang
     my $id = percent_encode_for_graphdefang($MsgID);
-    my $subj = percent_encode_for_graphdefang($Subject);
-    $event = percent_encode_for_graphdefang($event);
-    $value1 = percent_encode_for_graphdefang($value1);
-    $value2 = percent_encode_for_graphdefang($value2);
+    my $subj;
+    if($utf8_decode eq 1) {
+      $subj = mime_to_perl_string($Subject);
+    } else {
+      $subj = percent_encode_for_graphdefang($Subject);
+      $event = percent_encode_for_graphdefang($event);
+      $value1 = percent_encode_for_graphdefang($value1);
+      $value2 = percent_encode_for_graphdefang($value2);
+    }
     if ($EnumerateRecipients || scalar(@Recipients) == 1) {
 	foreach my $recipient (@Recipients) {
 	    my $lcrecipient = percent_encode_for_graphdefang(lc($recipient));
 	    md_syslog("$GraphDefangSyslogFacility|info","MDLOG,$id," .
-		      "$event,$value1,$value2,$lcsender," .
-		      "$lcrecipient,$subj");
+	              "$event,$value1,$value2,$lcsender," .
+	              "$lcrecipient,$subj");
 	}
     } else {
 	my $lcrecipient = "rcpts=" . scalar(@Recipients);
 	$lcrecipient = percent_encode_for_graphdefang($lcrecipient);
 	md_syslog("$GraphDefangSyslogFacility|info","MDLOG,$id," .
-		  "$event,$value1,$value2,$lcsender," .
+	          "$event,$value1,$value2,$lcsender," .
 		  "$lcrecipient,$subj");
     }
 }
