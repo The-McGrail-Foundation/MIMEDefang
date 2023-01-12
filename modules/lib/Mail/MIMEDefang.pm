@@ -399,7 +399,7 @@ sub md_graphdefang_log
 
     $value1 = "" unless defined($value1);
     $value2 = "" unless defined($value2);
-    $utf8_decode //= 0;
+    $utf8_decode = 0 unless defined($utf8_decode);
 
     my $lcsender = percent_encode_for_graphdefang(lc($Sender));
 
