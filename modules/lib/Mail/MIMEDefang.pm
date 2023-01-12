@@ -408,6 +408,17 @@ sub md_graphdefang_log
     my $subj;
     if($utf8_decode eq 1) {
       $subj = mime_to_perl_string($Subject);
+      $event = mime_to_perl_string($event);
+      $value1 = mime_to_perl_string($value1);
+      $value2 = mime_to_perl_string($value2);
+      $subj =~ s/\P{Print}//g;
+      $event =~ s/\P{Print}//g;
+      $value1 =~ s/\P{Print}//g;
+      $value2 =~ s/\P{Print}//g;
+      utf8::upgrade($subj);
+      utf8::upgrade($event);
+      utf8::upgrade($value1);
+      utf8::upgrade($value2);
     } else {
       $subj = percent_encode_for_graphdefang($Subject);
       $event = percent_encode_for_graphdefang($event);
