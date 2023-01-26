@@ -25,7 +25,7 @@ sub t_percent_decode : Test(1)
   is($pd, "foo\r\nbar\tbl%t");
 }
 
-sub t_synthetize : Test(1)
+sub t_synthetize : Test(4)
 {
   init_globals();
   $Helo = "test.example.com";
@@ -35,6 +35,20 @@ sub t_synthetize : Test(1)
   $Sender = 'me@example.com';
   my $header = synthesize_received_header();
   like($header, qr/Received\: from $Helo \( \[$RealRelayAddr\]\)\n\tby $hn \(envelope-sender $Sender\) \(MIMEDefang\) with ESMTP id NOQUEUE/);
+
+  $SendmailMacros{"tls_version"} = "1.2";
+  $header = synthesize_received_header();
+  like($header, qr/Received\: from $Helo \( \[$RealRelayAddr\]\)\n\tby $hn \(envelope-sender $Sender\) \(MIMEDefang\) with ESMTPS id NOQUEUE/);
+
+  undef $SendmailMacros{"tls_version"};
+  $SendmailMacros{"auth_authen"} = "user";
+  $header = synthesize_received_header();
+  like($header, qr/Received\: from $Helo \( \[$RealRelayAddr\]\)\n\tby $hn \(envelope-sender $Sender\) \(MIMEDefang\) with ESMTPA id NOQUEUE/);
+
+  $SendmailMacros{"auth_authen"} = "user";
+  $SendmailMacros{"tls_version"} = "1.2";
+  $header = synthesize_received_header();
+  like($header, qr/Received\: from $Helo \( \[$RealRelayAddr\]\)\n\tby $hn \(envelope-sender $Sender\) \(MIMEDefang\) with ESMTPSA id NOQUEUE/);
 }
 
 sub t_re_match : Test(2)

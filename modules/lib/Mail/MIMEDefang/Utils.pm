@@ -101,6 +101,7 @@ sub synthesize_received_header {
 
     my($hn) = $SendmailMacros{"if_name"};
     my($auth) = $SendmailMacros{"auth_authen"};
+    my($tls_version) = $SendmailMacros{"tls_version"};
 
     my $strdate = Mail::MIMEDefang::RFC2822::rfc2822_date($CachedTimezone);
 
@@ -111,9 +112,17 @@ sub synthesize_received_header {
       $hdr = "Received: from $Helo ([$RealRelayAddr])\n";
     }
     if($auth) {
-      $hdr .= "\tby $hn (envelope-sender $Sender) (MIMEDefang) with ESMTPA id $MsgID";
+      $hdr .= "\tby $hn (envelope-sender $Sender) (MIMEDefang) with ESMTP";
+      if($tls_version) {
+        $hdr .= "S";
+      }
+      $hdr .= "A id $MsgID";
     } else {
-      $hdr .= "\tby $hn (envelope-sender $Sender) (MIMEDefang) with ESMTP id $MsgID";
+      $hdr .= "\tby $hn (envelope-sender $Sender) (MIMEDefang) with ESMTP";
+      if($tls_version) {
+        $hdr .= "S";
+      }
+      $hdr .= " id $MsgID";
     }
     if ($#Recipients != 0) {
       $hdr .= "; ";
