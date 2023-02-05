@@ -11,6 +11,7 @@ make distro 1>/dev/null 2>&1
 mkdir -p ~/rpmbuild/SOURCES
 mkdir -p ~/rpmbuild/BUILD
 cp mimedefang-${VER}.tar.gz ~/rpmbuild/SOURCES
+perl  -p -e "s/#VERSION#/${VER}/;s/#RELEASE#/1/;s/#BETA#//g" < redhat/mimedefang-spec.in >redhat/mimedefang.spec
 rpmbuild -bb redhat/mimedefang.spec 1>/dev/null 2>&1
 dnf -y install ~/rpmbuild/RPMS/x86_64/mimedefang-* 1>/dev/null 2>&1
 cp t/data/mimedefang-test-filter /etc/mail/mimedefang-filter
