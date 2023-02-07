@@ -10,7 +10,7 @@ use Mail::MIMEDefang::Authres;
 
 use File::Copy;
 
-sub t_md_authres : Test(2)
+sub t_md_authres : Test(3)
 {
   SKIP: {
     if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
@@ -24,7 +24,8 @@ sub t_md_authres : Test(2)
     copy('t/data/spf1.eml', './INPUTMSG');
 
     $header = md_authres('test@dnsbltest.spamassassin.org', '64.142.3.173', 'dnsbltest.spamassassin.org', 'dnsbltest.spamassassin.org');
-    like($header, qr{dnsbltest\.spamassassin\.org(?:\s\(MIMEDefang\))?;(?:.*)\s+\s+spf=pass \(domain of test\@dnsbltest\.spamassassin\.org designates 64\.142\.3\.173 as permitted sender\) smtp\.mailfrom=test\@dnsbltest\.spamassassin\.org smtp.helo=dnsbltest\.spamassassin\.org;});
+    like($header, qr{dnsbltest\.spamassassin\.org(?:\s\(MIMEDefang\))?;(?:.*)\s+\s+spf=pass \(domain of test\@dnsbltest\.spamassassin\.org designates 64\.142\.3\.173 as permitted sender\) smtp\.mailfrom=test\@dnsbltest\.spamassassin\.org;});
+    like($header, qr{dnsbltest\.spamassassin\.org(?:\s\(MIMEDefang\))?;(?:.*)\s+\s+spf=pass \(domain of test\@dnsbltest\.spamassassin\.org designates 64\.142\.3\.173 as permitted sender\) smtp\.helo=dnsbltest\.spamassassin\.org;});
 
     unlink('./INPUTMSG');
   };

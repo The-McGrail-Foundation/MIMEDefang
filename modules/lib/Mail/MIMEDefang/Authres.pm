@@ -89,7 +89,7 @@ sub md_authres {
       ip_address      => $relayip,
     );
     $spfres = $spf_server->process($request);
-    if((defined $helo) and (defined $spfres and ($spfres->code eq 'pass'))) {
+    if(defined $helo) {
       my $helo_request     = Mail::SPF::Request->new(
         scope           => 'helo',
         identity        => $helo,
@@ -120,13 +120,18 @@ sub md_authres {
       if($spfres->code eq 'fail') {
         $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail does not designate $relayip as permitted sender) smtp.mailfrom=$spfmail;";
       } elsif($spfres->code eq 'pass') {
-        $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail designates $relayip as permitted sender) smtp.mailfrom=$spfmail";
-        if(defined $helo_spfres and $helo_spfres->code eq 'pass') {
-          $authres .= " smtp.helo=$helo";
-        }
-        $authres .= ';';
+        $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail designates $relayip as permitted sender) smtp.mailfrom=$spfmail;";
       } elsif($spfres->code eq 'none') {
         $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail doesn't specify if $relayip is a permitted sender) smtp.mailfrom=$spfmail;";
+      }
+    }
+    if(defined $helo_spfres) {
+      if($helo_spfres->code eq 'fail') {
+        $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail does not designate $relayip as permitted sender) smtp.helo=$helo;";
+      } elsif($helo_spfres->code eq 'pass') {
+        $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail designates $relayip as permitted sender) smtp.helo=$helo;";
+      } elsif($helo_spfres->code eq 'none') {
+        $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail doesn't specify if $relayip is a permitted sender) smtp.helo=$helo;";
       }
     }
     $authres =~ s/\r//gs;
