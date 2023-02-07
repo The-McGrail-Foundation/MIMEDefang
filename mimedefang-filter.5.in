@@ -882,6 +882,7 @@ organization.  This variable is available in \fBfilter_relay\fR,
 \fBfilter_sender\fR and \fBfilter_recipient\fR in addition to the body
 filtering functions.
 
+.TP
 .B $Helo
 The argument given to the SMTP "HELO" command.  This variable is
 available in \fBfilter_sender\fR and \fBfilter_recipient\fR,
