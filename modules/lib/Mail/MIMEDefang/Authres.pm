@@ -89,7 +89,7 @@ sub md_authres {
       ip_address      => $relayip,
     );
     $spfres = $spf_server->process($request);
-    if(defined $helo) {
+    if((defined $helo) and (defined $spfres and ($spfres->code eq 'pass'))) {
       my $helo_request     = Mail::SPF::Request->new(
         scope           => 'helo',
         identity        => $helo,
