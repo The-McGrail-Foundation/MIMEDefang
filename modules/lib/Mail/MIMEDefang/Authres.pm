@@ -82,6 +82,9 @@ sub md_authres {
   $spfmail =~ s/^<//;
   $spfmail =~ s/>$//;
   if(defined $spfmail and $spfmail =~ /\@/) {
+    if($spfmail =~ /(.*)\+(?:.*)\@(.*)/) {
+      $spfmail = $1 . '@' . $2;
+    }
     my $spf_server  = Mail::SPF::Server->new();
     my $request     = Mail::SPF::Request->new(
       scope           => 'mfrom',
