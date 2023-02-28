@@ -64,4 +64,33 @@ sub uri_utm_html : Test(1)
   system('rm', '-rf', 't/tmp');
 }
 
+sub t_takeStabAtFilename : Test(1)
+{
+  init_globals();
+  $Features{"HTML::Parser"} = 1;
+  # Set up temporary dir
+  system('rm', '-rf', 't/tmp');
+  mkdir('t/tmp', 0755);
+
+  # Make a parser
+  my $parser = MIME::Parser->new();
+  $parser->extract_nested_messages(1);
+  $parser->extract_uuencode(1);
+  $parser->output_to_core(0);
+  $parser->tmp_to_core(0);
+  my $filer = MIME::Parser::FileInto->new('t/tmp');
+  $filer->ignore_filename(1);
+  $parser->filer($filer);
+
+  my $entity = $parser->parse_open("t/data/zip.eml");
+  my $res;
+  foreach my $p ( $entity->parts() ) {
+    if($p->head->recommended_filename()) {
+      $res = takeStabAtFilename($p);
+      like($res, qr/test\.zip/);
+    }
+  }
+  system('rm', '-rf', 't/tmp');
+}
+
 __PACKAGE__->runtests();
