@@ -407,6 +407,15 @@ sub md_graphdefang_log
     my $id = percent_encode_for_graphdefang($MsgID);
     my $subj;
     if($utf8_decode eq 1) {
+      if (utf8::is_utf8($Subject)) {
+        utf8::encode($Subject);
+      }
+      if (utf8::is_utf8($value1)) {
+        utf8::encode($value1);
+      }
+      if (utf8::is_utf8($value2)) {
+        utf8::encode($value2);
+      }
       $subj = mime_to_perl_string($Subject);
       $event = mime_to_perl_string($event);
       $value1 = mime_to_perl_string($value1);

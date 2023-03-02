@@ -139,10 +139,17 @@ sub action_add_part {
 
     my ($part);
 
+    my $charset = undef;
+    if (utf8::is_utf8($data)) {
+      utf8::encode($data);
+      $charset = 'utf-8';
+    }
+
     $part = MIME::Entity->build(Type => $type,
 				Top => 0,
 				'X-Mailer' => undef,
 				Encoding => $encoding,
+				Charset => $charset,
 				Data => ["$data"]);
     defined ($fname) && $part->head->mime_attr("Content-Type.name" => $fname);
     defined ($disposition) && $part->head->mime_attr("Content-Disposition" => $disposition);
