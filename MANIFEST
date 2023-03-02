@@ -159,6 +159,7 @@ t/data/gtube.eml
 t/data/md.conf
 t/data/mimedefang-test-filter
 t/data/multipart.eml
+t/data/spf1.eml
 t/data/uri-html.eml
 t/data/uri.eml
 t/data/zip.eml
