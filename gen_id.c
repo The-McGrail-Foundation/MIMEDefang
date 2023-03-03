@@ -18,7 +18,7 @@
 /* Counter incremented each time gen_id is called */
 static unsigned int id_counter = 0;
 
-/* Mutext to protect id_counter */
+/* Mutex to protect id_counter */
 static pthread_mutex_t id_counter_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* This had better be 60 characters long! */
