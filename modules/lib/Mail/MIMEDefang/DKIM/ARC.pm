@@ -121,15 +121,23 @@ sub md_arc_sign {
     return;
   }
 
-  # or read an email and pass it into the signer, one line at a time
-  while (<$fh>) {
-    # remove local line terminators
-    chomp;
-    s/\015$//;
+  eval {
+    local $SIG{__WARN__} = sub {
+      my $warn = $_[0];
+      $warn =~ s/\n//g;
+      $warn =~ s/\bat .{10,100} line \d+\.//g;
+      md_syslog("Warning", "md_arc_sign: $warn");
+    };
+    # or read an email and pass it into the signer, one line at a time
+    while (<$fh>) {
+      # remove local line terminators
+      chomp;
+      s/\015$//;
 
-    # use SMTP line terminators
-    $arc->PRINT("$_\015\012");
-  }
+      # use SMTP line terminators
+      $arc->PRINT("$_\015\012");
+    }
+  };
   $arc->CLOSE;
   close($fh);
 
