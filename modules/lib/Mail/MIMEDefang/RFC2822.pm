@@ -25,6 +25,9 @@ use warnings;
 
 use Time::Local;
 
+use Mail::MIMEDefang;
+use Mail::MIMEDefang::Net;
+
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(gen_date_msgid_headers);
@@ -47,6 +50,9 @@ Method that generates RFC2822 compliant Date and Message-ID headers.
 #***********************************************************************
 sub gen_date_msgid_headers {
   my ($msgid_header) = @_;
+  if(not defined $msgid_header) {
+    $msgid_header = gen_msgid_header($QueueID, Mail::MIMEDefang::Net::get_host_name($PrivateMyHostName));
+  }
   return "Date: " . rfc2822_date() . "\n" . $msgid_header;
 }
 
