@@ -38,7 +38,7 @@ sub dkim_sign : Test(2)
   unlink('./INPUTMSG');
 }
 
-sub dkim_verify : Test(4)
+sub dkim_verify : Test(5)
 {
   my ($result, $domain, $ksize);
 
@@ -53,6 +53,11 @@ sub dkim_verify : Test(4)
     unlink('./INPUTMSG');
 
     copy('t/data/dkim2.eml', './INPUTMSG');
+    ($result, $domain, $ksize) = md_dkim_verify();
+    is($result, "fail");
+    unlink('./INPUTMSG');
+
+    copy('t/data/dkim3.eml', './INPUTMSG');
     ($result, $domain, $ksize) = md_dkim_verify();
     is($result, "fail");
     unlink('./INPUTMSG');

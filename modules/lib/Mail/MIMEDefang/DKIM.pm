@@ -171,15 +171,24 @@ sub md_dkim_verify {
     return;
   }
 
-  while (<$fh>) {
-    # remove local line terminators
-    chomp;
-    s/\015$//;
+  eval {
+    my $warn = 0;
+    local $SIG{__WARN__} = sub {
+      if($warn eq 0) {
+        md_syslog("Warning", "md_dkim_verify: cannot parse DKIM signature");
+      }
+      $warn++;
+    };
+    while (<$fh>) {
+      # remove local line terminators
+      chomp;
+      s/\015$//;
 
-    # use SMTP line terminators
-    $dkim->PRINT("$_\015\012");
-  }
-  $dkim->CLOSE;
+      # use SMTP line terminators
+      $dkim->PRINT("$_\015\012");
+    }
+    $dkim->CLOSE;
+  };
   close($fh);
 
   my $key_size;
