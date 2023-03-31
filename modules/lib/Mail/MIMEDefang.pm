@@ -407,15 +407,6 @@ sub md_graphdefang_log
     my $id = percent_encode_for_graphdefang($MsgID);
     my $subj;
     if($utf8_decode eq 1) {
-      if (utf8::is_utf8($Subject)) {
-        utf8::encode($Subject);
-      }
-      if (utf8::is_utf8($value1)) {
-        utf8::encode($value1);
-      }
-      if (utf8::is_utf8($value2)) {
-        utf8::encode($value2);
-      }
       $subj = mime_to_perl_string($Subject);
       $event = mime_to_perl_string($event);
       $value1 = mime_to_perl_string($value1);
@@ -424,10 +415,18 @@ sub md_graphdefang_log
       $event =~ s/\P{Print}//g;
       $value1 =~ s/\P{Print}//g;
       $value2 =~ s/\P{Print}//g;
-      utf8::upgrade($subj);
-      utf8::upgrade($event);
-      utf8::upgrade($value1);
-      utf8::upgrade($value2);
+      if (utf8::is_utf8($subj)) {
+        utf8::encode($subj);
+      }
+      if (utf8::is_utf8($event)) {
+        utf8::encode($event);
+      }
+      if (utf8::is_utf8($value1)) {
+        utf8::encode($value1);
+      }
+      if (utf8::is_utf8($value2)) {
+        utf8::encode($value2);
+      }
     } else {
       $subj = percent_encode_for_graphdefang($Subject);
       $event = percent_encode_for_graphdefang($event);
