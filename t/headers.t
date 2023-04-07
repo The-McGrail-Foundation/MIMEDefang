@@ -48,7 +48,7 @@ sub add_header_ok : Test(2)
         unlink('./RESULTS') if -f './RESULTS';
 }
 
-sub change_header_ok : Test(2)
+sub change_header_ok : Test(3)
 {
 	my @results;
 
@@ -64,6 +64,13 @@ sub change_header_ok : Test(2)
         undef $results_fh;
         @results = Mail::MIMEDefang::Utils::read_results();
 	cmp_deeply( \@results, [ ['I', 'X-Header', 1, 'some content' ], ['I', 'Received', 3, 'position 3'] ], 'action_add_header() wrote correct I line');
+
+	undef @results;
+        unlink('./RESULTS') if -f './RESULTS';
+	action_change_header('Subject', '🌸👀 OK');
+        undef $results_fh;
+        @results = Mail::MIMEDefang::Utils::read_results();
+	cmp_deeply( \@results, [ ['I', 'Subject', 1, '🌸👀 OK' ] ], 'action_change_header() wrote correct I line');
         unlink('./RESULTS') if -f './RESULTS';
 }
 
