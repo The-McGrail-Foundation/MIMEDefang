@@ -4243,7 +4243,7 @@ if test "$ac_cv_perlmodcheck" = "no" ; then
 printf "%s\n" "Compile-time checking for Perl modules disabled" >&6; }
       HAVE_SPAM_ASSASSIN=yes
 else
-    for module in 'IO::Socket' 'MIME::Tools 5.410 ()' 'MIME::WordDecoder' 'Digest::MD5' 'Digest::SHA' 'FindBin' ; do
+    for module in 'IO::Socket' 'MIME::Tools 5.410 ()' 'MIME::WordDecoder' 'Digest::SHA' 'FindBin' ; do
 	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl module $module" >&5
 printf %s "checking for Perl module $module... " >&6; }
 	(echo "use lib '$PERLINSTALLSITELIB'; use $module;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
@@ -4256,8 +4256,6 @@ printf "%s\n" "$as_me: WARNING: *** Make sure the following Perl modules are ins
 printf "%s\n" "$as_me: WARNING: *** MIME::Tools version 5.410 or higher (5.411a recommended)" >&2;}
 	    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: *** MIME::WordDecoder" >&5
 printf "%s\n" "$as_me: WARNING: *** MIME::WordDecoder" >&2;}
-	    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: *** Digest::MD5" >&5
-printf "%s\n" "$as_me: WARNING: *** Digest::MD5" >&2;}
 	    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: *** Digest::SHA" >&5
 printf "%s\n" "$as_me: WARNING: *** Digest::SHA" >&2;}
 	    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: *** FindBin" >&5
@@ -4355,6 +4353,17 @@ printf %s "checking for Perl module Mail::DKIM... " >&6; }
     fi
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $HAVE_DKIM" >&5
 printf "%s\n" "$HAVE_DKIM" >&6; }
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl module Digest::MD5" >&5
+printf %s "checking for Perl module Digest::MD5... " >&6; }
+    (echo "use Digest::MD5;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_DIGEST_MD5=no
+    else
+	HAVE_DIGEST_MD5=yes
+    fi
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $HAVE_DIGEST_MD5" >&5
+printf "%s\n" "$HAVE_DIGEST_MD5" >&6; }
 
         dirs=`echo 'print "@INC\n";' | $PERL`
     foundit=""
@@ -8342,6 +8351,13 @@ if test "$HAVE_DKIM" = "no" ; then
    echo ""
    echo "Could not find Mail::DKIM Perl module... do not use"
    echo "md_dkim_sign, md_dkim_verify or md_authres functions in your filter."
+   echo ""
+fi
+
+if test "$HAVE_DIGEST_MD5" = "no" ; then
+   echo ""
+   echo "Could not find Digest::MD5 Perl module... do not use"
+   echo "email_is_blacklisted function in your filter."
    echo ""
 fi
 

@@ -140,7 +140,7 @@ if test "$ac_cv_perlmodcheck" = "no" ; then
    dnl for installation of spamassassin.cf
    HAVE_SPAM_ASSASSIN=yes
 else
-    for module in 'IO::Socket' 'MIME::Tools 5.410 ()' 'MIME::WordDecoder' 'Digest::MD5' 'Digest::SHA' 'FindBin' ; do
+    for module in 'IO::Socket' 'MIME::Tools 5.410 ()' 'MIME::WordDecoder' 'Digest::SHA' 'FindBin' ; do
 	AC_MSG_CHECKING([for Perl module $module])
 	(echo "use lib '$PERLINSTALLSITELIB'; use $module;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
 	if test $? != 0 ; then
@@ -148,7 +148,6 @@ else
 	    AC_MSG_WARN([*** Make sure the following Perl modules are installed:])
 	    AC_MSG_WARN([*** MIME::Tools version 5.410 or higher (5.411a recommended)])
 	    AC_MSG_WARN([*** MIME::WordDecoder])
-	    AC_MSG_WARN([*** Digest::MD5])
 	    AC_MSG_WARN([*** Digest::SHA])
 	    AC_MSG_WARN([*** FindBin])
 	    exit 1
@@ -228,6 +227,15 @@ else
 	HAVE_DKIM=yes
     fi
     AC_MSG_RESULT($HAVE_DKIM)
+
+    AC_MSG_CHECKING([for Perl module Digest::MD5])
+    (echo "use Digest::MD5;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_DIGEST_MD5=no
+    else
+	HAVE_DIGEST_MD5=yes
+    fi
+    AC_MSG_RESULT($HAVE_DIGEST_MD5)
 
     dnl Check MIME::Tools version
     dirs=`echo 'print "@INC\n";' | $PERL`
@@ -1142,6 +1150,13 @@ if test "$HAVE_DKIM" = "no" ; then
    echo ""
    echo "Could not find Mail::DKIM Perl module... do not use"
    echo "md_dkim_sign, md_dkim_verify or md_authres functions in your filter."
+   echo ""
+fi
+
+if test "$HAVE_DIGEST_MD5" = "no" ; then
+   echo ""
+   echo "Could not find Digest::MD5 Perl module... do not use"
+   echo "email_is_blacklisted function in your filter."
    echo ""
 fi
 

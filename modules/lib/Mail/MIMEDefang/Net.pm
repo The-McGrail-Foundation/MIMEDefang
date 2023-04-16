@@ -25,8 +25,6 @@ use warnings;
 
 use Socket;
 
-use Digest::MD5 qw(md5_hex);
-use Digest::SHA qw(sha1_hex);
 use IO::Select;
 use Net::DNS;
 use Sys::Hostname;
@@ -38,7 +36,22 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_blacklisted email_is_blacklisted
                  relay_is_blacklisted_multi relay_is_blacklisted_multi_count relay_is_blacklisted_multi_list
                  is_public_ip4_address is_public_ip6_address md_get_bogus_mx_hosts get_mx_ip_addresses);
-our @EXPORT_OK = qw(get_host_name);
+our @EXPORT_OK = qw(get_host_name md_init);
+
+sub md_init {
+  my $digest_md5 = 0;
+  my $digest_sha = 0;
+  if (!defined($Features{"Digest::MD5"}) or ($Features{"Digest::MD5"} eq 1)) {
+    (eval 'use Digest::MD5 qw(md5_hex); $digest_md5 = 1;')
+    or $digest_md5 = 0;
+  }
+  if (!defined($Features{"Digest::SHA"}) or ($Features{"Digest::SHA"} eq 1)) {
+    (eval 'use Digest::SHA qw(sha1_hex); $digest_sha = 1;')
+    or $digest_sha = 0;
+  }
+  $Features{"Digest::MD5"} = $digest_md5;
+  $Features{"Digest::SHA"} = $digest_sha;
+}
 
 =item expand_ipv6_address
 
@@ -154,12 +167,12 @@ sub email_is_blacklisted {
   my($email, $domain, $hash_type) = @_;
 
   my $hashed;
-  if(uc($hash_type) eq 'MD5') {
+  if($Features{'Digest::MD5'} eq 1 and uc($hash_type) eq 'MD5') {
     $hashed = md5_hex($email);
-  } elsif(uc($hash_type) eq 'SHA1') {
+  } elsif($Features{'Digest::SHA'} eq 1 and uc($hash_type) eq 'SHA1') {
     $hashed = sha1_hex($email);
   } else {
-    md_syslog("Warning", "Invalid hash type in email_is_blacklisted call");
+    md_syslog("Warning", "Invalid or unsupported hash type in email_is_blacklisted call");
     return 0;
   }
   my $addr = $hashed . ".$domain";
