@@ -147,7 +147,7 @@ Source1:       https://mimedefang.org/static/%{name}-%{version}%{?prerelease}.ta
 Url:           https://mimedefang.org
 Vendor:        MIMEDefang
 Buildroot:     %{_tmppath}/%{name}-root
-Requires:      perl-Digest-SHA1 perl-MIME-tools perl-MailTools perl-Unix-Syslog
+Requires:      perl-Digest-SHA perl-Digest-MD5 perl-MIME-tools perl-MailTools perl-Unix-Syslog
 BuildRequires: sendmail-milter-devel >= 8.12.0
 BuildRequires: autoconf > 2.55
 
@@ -288,6 +288,8 @@ such as the graphdefang graphing package and a sample filter.
 %doc contrib
 
 %changelog
+* Sun Apr 16 2023 Giovanni Bechis <g.bechis@snb.it>
+- update Perl module requirements
 * Wed May 29 2002 Dianne Skoll <dfs@roaringpenguin.com>
 - Put pid files and sockets in /var/spool/MIMEDefang so we can
   drop privileges early.

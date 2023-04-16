@@ -23,6 +23,10 @@ package Mail::MIMEDefang::Net;
 use strict;
 use warnings;
 
+use Socket;
+
+use Digest::MD5 qw(md5_hex);
+use Digest::SHA qw(sha1_hex);
 use IO::Select;
 use Net::DNS;
 use Sys::Hostname;
@@ -31,7 +35,7 @@ use Mail::MIMEDefang;
 
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_black_listed
+our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_black_listed email_is_blacklisted
                  relay_is_blacklisted_multi relay_is_blacklisted_multi_count relay_is_blacklisted_multi_list
                  is_public_ip4_address is_public_ip6_address md_get_bogus_mx_hosts get_mx_ip_addresses);
 our @EXPORT_OK = qw(get_host_name);
@@ -122,6 +126,46 @@ sub relay_is_blacklisted {
   my $hn = gethostbyname($addr);
   return 0 unless defined($hn);
   return $hn if ($hn);
+
+  # Hostname is defined, but false -- return 1 instead.
+  return 1;
+}
+
+=item email_is_blacklisted
+
+Method that returns the result of the lookup (eg 127.0.0.2).
+Parameters are an email address, the domain of the
+hashbl server, and the type of hashing (MD5 or SHA1).
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: email_is_blacklisted
+# %ARGUMENTS:
+#  email -- email address to check in hashbl.
+#  domain -- domain of blacklist server (eg: ebl.msbl.org)
+#  hash_type -- type of hash: MD5/SHA1
+# %RETURNS:
+#  The result of the lookup (eg 127.0.0.2)
+#***********************************************************************
+sub email_is_blacklisted {
+  my($email, $domain, $hash_type) = @_;
+
+  my $hashed;
+  if(uc($hash_type) eq 'MD5') {
+    $hashed = md5_hex($email);
+  } elsif(uc($hash_type) eq 'SHA1') {
+    $hashed = sha1_hex($email);
+  } else {
+    md_syslog("Warning", "Invalid hash type in email_is_blacklisted call");
+    return 0;
+  }
+  my $addr = $hashed . ".$domain";
+  my $hn = gethostbyname($addr);
+  return 0 unless defined($hn);
+  if (defined $hn) {
+    return inet_ntoa($hn);
+  }
 
   # Hostname is defined, but false -- return 1 instead.
   return 1;

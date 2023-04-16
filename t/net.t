@@ -65,4 +65,19 @@ sub t_relay_is_blacklisted_multi : Test(1)
   }
 }
 
+sub t_email_is_blacklisted : Test(1)
+{
+  my $rbl = "hashbltest2.spamassassin.org";
+  my $email = 'hustl.er@gmail.com';
+
+  SKIP: {
+    if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
+      skip "Net test disabled", 1
+    }
+    detect_and_load_perl_modules();
+    my $ret = email_is_blacklisted($email, $rbl, 'md5');
+    is($ret, "127.0.0.2");
+  }
+}
+
 __PACKAGE__->runtests();
