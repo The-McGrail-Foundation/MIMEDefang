@@ -1,7 +1,8 @@
 dnl $Id$
 dnl Process this file with autoconf to produce a configure script.
 
-AC_INIT(mimedefang.c)
+AC_INIT
+AC_CONFIG_SRCDIR([mimedefang.c])
 
 dnl UGLY hack... set the --sysconfdir to /etc UNLESS it was explicitly
 dnl supplied on the command line.  Autoconf has no other nice way to set
@@ -11,7 +12,7 @@ echo $* | fgrep -e '--sysconfdir' > /dev/null 2>&1 || sysconfdir='/etc'
 
 AC_PROG_CC                      dnl Find C compiler
 AC_CHECK_PROGS(AR, ar, no)
-AC_CONFIG_HEADER(config.h)
+AC_CONFIG_HEADERS([config.h])
 
 dnl Add some common directories to PATH in case they are not there
 PATH=$PATH:/usr/local/bin
@@ -26,10 +27,10 @@ AC_PATH_PROG(PERL, perl)
 
 dnl Check for socklen_t type
 AC_MSG_CHECKING(whether socklen_t is defined)
-AC_TRY_COMPILE([
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #include <sys/types.h>
 #include <sys/socket.h>
-], [socklen_t x;], ac_have_socklen_t=yes, ac_have_socklen_t=no)
+]], [[socklen_t x;]])],[ac_have_socklen_t=yes],[ac_have_socklen_t=no])
 AC_MSG_RESULT($ac_have_socklen_t)
 if test "$ac_have_socklen_t" = "yes" ; then
    AC_DEFINE(HAVE_SOCKLEN_T,[],["Whether we have the variable type socklen_t"])
@@ -294,9 +295,9 @@ AC_CHECK_HEADERS(getopt.h unistd.h stdint.h poll.h stdint.h)
 
 dnl Check if stdint.h defines uint32_t
 AC_MSG_CHECKING(whether stdint.h defines uint32_t)
-AC_TRY_COMPILE([
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #include <stdint.h>
-], [uint32_t foo;], ac_uint32_t_defined=yes, ac_uint32_t_defined=no)
+]], [[uint32_t foo;]])],[ac_uint32_t_defined=yes],[ac_uint32_t_defined=no])
 AC_MSG_RESULT($ac_uint32_t_defined)
 
 if test "$ac_uint32_t_defined" = "yes" ; then
@@ -305,9 +306,9 @@ fi
 
 dnl Check if sys/types.h defines uint32_t
 AC_MSG_CHECKING(whether sys/types.h defines uint32_t)
-AC_TRY_COMPILE([
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #include <sys/types.h>
-], [uint32_t foo;], ac_uint32_t_defined=yes, ac_uint32_t_defined=no)
+]], [[uint32_t foo;]])],[ac_uint32_t_defined=yes],[ac_uint32_t_defined=no])
 AC_MSG_RESULT($ac_uint32_t_defined)
 
 if test "$ac_uint32_t_defined" = "yes" ; then
@@ -316,9 +317,9 @@ fi
 
 dnl sig_atomic_t
 AC_MSG_CHECKING(whether sig_atomic_t is defined)
-AC_TRY_COMPILE([
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #include <signal.h>
-], [sig_atomic_t foo;], ac_have_sig_atomic_t=yes, ac_have_sig_atomic_t=no)
+]], [[sig_atomic_t foo;]])],[ac_have_sig_atomic_t=yes],[ac_have_sig_atomic_t=no])
 AC_MSG_RESULT($ac_have_sig_atomic_t)
 if test "$ac_have_sig_atomic_t" = "yes" ; then
    AC_DEFINE(HAVE_SIG_ATOMIC_T,[],["Whether we have the atomic_t variable type "])
@@ -356,7 +357,7 @@ if test "$HAVE_EXTUTILS_EMBED" = "yes" ; then
    EMBPERLCFLAGS="`$PERL -MExtUtils::Embed -e ccopts`"
    LDFLAGS="$EMBPERLLDFLAGS $LDFLAGS"
    CFLAGS="$EMBPERLCFLAGS $CFLAGS"
-   AC_TRY_RUN([
+   AC_RUN_IFELSE([AC_LANG_SOURCE([[
 #include <EXTERN.h>
 #include <perl.h>
 #include <stdlib.h>
@@ -366,7 +367,7 @@ int main(int argc, char **argv, char **env) {
     if (!my_perl) exit(1);
     exit(0);
 }
-], EMBED_PERL=yes, EMBED_PERL=no)
+]])],[EMBED_PERL=yes],[EMBED_PERL=no],[])
    LIBS="$OLDLIBS"
    CFLAGS="$OLDCFLAGS"
    LDFLAGS="$OLDLDFLAGS"
@@ -389,7 +390,7 @@ else
    LIBS="-lperl $LIBS"
    LDFLAGS="$EMBPERLLDFLAGS $LDFLAGS"
    CFLAGS="$EMBPERLCFLAGS $CFLAGS $PTHREAD_FLAG"
-   AC_TRY_RUN([
+   AC_RUN_IFELSE([AC_LANG_SOURCE([[
 #include <EXTERN.h>
 #include <perl.h>
 
@@ -442,7 +443,7 @@ main(int argc, char **argv, char **env)
     make_embedded_interpreter(env);
     return 0;
 }
-], SAFE_EMBED_PERL=yes, SAFE_EMBED_PERL=no)
+]])],[SAFE_EMBED_PERL=yes],[SAFE_EMBED_PERL=no],[])
    LIBS="$OLDLIBS"
    CFLAGS="$OLDCFLAGS"
    LDFLAGS="$OLDLDFLAGS"
@@ -698,12 +699,8 @@ AC_DEFUN([MD_MILTER_SM],[
     OLD_LIBS="$LIBS"
     LIBS="$LIBS -lmilter"
     AC_MSG_CHECKING([whether libmilter requires -lsm])
-    AC_TRY_LINK(
-    [#include "libmilter/mfapi.h"
-     #include <string.h>],
-    [extern size_t sm_strlcpy(char *, char const *, ssize_t); char foo[10]; sm_strlcpy(foo, "", 0);],
-    NEED_LIBSM=no,
-    NEED_LIBSM=yes)
+    AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include "libmilter/mfapi.h"
+     #include <string.h>]], [[extern size_t sm_strlcpy(char *, char const *, ssize_t); char foo[10]; sm_strlcpy(foo, "", 0);]])],[NEED_LIBSM=no],[NEED_LIBSM=yes])
     AC_MSG_RESULT($NEED_LIBSM)
     LIBS="$OLD_LIBS"
     if test "$NEED_LIBSM" = yes ; then
@@ -835,7 +832,8 @@ AC_SUBST(PERLINSTALLCONF)
 AC_SUBST(PERLINSTALLSITECONF)
 AC_SUBST(PERLINSTALLVENDORCONF)
 
-AC_OUTPUT(Makefile mimedefang.pl script/mimedefang-util examples/init-script mimedefang-filter.5 mimedefang-multiplexor.8 mimedefang-protocol.7 mimedefang-notify.7 mimedefang.8 mimedefang.pl.8 md-mx-ctrl.8 watch-mimedefang redhat/mimedefang-init redhat/mimedefang-sysconfig)
+AC_CONFIG_FILES([Makefile mimedefang.pl script/mimedefang-util examples/init-script mimedefang-filter.5 mimedefang-multiplexor.8 mimedefang-protocol.7 mimedefang-notify.7 mimedefang.8 mimedefang.pl.8 md-mx-ctrl.8 watch-mimedefang redhat/mimedefang-init redhat/mimedefang-sysconfig])
+AC_OUTPUT
 chmod a+x examples/init-script > /dev/null 2>&1
 chmod a+x watch-mimedefang > /dev/null 2>&1
 chmod a+x redhat/mimedefang-init > /dev/null 2>&1
