@@ -35,7 +35,7 @@ use Mail::MIMEDefang;
 
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_black_listed email_is_blacklisted
+our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_blacklisted email_is_blacklisted
                  relay_is_blacklisted_multi relay_is_blacklisted_multi_count relay_is_blacklisted_multi_list
                  is_public_ip4_address is_public_ip6_address md_get_bogus_mx_hosts get_mx_ip_addresses);
 our @EXPORT_OK = qw(get_host_name);
@@ -125,7 +125,9 @@ sub relay_is_blacklisted {
 
   my $hn = gethostbyname($addr);
   return 0 unless defined($hn);
-  return $hn if ($hn);
+  if (defined $hn) {
+    return inet_ntoa($hn);
+  }
 
   # Hostname is defined, but false -- return 1 instead.
   return 1;
