@@ -6756,7 +6756,7 @@ CONFDIR_EVAL=`echo ${sysconfdir}${CONFSUBDIR}`
 
 
 
-ac_config_files="$ac_config_files Makefile mimedefang.pl script/mimedefang-util examples/init-script mimedefang-filter.5 mimedefang-multiplexor.8 mimedefang-protocol.7 mimedefang-notify.7 mimedefang.8 mimedefang.pl.8 md-mx-ctrl.8 watch-mimedefang redhat/mimedefang-init redhat/mimedefang-sysconfig"
+ac_config_files="$ac_config_files Makefile mimedefang.pl mimedefang-release.pl script/mimedefang-util examples/init-script mimedefang-filter.5 mimedefang-multiplexor.8 mimedefang-protocol.7 mimedefang-notify.7 mimedefang.8 mimedefang.pl.8 md-mx-ctrl.8 watch-mimedefang redhat/mimedefang-init redhat/mimedefang-sysconfig"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -7446,6 +7446,7 @@ do
     "config.h") CONFIG_HEADERS="$CONFIG_HEADERS config.h" ;;
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
     "mimedefang.pl") CONFIG_FILES="$CONFIG_FILES mimedefang.pl" ;;
+    "mimedefang-release.pl") CONFIG_FILES="$CONFIG_FILES mimedefang-release.pl" ;;
     "script/mimedefang-util") CONFIG_FILES="$CONFIG_FILES script/mimedefang-util" ;;
     "examples/init-script") CONFIG_FILES="$CONFIG_FILES examples/init-script" ;;
     "mimedefang-filter.5") CONFIG_FILES="$CONFIG_FILES mimedefang-filter.5" ;;

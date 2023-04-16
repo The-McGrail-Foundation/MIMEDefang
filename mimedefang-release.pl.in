@@ -1,0 +1,141 @@
+#!@PERL@
+# -*- Perl -*-
+######################################################################
+#	mimedefang-release -d directory
+#	release a message from quarantine directory
+#
+#	This program was derived by fang.pl available on contrib/
+#	directory
+#
+# * This program may be distributed under the terms of the GNU General
+# * Public License, Version 2.
+#
+######################################################################
+
+use strict;
+use warnings;
+
+use Carp;
+use Archive::Zip qw( :ERROR_CODES :CONSTANTS );
+use Getopt::Std;
+use File::Temp qw ( :POSIX );
+use MIME::Entity;
+
+use Mail::MIMEDefang;
+
+init_globals();
+$Features{'Path:SENDMAIL'}  = '@SENDMAILPROG@';
+$Features{'Path:QUARANTINEDIR'} = '@QDIR@';
+
+my %opts = ();
+getopts('hd:s:z', \%opts);
+
+if (exists $opts{'?'} || exists $opts{'h'}) {
+  print "mimedefang-release -d <dir> [ -s <subject> ] [ -z ]";
+  exit 0;
+}
+
+my $qdir = $opts{'d'};
+if($qdir !~ /^\//) {
+  $qdir = '/var/spool/MD-Quarantine/' . $qdir;
+}
+croak("$qdir is not a valid directory!") unless (-d $qdir and -f "$qdir/ENTIRE_MESSAGE");
+
+my $subject;
+if(defined $opts{'s'}) {
+  $subject = $opts{'s'};
+}
+
+my $zip = 0;
+if(defined $opts{'z'}) {
+  $zip = 1;
+}
+
+my $rc = make_message(qdir => $qdir, subject => $subject, zip => $zip);
+
+exit $rc;
+
+sub make_message {
+  my (%params) = @_;
+
+  my $dir = $params{qdir};
+  my $subj = $params{subject};
+  my $use_zip = $params{zip};
+
+  my @to;
+  open(TO,"<$dir/RECIPIENTS")
+    || croak("Can't read $dir/RECIPIENTS: $!");
+  while (<TO>) { chomp; push @to,$_; }
+  close(TO);
+
+  my $from;
+  open(FROM,"<$dir/SENDER")
+    || croak("Can't read $dir/SENDER: $!");
+  $from = <FROM>;
+  close(FROM);
+
+  my $subject;
+  my $date;
+  open(HEADER,"<$dir/HEADERS")
+    || croak("Can't read $dir/HEADERS: $!");
+  while (<HEADER>) {
+    chomp;
+    SWITCH: {
+	/Date:/ && do {
+	  s/Date: //;
+	  $date = $_;
+	};
+
+	/Subject:/ && do {
+	  s/Subject: //;
+	  $subject = $_;
+	};
+    }
+  }
+  close(HEADER);
+
+  # use subject passed as parameter
+  if(defined($subj)) {
+    $subject = $subj;
+  }
+
+  opendir(FOLDER,"$dir")
+    || Error("Can't list $dir: $!");
+  my @files = readdir(FOLDER);
+  close(FOLDER);
+
+  my $msg = MIME::Entity->build(
+		  From    => 'postmaster@localhost.localdomain',
+		  To      => join(',',@to),
+		  Subject => $subject,
+		  Type    => 'multipart/mixed',
+  );
+
+  my $tmpzip;
+  if($use_zip) {
+    my $zipfile = Archive::Zip->new();
+    my $file_member = $zipfile->addFile("$dir/ENTIRE_MESSAGE", 'released-message.eml');
+    $tmpzip = tmpnam();
+    my $status = $zipfile->writeToFileNamed($tmpzip);
+       croak "error somewhere" if $status != AZ_OK;
+    $msg->attach(
+		  Type     => 'application/zip',
+		  Path     => $tmpzip,
+		  Filename => 'released-message.zip',
+    );
+  } else {
+    $msg->attach(
+		  Type     => 'message/rfc822',
+		  Path     => "$dir/ENTIRE_MESSAGE",
+		  Filename => 'released-message.eml',
+    );
+  }
+
+  if(send_mail($DaemonAddress, $DaemonName, join(',', @to), $msg->stringify)) {
+    unlink($tmpzip) if ($zip);
+    return 1;
+  } else {
+    unlink($tmpzip) if ($zip);
+    return 0;
+  }
+}

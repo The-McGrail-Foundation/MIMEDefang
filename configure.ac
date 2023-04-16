@@ -840,7 +840,7 @@ AC_SUBST(PERLINSTALLCONF)
 AC_SUBST(PERLINSTALLSITECONF)
 AC_SUBST(PERLINSTALLVENDORCONF)
 
-AC_CONFIG_FILES([Makefile mimedefang.pl script/mimedefang-util examples/init-script mimedefang-filter.5 mimedefang-multiplexor.8 mimedefang-protocol.7 mimedefang-notify.7 mimedefang.8 mimedefang.pl.8 md-mx-ctrl.8 watch-mimedefang redhat/mimedefang-init redhat/mimedefang-sysconfig])
+AC_CONFIG_FILES([Makefile mimedefang.pl mimedefang-release.pl script/mimedefang-util examples/init-script mimedefang-filter.5 mimedefang-multiplexor.8 mimedefang-protocol.7 mimedefang-notify.7 mimedefang.8 mimedefang.pl.8 md-mx-ctrl.8 watch-mimedefang redhat/mimedefang-init redhat/mimedefang-sysconfig])
 AC_OUTPUT
 chmod a+x examples/init-script > /dev/null 2>&1
 chmod a+x watch-mimedefang > /dev/null 2>&1

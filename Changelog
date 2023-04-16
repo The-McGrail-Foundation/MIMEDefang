@@ -4,6 +4,11 @@ affect your filter.
 
 2023-04-16 Giovanni Bechis <g.bechis@snb.it>
 
+	* add a mimedefang-release program to release a message from
+	quarantine directory
+
+2023-04-16 Giovanni Bechis <g.bechis@snb.it>
+
 	* add email_is_blacklisted to check an email address against an
 	hashbl rbl server
 
