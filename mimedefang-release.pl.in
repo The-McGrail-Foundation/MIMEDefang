@@ -105,10 +105,11 @@ sub make_message {
   close(FOLDER);
 
   my $msg = MIME::Entity->build(
-		  From    => 'postmaster@localhost.localdomain',
-		  To      => join(',',@to),
-		  Subject => $subject,
-		  Type    => 'multipart/mixed',
+                 From    => $DaemonAddress,
+                 To      => join(',',@to),
+                 Subject => $subject,
+                 Data    => "A quarantined message has been released,\nyou can find the original message in the attached file.",
+                 Type    => 'multipart/mixed',
   );
 
   my $tmpzip;
