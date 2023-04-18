@@ -1,16 +1,53 @@
 #!@PERL@
 # -*- Perl -*-
 ######################################################################
-#	mimedefang-release -d directory
-#	release a message from quarantine directory
+#       mimedefang-release -d directory
+#       release a message from quarantine directory
 #
-#	This program was derived by fang.pl available on contrib/
-#	directory
+#       This program was derived by fang.pl available on contrib/
+#       directory
 #
 # * This program may be distributed under the terms of the GNU General
 # * Public License, Version 2.
 #
 ######################################################################
+
+=head1 NAME
+
+mimedefang-release - a tool to release quarantined email messages
+
+=head1 DESCRIPTION
+
+mimedefang-release is a tool that permits to release quarantined
+messages or to attach the messages to a new email message.
+
+=head1 SYNOPSIS
+
+ mimedefang-release [options] <directory> ...
+
+ Options:
+   -a	enable attach more, the released email will be sent as an attachment
+	to the user.
+   -h   display the help
+   -d	path to the quarantined directory, it can be an absolute path or
+	relative to MIMEDefang quarantine spool directory.
+   -s	set a custom subject for the email, this option is valid only
+	in attach mode.
+   -S	specify an smtp server, in this mode the quarantined email will be
+	delivered to the original user without modifications.
+   -t	enable TLS when delivering the email in smtp mode.
+   -z	compress the quarantined email using Archive::Zip.
+	this option is valid only in attach mode.
+
+=head1 EXAMPLES
+
+mbox mode:
+  mimedefang-release -s "Message Relased" -a -z -d 2023-04-16-14/qdir-2023-04-16-14.36.05-001
+
+smtp mode:
+  mimedefang-release -S 192.168.0.254 -d 2023-04-16-14/qdir-2023-04-16-14.36.05-001
+
+=cut
 
 use strict;
 use warnings;
@@ -20,6 +57,7 @@ use Archive::Zip qw( :ERROR_CODES :CONSTANTS );
 use Getopt::Std;
 use File::Temp qw ( :POSIX );
 use MIME::Entity;
+use Net::SMTP;
 
 use Mail::MIMEDefang;
 
@@ -28,10 +66,10 @@ $Features{'Path:SENDMAIL'}  = '@SENDMAILPROG@';
 $Features{'Path:QUARANTINEDIR'} = '@QDIR@';
 
 my %opts = ();
-getopts('hd:s:z', \%opts);
+getopts('ahd:s:S:tz', \%opts);
 
 if (exists $opts{'?'} || exists $opts{'h'}) {
-  print "mimedefang-release -d <dir> [ -s <subject> ] [ -z ]";
+  print "mimedefang-release -d <dir> [ -a ] [ -s <subject> ] [ -S <server> ] [ -t ] [ -z ]";
   exit 0;
 }
 
@@ -41,14 +79,41 @@ if($qdir !~ /^\//) {
 }
 croak("$qdir is not a valid directory!") unless (-d $qdir and -f "$qdir/ENTIRE_MESSAGE");
 
+my $attach = 0;
+if(defined $opts{'a'}) {
+  $attach = 1;
+}
+
 my $subject;
 if(defined $opts{'s'}) {
   $subject = $opts{'s'};
 }
 
+my $smtp;
+if(defined $opts{'S'}) {
+  $smtp = $opts{'S'};
+}
+
+my $tls = 0;
+if(defined $opts{'t'}) {
+  $tls = 1;
+}
+
 my $zip = 0;
 if(defined $opts{'z'}) {
   $zip = 1;
+}
+
+if($zip and not $attach) {
+  croak("-z option cannot be used without -a option");
+}
+
+if(($zip or $attach) and defined $smtp) {
+  croak("-z and -a options cannot be used with -S option");
+}
+
+if($tls and not $smtp) {
+  croak("-t option cannot be used without -S option");
 }
 
 my $rc = make_message(qdir => $qdir, subject => $subject, zip => $zip);
@@ -105,38 +170,58 @@ sub make_message {
   close(FOLDER);
 
   my $msg = MIME::Entity->build(
-                 From    => $DaemonAddress,
-                 To      => join(',',@to),
-                 Subject => $subject,
-                 Data    => "A quarantined message has been released,\nyou can find the original message in the attached file.",
-                 Type    => 'multipart/mixed',
+		  From    => $DaemonAddress,
+		  To      => join(',',@to),
+		  Subject => $subject,
+                  Data    => "A quarantined message has been released,\nyou can find the original message in the attached file.",
+		  Type    => 'multipart/mixed',
   );
 
   my $tmpzip;
-  if($use_zip) {
-    my $zipfile = Archive::Zip->new();
-    my $file_member = $zipfile->addFile("$dir/ENTIRE_MESSAGE", 'released-message.eml');
-    $tmpzip = tmpnam();
-    my $status = $zipfile->writeToFileNamed($tmpzip);
-       croak "error somewhere" if $status != AZ_OK;
-    $msg->attach(
+  if($attach) {
+    if($use_zip) {
+      my $zipfile = Archive::Zip->new();
+      my $file_member = $zipfile->addFile("$dir/ENTIRE_MESSAGE", 'released-message.eml');
+      $tmpzip = tmpnam();
+      my $status = $zipfile->writeToFileNamed($tmpzip);
+        croak "error somewhere" if $status != AZ_OK;
+      $msg->attach(
 		  Type     => 'application/zip',
 		  Path     => $tmpzip,
 		  Filename => 'released-message.zip',
-    );
-  } else {
-    $msg->attach(
+      );
+    } else {
+      $msg->attach(
 		  Type     => 'message/rfc822',
 		  Path     => "$dir/ENTIRE_MESSAGE",
 		  Filename => 'released-message.eml',
-    );
-  }
+      );
+    }
 
-  if(send_mail($DaemonAddress, $DaemonName, join(',', @to), $msg->stringify)) {
-    unlink($tmpzip) if ($zip);
-    return 1;
+    if(send_mail($DaemonAddress, $DaemonName, join(',', @to), $msg->stringify)) {
+      unlink($tmpzip) if ($zip);
+      return 1;
+    } else {
+      unlink($tmpzip) if ($zip);
+      return 0;
+    }
+  } elsif(defined $smtp) {
+    my $srv = Net::SMTP->new($smtp,
+                           SSL     => $tls,
+                          );
+    open my $fh, '<', "$dir/ENTIRE_MESSAGE" or croak("Cannot open quarantined message on directory $dir");
+    local $/ = undef;
+    my $entire_message = <$fh>;
+    close $fh;
+
+    $srv->mail($from);
+    if($srv->to(join(',',@to))) {
+      $srv->data();
+      $srv->datasend($entire_message);
+      $srv->dataend();
+    }
+    $srv->quit();
   } else {
-    unlink($tmpzip) if ($zip);
-    return 0;
+    croak("Invalid options, at least -S or -a options must be used");
   }
 }

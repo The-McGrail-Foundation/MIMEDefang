@@ -96,6 +96,7 @@ mimedefang.pl.8
 mimedefang.pl.8.in
 mimedefang.pl.in
 mimedefang-release.pl.in
+mimedefang-release.8
 modules/lib/Mail/MIMEDefang.pm
 modules/lib/Mail/MIMEDefang/Actions.pm
 modules/lib/Mail/MIMEDefang/Antispam.pm

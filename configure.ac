@@ -237,6 +237,15 @@ else
     fi
     AC_MSG_RESULT($HAVE_DIGEST_MD5)
 
+    AC_MSG_CHECKING([for Perl module Net::SMTP])
+    (echo "use Net::SMTP;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_NET_SMTP=no
+    else
+	HAVE_NET_SMTP=yes
+    fi
+    AC_MSG_RESULT($HAVE_NET_SMTP)
+
     dnl Check MIME::Tools version
     dirs=`echo 'print "@INC\n";' | $PERL`
     foundit=""
@@ -1157,6 +1166,13 @@ if test "$HAVE_DIGEST_MD5" = "no" ; then
    echo ""
    echo "Could not find Digest::MD5 Perl module... do not use"
    echo "email_is_blacklisted function in your filter."
+   echo ""
+fi
+
+if test "$HAVE_NET_SMTP" = "no" ; then
+   echo ""
+   echo "Could not find Net::SMTP Perl module... you will not be able"
+   echo "to release quarantined messages using mimedefang-release(8)."
    echo ""
 fi
 

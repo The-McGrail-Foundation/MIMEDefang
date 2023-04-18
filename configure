@@ -4365,6 +4365,17 @@ printf %s "checking for Perl module Digest::MD5... " >&6; }
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $HAVE_DIGEST_MD5" >&5
 printf "%s\n" "$HAVE_DIGEST_MD5" >&6; }
 
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl module Net::SMTP" >&5
+printf %s "checking for Perl module Net::SMTP... " >&6; }
+    (echo "use Net::SMTP;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_NET_SMTP=no
+    else
+	HAVE_NET_SMTP=yes
+    fi
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $HAVE_NET_SMTP" >&5
+printf "%s\n" "$HAVE_NET_SMTP" >&6; }
+
         dirs=`echo 'print "@INC\n";' | $PERL`
     foundit=""
     for i in $dirs ; do
@@ -8359,6 +8370,13 @@ if test "$HAVE_DIGEST_MD5" = "no" ; then
    echo ""
    echo "Could not find Digest::MD5 Perl module... do not use"
    echo "email_is_blacklisted function in your filter."
+   echo ""
+fi
+
+if test "$HAVE_NET_SMTP" = "no" ; then
+   echo ""
+   echo "Could not find Net::SMTP Perl module... you will not be able"
+   echo "to release quarantined messages using mimedefang-release(8)."
    echo ""
 fi
 

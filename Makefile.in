@@ -132,6 +132,11 @@ script/mimedefang-util.1: script/mimedefang-util
 		script/mimedefang-util script/mimedefang-util.1
 
 lib/manpages:
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=8 --perm_rw=644 \
+		--center="mimedefang-release Documentation" \
+		--name="mimedefang-release" \
+		--release=$(VERSION) \
+		mimedefang-release.pl mimedefang-release.8
 	mkdir -p modules/man
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \
 		--center="Mail::MIMEDefang Documentation" \
@@ -205,7 +210,7 @@ distclean:: clean
 	script/mimedefang-util \
 	mimedefang-filter.5 mimedefang-multiplexor.8 mimedefang-protocol.7 \
 	mimedefang-notify.7 \
-	mimedefang.8 mimedefang.pl.8 md-mx-ctrl.8 watch-mimedefang \
+	mimedefang.8 mimedefang.pl.8 mimedefang-release.8 md-mx-ctrl.8 watch-mimedefang \
 	redhat/mimedefang-init redhat/mimedefang-spec redhat/mimedefang-sysconfig \
 	script/mimedefang-util.1 modules/man/*.3
 
@@ -294,6 +299,7 @@ install: all
 	$(INSTALL) -m 644 script/mimedefang-util.1 $(DESTDIR)$(MANDIR)/man1/mimedefang-util.1
 	$(INSTALL) -m 644 modules/man/Mail::MIMEDefang*.3 $(DESTDIR)$(MANDIR)/man3/
 	$(INSTALL) -m 644 mimedefang.8             $(DESTDIR)$(MANDIR)/man8/mimedefang.8
+	$(INSTALL) -m 644 mimedefang-release.8     $(DESTDIR)$(MANDIR)/man8/mimedefang-release.8
 	$(INSTALL) -m 644 watch-mimedefang.8       $(DESTDIR)$(MANDIR)/man8/watch-mimedefang.8
 	$(INSTALL) -m 644 watch-multiple-mimedefangs.8 $(DESTDIR)$(MANDIR)/man8/watch-multiple-mimedefangs.8
 	$(INSTALL) -m 644 mimedefang.pl.8          $(DESTDIR)$(MANDIR)/man8/mimedefang.pl.8
