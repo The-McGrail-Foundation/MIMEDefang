@@ -74,6 +74,7 @@ if (exists $opts{'?'} || exists $opts{'h'}) {
 }
 
 my $qdir = $opts{'d'};
+$qdir //= '';
 if($qdir !~ /^\//) {
   $qdir = '/var/spool/MD-Quarantine/' . $qdir;
 }
