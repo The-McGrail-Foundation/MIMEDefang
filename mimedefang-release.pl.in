@@ -1,14 +1,15 @@
 #!@PERL@
 # -*- Perl -*-
 ######################################################################
-#       mimedefang-release -d directory
-#       release a message from quarantine directory
+# mimedefang-release -d directory
+# release a message from quarantine directory
 #
-#       This program was derived by fang.pl available on contrib/
-#       directory
+# This program was derived from fang.pl,
+# original script available on contrib/ directory
 #
-# * This program may be distributed under the terms of the GNU General
-# * Public License, Version 2.
+# * This program may be distributed under the
+#   terms of the GNU General Public License,
+#   Version 2.
 #
 ######################################################################
 
