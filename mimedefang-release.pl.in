@@ -186,7 +186,7 @@ sub make_message {
       my $file_member = $zipfile->addFile("$dir/ENTIRE_MESSAGE", 'released-message.eml');
       $tmpzip = tmpnam();
       my $status = $zipfile->writeToFileNamed($tmpzip);
-        croak "error somewhere" if $status != AZ_OK;
+        croak "error while compressing file $tmpzip" if $status != AZ_OK;
       $msg->attach(
 		  Type     => 'application/zip',
 		  Path     => $tmpzip,
