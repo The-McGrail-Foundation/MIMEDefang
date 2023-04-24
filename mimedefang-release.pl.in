@@ -58,9 +58,10 @@ use Archive::Zip qw( :ERROR_CODES :CONSTANTS );
 use Getopt::Std;
 use File::Temp qw ( :POSIX );
 use MIME::Entity;
-use Net::SMTP;
 
 use Mail::MIMEDefang;
+
+use constant HAS_NET_SMTP => eval { require Net::SMTP; };
 
 init_globals();
 $Features{'Path:SENDMAIL'}  = '@SENDMAILPROG@';
@@ -93,6 +94,9 @@ if(defined $opts{'s'}) {
 
 my $smtp;
 if(defined $opts{'S'}) {
+  if(not HAS_NET_SMTP) {
+    croak("Net::SMTP is required to use smtp mode");
+  }
   $smtp = $opts{'S'};
 }
 

@@ -8376,7 +8376,8 @@ fi
 if test "$HAVE_NET_SMTP" = "no" ; then
    echo ""
    echo "Could not find Net::SMTP Perl module... you will not be able"
-   echo "to release quarantined messages using mimedefang-release(8)."
+   echo "to release quarantined messages using mimedefang-release(8)"
+   echo "in smtp mode."
    echo ""
 fi
 
