@@ -26,7 +26,8 @@ messages or to attach the messages to a new email message.
 
  mimedefang-release [options] <directory> ...
 
- Options:
+=head1 OPTIONS
+
    -a	enable attach more, the released email will be sent as an attachment
 	to the user.
    -h   display the help
