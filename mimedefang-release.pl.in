@@ -54,7 +54,6 @@ use strict;
 use warnings;
 
 use Carp;
-use Archive::Zip qw( :ERROR_CODES :CONSTANTS );
 use Getopt::Std;
 use File::Temp qw ( :POSIX );
 use MIME::Entity;
@@ -64,6 +63,8 @@ use Mail::MIMEDefang;
 use constant HAS_NET_SMTP => eval { require Net::SMTP; };
 
 init_globals();
+detect_and_load_perl_modules();
+
 $Features{'Path:SENDMAIL'}  = '@SENDMAILPROG@';
 $Features{'Path:QUARANTINEDIR'} = '@QDIR@';
 
@@ -106,8 +107,10 @@ if(defined $opts{'t'}) {
 }
 
 my $zip = 0;
-if(defined $opts{'z'}) {
+if(defined $opts{'z'} and $Features{"Archive::Zip"} eq 1) {
   $zip = 1;
+} elsif((not defined $Features{"Archive::Zip"}) or ($Features{"Archive::Zip"} eq 0)) {
+  croak("-z option needs Archive::Zip Perl module");
 }
 
 if($zip and not $attach) {
@@ -189,8 +192,12 @@ sub make_message {
       my $zipfile = Archive::Zip->new();
       my $file_member = $zipfile->addFile("$dir/ENTIRE_MESSAGE", 'released-message.eml');
       $tmpzip = tmpnam();
+      # this code burps an ugly message if it fails, but that's redirected elsewhere
+      # AZ_OK is a constant exported by Archive::Zip
+      my $az_ok;
+      eval '$az_ok = AZ_OK';
       my $status = $zipfile->writeToFileNamed($tmpzip);
-        croak "error while compressing file $tmpzip" if $status != AZ_OK;
+        croak "error while compressing file $tmpzip" if $status != $az_ok;
       $msg->attach(
 		  Type     => 'application/zip',
 		  Path     => $tmpzip,
