@@ -43,10 +43,18 @@ messages or to attach the messages to a new email message.
 =head1 EXAMPLES
 
 mbox mode:
-  mimedefang-release -s "Message Relased" -a -z -d 2023-04-16-14/qdir-2023-04-16-14.36.05-001
+  mimedefang-release -s "Message Released" -a -z -d 2023-04-16-14/qdir-2023-04-16-14.36.05-001
 
 smtp mode:
   mimedefang-release -S 192.168.0.254 -d 2023-04-16-14/qdir-2023-04-16-14.36.05-001
+
+=head1 AUTHOR
+
+mimedefang-release(8) was written by Giovanni Bechis L<<giovanni@paclan.it>>. The mimedefang home page is L<https://www.mimedefang.org/>.
+
+=head1 SEE ALSO
+
+mimedefang.pl(8), mimedefang-filter(5), mimedefang(8), mimedefang-protocol(7), watch-mimedefang(8)
 
 =cut
 

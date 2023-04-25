@@ -274,6 +274,6 @@ may introduce.
 The \fBmimedefang\fR home page is \fIhttp://www.mimedefang.org/\fR.
 
 .SH SEE ALSO
-mimedefang.pl(8), mimedefang-filter(5), mimedefang-multiplexor(8), mimedefang-protocol(7)
+mimedefang.pl(8), mimedefang-filter(5), mimedefang-multiplexor(8), mimedefang-protocol(7), mimedefang-release(8)
 
 

@@ -73,6 +73,6 @@ If filter_validate does not exist, an error message is printed and
 The \fBmimedefang\fR home page is \fIhttps://www.mimedefang.org/\fR.
 
 .SH SEE ALSO
-mimedefang(8), mimedefang-filter(5), mimedefang-protocol(7)
+mimedefang(8), mimedefang-filter(5), mimedefang-protocol(7), mimedefang-release(8)
 
 
