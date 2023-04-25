@@ -81,7 +81,13 @@ $qdir //= '';
 if($qdir !~ /^\//) {
   $qdir = $Features{'Path:QUARANTINEDIR'} . '/' . $qdir;
 }
-croak("$qdir is not a valid directory!") unless (-d $qdir and -f "$qdir/ENTIRE_MESSAGE");
+
+unless (-d $qdir and -f "$qdir/ENTIRE_MESSAGE"
+        and -f "$qdir/RECIPIENTS"
+        and -f "$qdir/SENDER"
+        and -f "$qdir/HEADERS") {
+  croak("$qdir is not a valid directory!");
+}
 
 my $attach = 0;
 if(defined $opts{'a'}) {
