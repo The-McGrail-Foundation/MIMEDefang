@@ -1176,7 +1176,7 @@ L<Mail::MIMEDefang::DKIM(3)>
 
 L<Mail::MIMEDefang::DKIM::ARC(3)>
 
-L<Mail::MIMEDefang::DKIM::Authres(3)>
+L<Mail::MIMEDefang::Authres(3)>
 
 L<Mail::MIMEDefang::Mail(3)>
 
