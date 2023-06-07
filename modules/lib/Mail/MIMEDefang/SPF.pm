@@ -96,4 +96,8 @@ sub md_spf {
   }
 }
 
+=back
+
+=cut
+
 1;
