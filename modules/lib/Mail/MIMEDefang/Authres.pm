@@ -25,10 +25,9 @@ use warnings;
 
 require Exporter;
 
-use Mail::SPF;
-
 use Mail::MIMEDefang::DKIM;
 use Mail::MIMEDefang::Net;
+use Mail::MIMEDefang::SPF;
 
 our @ISA = qw(Exporter);
 our @EXPORT;
@@ -79,29 +78,9 @@ sub md_authres {
 
   my ($authres, $spfres, $helo_spfres);
   my ($dkimres, $dkimdom, $ksize, $dkimpk) = md_dkim_verify();
-  $spfmail =~ s/^<//;
-  $spfmail =~ s/>$//;
-  if(defined $spfmail and $spfmail =~ /\@/) {
-    if($spfmail =~ /(.*)\+(?:.*)\@(.*)/) {
-      $spfmail = $1 . '@' . $2;
-    }
-    my $spf_server  = Mail::SPF::Server->new();
-    my $request     = Mail::SPF::Request->new(
-      scope           => 'mfrom',
-      identity        => $spfmail,
-      ip_address      => $relayip,
-    );
-    $spfres = $spf_server->process($request);
-    if(defined $helo) {
-      my $helo_request     = Mail::SPF::Request->new(
-        scope           => 'helo',
-        identity        => $helo,
-        ip_address      => $relayip,
-      );
-      $helo_spfres = $spf_server->process($request);
-    }
-  }
-  if((defined $spfres and defined $spfres->code) or ((defined $dkimpk) and ($ksize > 0))) {
+
+  my ($spfcode, $spfexpl, $helo_spfcode, $helo_spfexpl) = md_spf($spfmail, $relayip, $helo);
+  if((defined $spfcode) or ((defined $dkimpk) and ($ksize > 0))) {
     # Mail::DKIM::ARC::Signer v0.54 doesn't correctly parse Authentication-Results headers,
     # add a workaround to make md_arc_sign work with our own headers.
     if($dkimoldver) {
@@ -119,22 +98,22 @@ sub md_authres {
         $authres .= ";";
       }
     }
-    if(defined $spfres) {
-      if($spfres->code eq 'fail') {
-        $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail does not designate $relayip as permitted sender) smtp.mailfrom=$spfmail;";
-      } elsif($spfres->code eq 'pass') {
-        $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail designates $relayip as permitted sender) smtp.mailfrom=$spfmail;";
-      } elsif($spfres->code eq 'none') {
-        $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail doesn't specify if $relayip is a permitted sender) smtp.mailfrom=$spfmail;";
+    if(defined $spfcode) {
+      if($spfcode eq 'fail') {
+        $authres .= "\r\n\tspf=" . $spfcode . " (domain of $spfmail does not designate $relayip as permitted sender) smtp.mailfrom=$spfmail;";
+      } elsif($spfcode eq 'pass') {
+        $authres .= "\r\n\tspf=" . $spfcode . " (domain of $spfmail designates $relayip as permitted sender) smtp.mailfrom=$spfmail;";
+      } elsif($spfcode eq 'none') {
+        $authres .= "\r\n\tspf=" . $spfcode . " (domain of $spfmail doesn't specify if $relayip is a permitted sender) smtp.mailfrom=$spfmail;";
       }
     }
-    if(defined $helo_spfres) {
-      if($helo_spfres->code eq 'fail') {
-        $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail does not designate $relayip as permitted sender) smtp.helo=$helo;";
-      } elsif($helo_spfres->code eq 'pass') {
-        $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail designates $relayip as permitted sender) smtp.helo=$helo;";
-      } elsif($helo_spfres->code eq 'none') {
-        $authres .= "\r\n\tspf=" . $spfres->code . " (domain of $spfmail doesn't specify if $relayip is a permitted sender) smtp.helo=$helo;";
+    if(defined $helo_spfcode) {
+      if($helo_spfcode eq 'fail') {
+        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $spfmail does not designate $relayip as permitted sender) smtp.helo=$helo;";
+      } elsif($helo_spfcode eq 'pass') {
+        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $spfmail designates $relayip as permitted sender) smtp.helo=$helo;";
+      } elsif($helo_spfcode eq 'none') {
+        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $spfmail doesn't specify if $relayip is a permitted sender) smtp.helo=$helo;";
       }
     }
     $authres =~ s/\r//gs;

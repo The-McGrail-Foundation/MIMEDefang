@@ -1,0 +1,99 @@
+#
+# This program may be distributed under the terms of the GNU General
+# Public License, Version 2.
+#
+
+=head1 NAME
+
+Mail::MIMEDefang::SPF - Sender Policy Framework interface for MIMEDefang
+
+=head1 DESCRIPTION
+
+Mail::MIMEDefang::SPF is a module used to check for Sender Policy Framework
+headers from F<mimedefang-filter>.
+
+=head1 METHODS
+
+=over 4
+
+=cut
+
+package Mail::MIMEDefang::SPF;
+
+use strict;
+use warnings;
+
+require Exporter;
+
+use Mail::SPF;
+
+our @ISA = qw(Exporter);
+our @EXPORT;
+our @EXPORT_OK;
+
+@EXPORT = qw(md_spf);
+
+=item md_spf
+
+Returns code and explanation of Sender Policy Framework
+check.
+The method accepts the following parameters:
+
+=over 4
+
+=item C<$email>
+
+The email address of the sender
+
+=item C<$relayip>
+
+The relay ip address
+
+=item C<$helo> (optional)
+
+The MTA helo server name
+
+=back
+
+=cut
+
+sub md_spf {
+
+  my ($spfmail, $relayip, $helo) = @_;
+
+  if(not defined $spfmail and not defined $relayip) {
+    md_syslog('err', "Cannot check SPF without email address and relay ip");
+    return;
+  }
+
+  my ($spfres, $helo_spfres);
+  $spfmail =~ s/^<//;
+  $spfmail =~ s/>$//;
+  if(defined $spfmail and $spfmail =~ /\@/) {
+    if($spfmail =~ /(.*)\+(?:.*)\@(.*)/) {
+      $spfmail = $1 . '@' . $2;
+    }
+    my $spf_server  = Mail::SPF::Server->new();
+    my $request     = Mail::SPF::Request->new(
+      scope           => 'mfrom',
+      identity        => $spfmail,
+      ip_address      => $relayip,
+    );
+    $spfres = $spf_server->process($request);
+    if(defined $helo) {
+      my $helo_request     = Mail::SPF::Request->new(
+        scope           => 'helo',
+        identity        => $helo,
+        ip_address      => $relayip,
+      );
+      $helo_spfres = $spf_server->process($request);
+    }
+  }
+  if(defined $helo) {
+    return ($spfres->code, $spfres->local_explanation, $helo_spfres->code, $helo_spfres->local_explanation);
+  } else {
+    return ($spfres->code, $spfres->local_explanation);
+  }
+}
+
+1;

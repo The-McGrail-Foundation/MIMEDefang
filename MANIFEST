@@ -107,6 +107,7 @@ modules/lib/Mail/MIMEDefang/Authres.pm
 modules/lib/Mail/MIMEDefang/Mail.pm
 modules/lib/Mail/MIMEDefang/MIME.pm
 modules/lib/Mail/MIMEDefang/Net.pm
+modules/lib/Mail/MIMEDefang/SPF.pm
 modules/lib/Mail/MIMEDefang/RFC2822.pm
 modules/lib/Mail/MIMEDefang/Unit.pm
 modules/lib/Mail/MIMEDefang/Utils.pm
@@ -122,6 +123,7 @@ modules/man/Mail::MIMEDefang::Authres.3
 modules/man/Mail::MIMEDefang::Mail.3
 modules/man/Mail::MIMEDefang::MIME.3
 modules/man/Mail::MIMEDefang::Net.3
+modules/man/Mail::MIMEDefang::SPF.3
 modules/man/Mail::MIMEDefang::RFC2822.3
 modules/man/Mail::MIMEDefang::Unit.3
 modules/man/Mail::MIMEDefang::Utils.3
@@ -177,6 +179,7 @@ t/net.t
 t/relay.t
 t/sender.t
 t/smtp.t
+t/spf.t
 t/utils.t
 utils.c
 watch-mimedefang

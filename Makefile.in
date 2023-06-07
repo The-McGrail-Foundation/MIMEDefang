@@ -189,6 +189,11 @@ lib/manpages:
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/Net.pm modules/man/Mail::MIMEDefang::Net.3
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \
+		--center="Mail::MIMEDefang::SPF Documentation" \
+		--name="Mail::MIMEDefang::SPF" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang/SPF.pm modules/man/Mail::MIMEDefang::SPF.3
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \
 		--center="Mail::MIMEDefang::RFC2822 Documentation" \
 		--name="Mail::MIMEDefang::RFC2822" \
 		--release=$(VERSION) \
