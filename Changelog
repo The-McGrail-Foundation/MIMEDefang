@@ -2,6 +2,11 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2023-06-07 Giovanni Bechis <g.bechis@snb.it>
+
+	* add a Mail::MIMEDefang::SPF module to do Sender Policy Framework
+	checks
+
 2023-05-01 Giovanni Bechis <g.bechis@snb.it>
 
 	* MIMEDefang 3.4.1 RELEASED
