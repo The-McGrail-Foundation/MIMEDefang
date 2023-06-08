@@ -109,11 +109,11 @@ sub md_authres {
     }
     if(defined $helo_spfcode) {
       if($helo_spfcode eq 'fail') {
-        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $spfmail does not designate $relayip as permitted sender) smtp.helo=$helo;";
+        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $helo does not designate $relayip as permitted sender) smtp.helo=$helo;";
       } elsif($helo_spfcode eq 'pass') {
-        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $spfmail designates $relayip as permitted sender) smtp.helo=$helo;";
+        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $helo designates $relayip as permitted sender) smtp.helo=$helo;";
       } elsif($helo_spfcode eq 'none') {
-        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $spfmail doesn't specify if $relayip is a permitted sender) smtp.helo=$helo;";
+        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $helo doesn't specify if $relayip is a permitted sender) smtp.helo=$helo;";
       }
     }
     $authres =~ s/\r//gs;

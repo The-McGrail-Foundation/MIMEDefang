@@ -25,7 +25,7 @@ sub t_md_authres : Test(3)
 
     $header = md_authres('test@dnsbltest.spamassassin.org', '64.142.3.173', 'dnsbltest.spamassassin.org', 'dnsbltest.spamassassin.org');
     like($header, qr{dnsbltest\.spamassassin\.org(?:\s\(MIMEDefang\))?;(?:.*)\s+\s+spf=pass \(domain of test\@dnsbltest\.spamassassin\.org designates 64\.142\.3\.173 as permitted sender\) smtp\.mailfrom=test\@dnsbltest\.spamassassin\.org;});
-    like($header, qr{dnsbltest\.spamassassin\.org(?:\s\(MIMEDefang\))?;(?:.*)\s+\s+spf=pass \(domain of test\@dnsbltest\.spamassassin\.org designates 64\.142\.3\.173 as permitted sender\) smtp\.helo=dnsbltest\.spamassassin\.org;});
+    like($header, qr{dnsbltest\.spamassassin\.org(?:\s\(MIMEDefang\))?;(?:.*)\s+\s+spf=pass \(domain of dnsbltest\.spamassassin\.org designates 64\.142\.3\.173 as permitted sender\) smtp\.helo=dnsbltest\.spamassassin\.org;});
 
     unlink('./INPUTMSG');
   };
