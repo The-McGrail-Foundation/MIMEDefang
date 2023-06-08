@@ -31,9 +31,9 @@ our @ISA = qw(Exporter);
 our @EXPORT;
 our @EXPORT_OK;
 
-@EXPORT = qw(md_spf);
+@EXPORT = qw(md_spf_verify);
 
-=item md_spf
+=item md_spf_verify
 
 Returns code and explanation of Sender Policy Framework
 check.
@@ -57,7 +57,7 @@ The MTA helo server name
 
 =cut
 
-sub md_spf {
+sub md_spf_verify {
 
   my ($spfmail, $relayip, $helo) = @_;
 

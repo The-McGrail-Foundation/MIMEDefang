@@ -79,7 +79,7 @@ sub md_authres {
   my ($authres, $spfres, $helo_spfres);
   my ($dkimres, $dkimdom, $ksize, $dkimpk) = md_dkim_verify();
 
-  my ($spfcode, $spfexpl, $helo_spfcode, $helo_spfexpl) = md_spf($spfmail, $relayip, $helo);
+  my ($spfcode, $spfexpl, $helo_spfcode, $helo_spfexpl) = md_spf_verify($spfmail, $relayip, $helo);
   if((defined $spfcode) or ((defined $dkimpk) and ($ksize > 0))) {
     # Mail::DKIM::ARC::Signer v0.54 doesn't correctly parse Authentication-Results headers,
     # add a workaround to make md_arc_sign work with our own headers.
