@@ -7,7 +7,7 @@ use Test::Most;
 
 use Mail::MIMEDefang::SPF;
 
-sub t_md_spf_verify : Test(3)
+sub t_md_spf_verify : Test(5)
 {
   SKIP: {
     if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
@@ -18,6 +18,10 @@ sub t_md_spf_verify : Test(3)
     ($spf_code, $spf_expl, $helo_spf_code, $helo_spf_expl) = md_spf_verify('newsalerts-noreply@dnsbltest.spamassassin.org', '65.214.43.157', 'dnsbltest.spamassassin.org');
     is($spf_code, 'neutral');
     is($helo_spf_code, 'neutral');
+    ($spf_code, $spf_expl, $helo_spf_code, $helo_spf_expl) = md_spf_verify('dnsbltest.spamassassin.org', '65.214.43.157', 'dnsbltest.spamassassin.org');
+    is($spf_code, 'neutral');
+    ($spf_code, $spf_expl, $helo_spf_code, $helo_spf_expl) = md_spf_verify('', '65.214.43.157', 'dnsbltest.spamassassin.org');
+    is($spf_code, 'invalid');
   };
 }
 

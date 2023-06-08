@@ -37,6 +37,10 @@ our @EXPORT_OK;
 
 Returns code and explanation of Sender Policy Framework
 check.
+
+Possible return code values are:
+"pass", "fail", "softfail", "neutral", "none", "error", "permerror", "temperror", "invalid"
+
 The method accepts the following parameters:
 
 =over 4
@@ -66,28 +70,30 @@ sub md_spf_verify {
     return;
   }
 
+  my $spf_server  = Mail::SPF::Server->new();
   my ($spfres, $helo_spfres);
   $spfmail =~ s/^<//;
   $spfmail =~ s/>$//;
-  if(defined $spfmail and $spfmail =~ /\@/) {
+  if(defined $spfmail and $spfmail ne '') {
     if($spfmail =~ /(.*)\+(?:.*)\@(.*)/) {
       $spfmail = $1 . '@' . $2;
     }
-    my $spf_server  = Mail::SPF::Server->new();
     my $request     = Mail::SPF::Request->new(
       scope           => 'mfrom',
       identity        => $spfmail,
       ip_address      => $relayip,
     );
     $spfres = $spf_server->process($request);
-    if(defined $helo) {
-      my $helo_request     = Mail::SPF::Request->new(
-        scope           => 'helo',
-        identity        => $helo,
-        ip_address      => $relayip,
-      );
-      $helo_spfres = $spf_server->process($request);
-    }
+  } else {
+    return ('invalid', 'Invalid mail from parameter');
+  }
+  if(defined $helo) {
+    my $helo_request     = Mail::SPF::Request->new(
+      scope           => 'helo',
+      identity        => $helo,
+      ip_address      => $relayip,
+    );
+    $helo_spfres = $spf_server->process($helo_request);
   }
   if(defined $helo) {
     return ($spfres->code, $spfres->local_explanation, $helo_spfres->code, $helo_spfres->local_explanation);
