@@ -311,7 +311,7 @@ The sub returns a four-element list:(retval, code, dsn, exts)
 
 =item * dsn is an extended SMTP status code
 
-=item * exts is a hash of EXTNAME->EXTOPTS
+=item * exts is a hash of EXTNAME-E<gt>EXTOPTS
 
 =back
 
@@ -372,6 +372,23 @@ sub get_smtp_extensions {
 
 Method that verifies a recipient against another SMTP server by issuing a
 HELO / MAIL FROM: / RCPT TO: / QUIT sequence.
+
+The method accepts the following parameters:
+
+=over 4
+
+=item * sender e-mail address
+
+=item * recipient e-mail address
+
+=item * helo string to put in "HELO" command
+
+=item * SMTP server to try.
+
+=item * optional: Port to connect on (defaults to 25)
+
+=back
+
 The method returns:
 
 =over 4
