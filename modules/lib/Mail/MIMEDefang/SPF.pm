@@ -78,22 +78,40 @@ sub md_spf_verify {
     if($spfmail =~ /(.*)\+(?:.*)\@(.*)/) {
       $spfmail = $1 . '@' . $2;
     }
-    my $request     = Mail::SPF::Request->new(
-      scope           => 'mfrom',
-      identity        => $spfmail,
-      ip_address      => $relayip,
-    );
-    $spfres = $spf_server->process($request);
+    my $request;
+    eval {
+      local $SIG{__WARN__} = sub {
+        my $warn = $_[0];
+        $warn =~ s/\n//g;
+        $warn =~ s/\bat .{10,100} line \d+\.//g;
+        md_syslog("Warning", "md_spf_verify: $warn");
+      };
+      $request          = Mail::SPF::Request->new(
+        scope           => 'mfrom',
+        identity        => $spfmail,
+        ip_address      => $relayip,
+      );
+      $spfres = $spf_server->process($request);
+    };
   } else {
     return ('invalid', 'Invalid mail from parameter');
   }
   if(defined $helo) {
-    my $helo_request     = Mail::SPF::Request->new(
-      scope           => 'helo',
-      identity        => $helo,
-      ip_address      => $relayip,
-    );
-    $helo_spfres = $spf_server->process($helo_request);
+    my $helo_request;
+    eval {
+      local $SIG{__WARN__} = sub {
+        my $warn = $_[0];
+        $warn =~ s/\n//g;
+        $warn =~ s/\bat .{10,100} line \d+\.//g;
+        md_syslog("Warning", "md_spf_verify: $warn");
+      };
+      $helo_request     = Mail::SPF::Request->new(
+        scope           => 'helo',
+        identity        => $helo,
+        ip_address      => $relayip,
+      );
+      $helo_spfres = $spf_server->process($helo_request);
+    };
   }
   if(defined $helo) {
     return ($spfres->code, $spfres->local_explanation, $helo_spfres->code, $helo_spfres->local_explanation);
