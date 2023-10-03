@@ -401,7 +401,17 @@ sub re_match_in_tgz_directory {
   my($zname, $regexp) = @_;
   my ($rf, $beginmark, $file);
 
-  my @unz_args = ("tar", "ztvf", $zname);
+  my @unz_args;
+  if($zname =~ /\.tar/) {
+    @unz_args = ("tar", "tvf", $zname);
+  } elsif($zname =~ /\.tar\.bz2/) {
+    @unz_args = ("tar", "jtvf", $zname);
+  } elsif($zname =~ /\.(?:tar\.gz|tgz)/) {
+    @unz_args = ("tar", "ztvf", $zname);
+  } else {
+    md_syslog('err', "Attempted to use re_match_in_tgz_directory, but filename $zname is not supported.");
+    return 0;
+  }
 
   unless ($Features{"tar"}) {
           md_syslog('err', "Attempted to use re_match_in_tgz_directory, but tar binary is not installed.");
