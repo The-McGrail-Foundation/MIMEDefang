@@ -34,7 +34,7 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(time_str date_str hour_str
                  synthesize_received_header copy_or_link
                  re_match re_match_ext re_match_in_rar_directory re_match_in_zip_directory
-                 md_copy_orig_msg_to_work_dir_as_mbox_file read_results);
+                 re_match_in_7zip_directory md_copy_orig_msg_to_work_dir_as_mbox_file read_results);
 our @EXPORT_OK = qw(md_init gen_mx_id);
 
 =item time_str
