@@ -283,7 +283,7 @@ sub re_match_ext {
 
 Method that returns 1 if the EXTENSION part of any file in the rar archive
 matches regexp.
-To enable the check $Features{'unrar'} should be set to the path of the unrar binary.
+To enable the check $Features{'unrar'} should be enabled.
 
 =cut
 
@@ -332,7 +332,7 @@ sub re_match_in_rar_directory {
 
 Method that returns 1 if the EXTENSION part of any file in the 7zip archive
 matches regexp.
-To enable the check $Features{'7zip'} should be set to the path of the 7z binary.
+To enable the check $Features{'7zip'} should be enabled.
 
 =cut
 
@@ -382,7 +382,7 @@ sub re_match_in_7zip_directory {
 
 Method that returns 1 if the EXTENSION part of any file in the tgz archive
 matches regexp.
-To enable the check $Features{'tar'} should be set to the path of the tar binary.
+To enable the check $Features{'tar'} should be enabled.
 
 =cut
 
