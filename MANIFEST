@@ -168,6 +168,7 @@ t/data/multipart.eml
 t/data/spf1.eml
 t/data/uri-html.eml
 t/data/uri.eml
+t/data/tgz.eml
 t/data/zip.eml
 t/dates.t
 t/dkim.t
