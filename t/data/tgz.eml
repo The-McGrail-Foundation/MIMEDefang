@@ -1,0 +1,46 @@
+Message-ID: <2e238d52-0f98-cdea-3e9d-dda625df5a08@example.com>
+Date: Thu, 5 May 2022 14:50:09 +0200
+MIME-Version: 1.0
+User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101
+ Thunderbird/91.8.0
+Content-Language: en-US
+To: me@example.com
+From: You <you@example.com>
+Subject: Test
+Content-Type: multipart/mixed; boundary="------------62ATfdiTB07G9boOgpgkRqfH"
+
+This is a multi-part message in MIME format.
+--------------62ATfdiTB07G9boOgpgkRqfH
+Content-Type: multipart/alternative;
+ boundary="------------02Tj3lGNeKJ1fcXPjVb9IeWa"
+
+--------------02Tj3lGNeKJ1fcXPjVb9IeWa
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+Test
+--------------02Tj3lGNeKJ1fcXPjVb9IeWa
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+<html>
+  <head>
+
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  </head>
+  <body>
+    Test
+  </body>
+</html>
+
+--------------02Tj3lGNeKJ1fcXPjVb9IeWa--
+--------------62ATfdiTB07G9boOgpgkRqfH
+Content-Type: application/x-compressed-tar; name="test.tgz"
+Content-Disposition: attachment; filename="test.tgz"
+Content-Transfer-Encoding: base64
+
+H4sIAAAAAAAAA+3SPQrCQBCG4a09xZxAdrN/59liIosSwawhxzdBAjaiTRDhfZoPZqb4imk6
+tqPOanZkFymENV2O9jWfXDYuRJuy71JY5q7L0Ruxe5ba3MdWbiLmVK9TGYb67u7T/k/15ayy
+PoD09aKHX9cBAAAAAAAAAAAAAAAAAHzpARIuElQAKAAA
+
+--------------62ATfdiTB07G9boOgpgkRqfH--

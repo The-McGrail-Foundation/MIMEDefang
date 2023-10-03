@@ -2,6 +2,10 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2023-10-03 Giovanni Bechis <g.bechis@snb.it>
+
+	* add re_match_in_tgz_directory sub to block attachments in .tgz files
+
 2023-06-07 Giovanni Bechis <g.bechis@snb.it>
 
 	* add a Mail::MIMEDefang::SPF module to do Sender Policy Framework

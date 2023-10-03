@@ -34,7 +34,7 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(time_str date_str hour_str
                  synthesize_received_header copy_or_link
                  re_match re_match_ext re_match_in_rar_directory re_match_in_zip_directory
-                 re_match_in_7zip_directory md_copy_orig_msg_to_work_dir_as_mbox_file read_results);
+                 re_match_in_7zip_directory re_match_in_tgz_directory md_copy_orig_msg_to_work_dir_as_mbox_file read_results);
 our @EXPORT_OK = qw(md_init gen_mx_id);
 
 =item time_str
@@ -283,6 +283,7 @@ sub re_match_ext {
 
 Method that returns 1 if the EXTENSION part of any file in the rar archive
 matches regexp.
+To enable the check $Features{'unrar'} should be set to the path of the unrar binary.
 
 =cut
 
@@ -331,6 +332,7 @@ sub re_match_in_rar_directory {
 
 Method that returns 1 if the EXTENSION part of any file in the 7zip archive
 matches regexp.
+To enable the check $Features{'7zip'} should be set to the path of the 7z binary.
 
 =cut
 
@@ -369,6 +371,51 @@ sub re_match_in_7zip_directory {
       }
       last if ( $beginmark and ( $rf !~ /^\-\-\-/ ) );
       $beginmark = 1 if ( $rf =~ /^\-\-\-/ );
+    }
+    close(UNZ_PIPE);
+  }
+
+  return 0;
+}
+
+=item re_match_in_tgz_directory
+
+Method that returns 1 if the EXTENSION part of any file in the tgz archive
+matches regexp.
+To enable the check $Features{'tar'} should be set to the path of the tar binary.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: re_match_in_tgz_directory
+# %ARGUMENTS:
+#  fname -- name of tgz file
+#  regexp -- a regular expression
+# %RETURNS:
+#  1 if the EXTENSION part of any file in the tgz archive matches regexp
+#  Matching is case-insensitive.
+# %DESCRIPTION:
+#  A helper function for filter.
+#***********************************************************************
+sub re_match_in_tgz_directory {
+  my($zname, $regexp) = @_;
+  my ($rf, $beginmark, $file);
+
+  my @unz_args = ("tar", "ztvf", $zname);
+
+  unless ($Features{"tar"}) {
+          md_syslog('err', "Attempted to use re_match_in_tgz_directory, but tar binary is not installed.");
+          return 0;
+  }
+
+  if ( -f $zname ) {
+    open(UNZ_PIPE, "-|", @unz_args)
+                        || croak "can't open @unz_args|: $!";
+    while(<UNZ_PIPE>) {
+      if(/(?:[a-z-]+)\s+(?:.*)\s+(?:\d+)\s+(?:\d+\-\d+\-\d+)\s+(?:\d+\:\d+)\s+(.*)/) {
+        $file = $1;
+              return 1 if ((defined $file) and ($file =~ /$regexp/i));
+      }
     }
     close(UNZ_PIPE);
   }
