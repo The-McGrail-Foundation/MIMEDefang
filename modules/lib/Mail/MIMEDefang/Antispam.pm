@@ -35,7 +35,7 @@ our @EXPORT;
 our @EXPORT_OK;
 
 @EXPORT = qw(spam_assassin_init spam_assassin_mail spam_assassin_check
-            spam_assassin_status spam_assassin_is_spam
+            spam_assassin_status spam_assassin_is_spam spamd_check
             rspamd_check);
 
 =item spam_assassin_is_spam
@@ -233,6 +233,97 @@ sub spam_assassin_mail {
 	return unless $SASpamTester;
     }
     return $SASpamTester->parse(\@msg);
+}
+
+=item md_spamd_check
+
+Method that scans the message using SpamAssassin Perl client and returns an array of six elemets:
+
+=over 4
+
+=item * Weight of message ('score')
+
+=item * Number of hits required before Apache SpamAssassin considers a message spam
+
+=item * A 'report' string, detailing tests that failed and their weights
+
+=item * A flag explaining if the email is a spam message or not (true/false).
+
+=back
+
+Optional parameters are SpamAssassin host, SpamAssassin port, the username to pass to
+SpamAssassin server and the maximum size of the email message.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: md_spamd_check
+# %ARGUMENTS:
+#  SpamAssassin host -- defaults to localhost
+#  SpamAssassin port -- defaults to 783
+#  SpamAssassin user --
+#  SpamAssassin maximum email size --
+# %RETURNS:
+#  An array of four elements,
+#       Weight of message ('score')
+#       Number of hits required before Apache SpamAssassin considers a message spam
+#       A 'report' string, detailing tests that failed and their weights
+#       A flag is_spam true/false
+#       The sub returns undef if the connection fails
+# %DESCRIPTION:
+#  Scans message using Apache SpamAssassin (https://spamassassin.apache.org)
+#***********************************************************************
+sub spamd_check {
+    my ($host, $port, $spamc_user, $spamc_max_size) = @_;
+
+    my $spamc;
+    (eval 'use Mail::SpamAssassin::Client (); $spamc = 1;') or $spamc = 0;
+    if($spamc eq 0) {
+      md_syslog('err', "Attempt to call Apache SpamAssassin function, but Apache SpamAssassin is not installed.");
+      return;
+    }
+
+    $host //= 'localhost';
+    $port //= 783;
+
+    open(IN, "<", "./INPUTMSG") or return;
+    my @msg = <IN>;
+    close(IN);
+
+    # Synthesize a "Return-Path" and "Received:" header
+    my @sahdrs;
+    push (@sahdrs, "Return-Path: $Sender\n");
+    push (@sahdrs, split(/^/m, synthesize_received_header()));
+
+    if ($AddApparentlyToForSpamAssassin and
+        ($#Recipients >= 0)) {
+        push(@sahdrs, "Apparently-To: " .
+             join(", ", @Recipients) . "\n");
+    }
+    unshift (@msg, @sahdrs);
+    my $msg = join('', @msg);
+
+    my $client;
+    my $result;
+    eval {
+      local $SIG{__WARN__} = sub {
+        my $warn = $_[0];
+        $warn =~ s/\n//g;
+        md_syslog("Warning", "spamd_check: $warn");
+      };
+      $client = Mail::SpamAssassin::Client->new({
+                                       host => $host,
+                                       port => $port,
+                                       max_size => $spamc_max_size,
+                                       username => $spamc_user});
+
+      $result = $client->spam_report($msg);
+    };
+    if(defined $result and (ref($result) eq 'HASH')) {
+      return ($result->{score}, $result->{threshold}, $result->{report}, $result->{isspam});
+    } else {
+      return;
+    }
 }
 
 =item rspamd_check
