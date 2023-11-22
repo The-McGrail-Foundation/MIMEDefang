@@ -238,6 +238,8 @@ sub spam_assassin_mail {
 =item md_spamc_init
 
 Initialize Apache SpamAssassin and returns a C<Mail::SpamAssassin::Client> object.
+C<md_spamc_init> and C<md_spamc_check> subs should be used only with Apache SpamAssassin
+starting from version 4.0.1.
 
 =over 4
 
