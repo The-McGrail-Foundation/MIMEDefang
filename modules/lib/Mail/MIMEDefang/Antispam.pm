@@ -35,7 +35,7 @@ our @EXPORT;
 our @EXPORT_OK;
 
 @EXPORT = qw(spam_assassin_init spam_assassin_mail spam_assassin_check
-            spam_assassin_status spam_assassin_is_spam spamd_check
+            spam_assassin_status spam_assassin_is_spam md_spamc_init md_spamc_check
             rspamd_check);
 
 =item spam_assassin_is_spam
@@ -235,9 +235,66 @@ sub spam_assassin_mail {
     return $SASpamTester->parse(\@msg);
 }
 
-=item md_spamd_check
+=item md_spamc_init
 
-Method that scans the message using SpamAssassin Perl client and returns an array of six elemets:
+Initialize Apache SpamAssassin and returns a C<Mail::SpamAssassin::Client> object.
+
+=over 4
+
+The sub returns a Mail::SpamAssassin::Client object.
+
+=back
+
+Optional parameters are SpamAssassin host, SpamAssassin port, the username to pass to
+SpamAssassin server and the maximum size of the email message.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: md_spamc_init
+# %ARGUMENTS:
+#  SpamAssassin host -- defaults to localhost
+#  SpamAssassin port -- defaults to 783
+#  SpamAssassin user
+#  SpamAssassin maximum email size
+# %RETURNS:
+#  A Mail::SpamAssassin::Client object.
+# %DESCRIPTION:
+#  Scans message using SpamAssassin (http://www.spamassassin.org)
+#***********************************************************************
+sub md_spamc_init {
+    my ($host, $port, $spamc_user, $spamc_max_size) = @_;
+
+    my $spamc;
+    (eval 'use Mail::SpamAssassin::Client (); $spamc = 1;') or $spamc = 0;
+    if($spamc eq 0) {
+      md_syslog('err', "Attempt to call Apache SpamAssassin function, but Apache SpamAssassin is not installed.");
+      return;
+    }
+
+    $host //= 'localhost';
+    $port //= 783;
+
+    my $client;
+    eval {
+      local $SIG{__WARN__} = sub {
+        my $warn = $_[0];
+        $warn =~ s/\n//g;
+        md_syslog("Warning", "md_spamc_init: $warn");
+      };
+      $client = Mail::SpamAssassin::Client->new({
+                                       host => $host,
+                                       port => $port,
+                                       max_size => $spamc_max_size,
+                                       username => $spamc_user});
+
+    };
+    return $client;
+}
+
+=item md_spamc_check
+
+Method that scans the message using SpamAssassin Perl client and returns an array of four elemets:
 
 =over 4
 
@@ -251,18 +308,14 @@ Method that scans the message using SpamAssassin Perl client and returns an arra
 
 =back
 
-Optional parameters are SpamAssassin host, SpamAssassin port, the username to pass to
-SpamAssassin server and the maximum size of the email message.
+Required parameters is a Mail::SpamAssassin::Client object initialized by calling C<md_spamc_init> sub.
 
 =cut
 
 #***********************************************************************
-# %PROCEDURE: md_spamd_check
+# %PROCEDURE: md_spamc_check
 # %ARGUMENTS:
-#  SpamAssassin host -- defaults to localhost
-#  SpamAssassin port -- defaults to 783
-#  SpamAssassin user --
-#  SpamAssassin maximum email size --
+#  A Mail::SpamAssassin::Client object as returned by md_spamc_init
 # %RETURNS:
 #  An array of four elements,
 #       Weight of message ('score')
@@ -273,18 +326,13 @@ SpamAssassin server and the maximum size of the email message.
 # %DESCRIPTION:
 #  Scans message using Apache SpamAssassin (https://spamassassin.apache.org)
 #***********************************************************************
-sub spamd_check {
-    my ($host, $port, $spamc_user, $spamc_max_size) = @_;
+sub md_spamc_check {
+    my ($saobj) = @_;
 
-    my $spamc;
-    (eval 'use Mail::SpamAssassin::Client (); $spamc = 1;') or $spamc = 0;
-    if($spamc eq 0) {
-      md_syslog('err', "Attempt to call Apache SpamAssassin function, but Apache SpamAssassin is not installed.");
+    if((not defined $saobj) or (ref($saobj) ne 'Mail::SpamAssassin::Client')) {
+      md_syslog("Warning", "md_spamc_check: SpamAssassin client not initialized");
       return;
     }
-
-    $host //= 'localhost';
-    $port //= 783;
 
     open(IN, "<", "./INPUTMSG") or return;
     my @msg = <IN>;
@@ -303,21 +351,14 @@ sub spamd_check {
     unshift (@msg, @sahdrs);
     my $msg = join('', @msg);
 
-    my $client;
     my $result;
     eval {
       local $SIG{__WARN__} = sub {
         my $warn = $_[0];
         $warn =~ s/\n//g;
-        md_syslog("Warning", "spamd_check: $warn");
+        md_syslog("Warning", "md_spamc_check: $warn");
       };
-      $client = Mail::SpamAssassin::Client->new({
-                                       host => $host,
-                                       port => $port,
-                                       max_size => $spamc_max_size,
-                                       username => $spamc_user});
-
-      $result = $client->spam_report($msg);
+      $result = $saobj->spam_report($msg);
     };
     if(defined $result and (ref($result) eq 'HASH')) {
       return ($result->{score}, $result->{threshold}, $result->{report}, $result->{isspam});
