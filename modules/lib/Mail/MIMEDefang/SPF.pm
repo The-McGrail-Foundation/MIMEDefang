@@ -70,7 +70,10 @@ sub md_spf_verify {
     return;
   }
 
-  my $spf_server  = Mail::SPF::Server->new();
+  # RFC 4408 defines the maximum number of terms (mechanisms and modifiers) per SPF check that perform DNS look-ups
+  # to 10.
+  # In practice 10 lookups are not enough for some domains.
+  my $spf_server  = Mail::SPF::Server->new(max_dns_interactive_terms => 20);
   my ($spfres, $helo_spfres);
   $spfmail =~ s/^<//;
   $spfmail =~ s/>$//;
