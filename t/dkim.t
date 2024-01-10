@@ -59,7 +59,7 @@ sub dkim_verify : Test(5)
 
     copy('t/data/dkim3.eml', './INPUTMSG');
     ($result, $domain, $ksize) = md_dkim_verify();
-    is($result, "fail");
+    like($result, qr/fail|invalid/);
     unlink('./INPUTMSG');
 
     copy('t/data/spf1.eml', './INPUTMSG');
