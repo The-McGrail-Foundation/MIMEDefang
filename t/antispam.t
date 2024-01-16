@@ -14,7 +14,7 @@ use version;
 sub md_spamc : Test(1)
 {
   SKIP: {
-    if ( -f "/.dockerenv" ) {
+    if ( -f "/.dockerenv" or (defined $ENV{GITHUB_ACTIONS}) ) {
       skip "Spamd test disabled on Docker", 1
     }
     init_globals();
