@@ -276,6 +276,8 @@ sub md_spamc_init {
 
     $host //= 'localhost';
     $port //= 783;
+    $spamc_max_size //= 0;
+    $spamc_user //= getpwuid($<);
 
     my $client;
     eval {

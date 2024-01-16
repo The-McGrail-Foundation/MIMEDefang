@@ -30,6 +30,6 @@ jobs:
       - name: Install Perl modules
         run: |
           sudo apt-get update
-          sudo apt-get -y install libmail-spf-perl libmail-dkim-perl libio-socket-ssl-perl libio-stringy-perl libmailtools-perl libmime-tools-perl libnet-smtp-ssl-perl libnet-ssleay-perl libtimedate-perl libunix-syslog-perl libhtml-parser-perl libarchive-zip-perl libtest-class-most-perl
+          sudo apt-get -y install libmail-spf-perl libmail-dkim-perl libio-socket-ssl-perl libio-stringy-perl libmailtools-perl libmime-tools-perl libnet-smtp-ssl-perl libnet-ssleay-perl libtimedate-perl libunix-syslog-perl libhtml-parser-perl libarchive-zip-perl libtest-class-most-perl spamassassin libunix-syslog-perl
       - name: Regression tests
         run: env NET_TEST=yes prove -lv t
