@@ -9,7 +9,6 @@ use Mail::MIMEDefang;
 use Mail::MIMEDefang::DKIM::ARC;
 
 use File::Copy;
-use version;
 
 sub arc_sign : Test(7)
 {
