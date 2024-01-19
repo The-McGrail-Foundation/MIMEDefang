@@ -9,7 +9,6 @@ use Mail::MIMEDefang;
 use Mail::MIMEDefang::Antispam;
 
 use File::Copy;
-use version;
 
 sub md_spamc : Test(1)
 {
