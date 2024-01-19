@@ -842,7 +842,7 @@ sub action_bounce {
 
 =item action_discard
 
-Method that causes the entire message to be silently discarded without without
+Method that causes the entire message to be silently discarded without
 notifying anyone.
 
 =cut
