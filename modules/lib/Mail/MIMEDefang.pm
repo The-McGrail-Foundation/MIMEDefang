@@ -86,7 +86,7 @@ our $VERSION = '3.4.1';
       signal_changed signal_unchanged md_syslog md_graphdefang_log
       write_result_line in_message_context in_filter_context in_filter_wrapup
       in_filter_end percent_decode percent_encode percent_encode_for_graphdefang
-      send_mail send_quarantine_notifications signal_complete send_admin_mail
+      send_mail send_multipart_mail send_quarantine_notifications signal_complete send_admin_mail
       md_version set_status_tag
     };
 
@@ -1123,6 +1123,65 @@ sub send_mail {
   md_syslog('err', "Could not exec $sm: $!");
   exit(1);
   # NOTREACHED
+}
+
+=item send_multipart_mail(fromAddr, fromName, recipient, subject, body_text, body_html, extra_headers)
+
+Sends a multipart mail message using Sendmail.
+
+Invokes Sendmail without involving the shell, so that shell metacharacters won't cause security problems.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: send_multipart_mail
+# %ARGUMENTS:
+#  fromAddr -- address of sender
+#  fromName -- full name of sender
+#  recipient -- address of recipient
+#  subject -- email subject
+#  body_text -- text message newline-terminated
+#  body_html -- html message newline-terminated
+#  extra_headers -- optional extra headers to add to the email message
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Sends a mail message using Sendmail.  Invokes Sendmail without involving
+#  the shell, so that shell metacharacters won't cause security problems.
+#***********************************************************************
+sub send_multipart_mail {
+  my ($fromAddr, $fromName, $recipient, $subject, $body_text, $body_html, $extra_headers) = @_;
+  my $body;
+
+  my @bset = ('A' .. 'Z');
+  my $boundary = join '' => map $bset[rand @bset], 1 .. 10;
+  if ($fromAddr ne '<>') {
+    $body = "From: $fromName <$fromAddr>\n";
+    $body .= "To: $recipient\n";
+    $body .= gen_date_msgid_headers();
+    $body .= "Auto-Submitted: auto-generated\n";
+    $body .= "MIME-Version: 1.0\nContent-Type: multipart/alternative; boundary=$boundary\n";
+    $body .= "Precedence: bulk\n";
+    $body .= "Subject: $subject\n\n";
+    if (defined $extra_headers  and ($extra_headers ne '')) {
+      $body .= "$extra_headers";
+    }
+    $body .= sprintf("--%s
+Content-Type: text/plain; charset=utf-8
+
+%s
+
+--%s
+Content-Type: text/html; charset=utf-8
+
+%s
+
+--%s--
+\n", $boundary, $body_text, $boundary, $body_html, $boundary);
+    send_mail($fromAddr, $fromName, $recipient, $body);
+  } else {
+    md_syslog("Warning", "send_mail_multipart called with empty \"fromAddr\" parameter");
+  }
 }
 
 =item send_admin_mail(subject, body)
