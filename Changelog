@@ -2,6 +2,14 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2024-01-23 Giovanni Bechis <gbechis@pccc.com>
+
+	* add a sub to send a multipart mail message using Sendmail
+
+2023-11-22 Giovanni Bechis <g.bechis@snb.it>
+
+	* add a sub to check emails using Mail::SpamAssassin::Client
+
 2023-10-03 Giovanni Bechis <g.bechis@snb.it>
 
 	* add re_match_in_tgz_directory sub to block attachments in .tgz files
