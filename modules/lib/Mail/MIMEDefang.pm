@@ -40,6 +40,7 @@ require Exporter;
 use Carp;
 use Errno qw(ENOENT EACCES);
 use File::Spec;
+use MIME::Entity;
 use MIME::WordDecoder;
 
 our @ISA = qw(Exporter);
@@ -893,13 +894,6 @@ sub send_quarantine_notifications {
   if ($QuarantineCount > 0 || $EntireMessageQuarantined) {
 	  my($body);
 	  my $hostname = Mail::MIMEDefang::Net::get_host_name();
-	  $body = "From: $DaemonName <$DaemonAddress>\n";
-	  $body .= "To: \"$AdminName\" <$AdminAddress>\n";
-	  $body .= Mail::MIMEDefang::RFC2822::gen_date_msgid_headers($QueueID, $hostname);
-	  $body .= "Auto-Submitted: auto-generated\n";
-	  $body .= "MIME-Version: 1.0\nContent-Type: text/plain\n";
-	  $body .= "Precedence: bulk\n";
-	  $body .= "Subject: $QuarantineSubject\n\n";
 	  if ($QuarantineCount >= 1) {
 	    $body .= "An e-mail had $QuarantineCount part";
 	    $body .= "s" if ($QuarantineCount != 1);
@@ -957,7 +951,16 @@ sub send_quarantine_notifications {
 	    $body .= "\n----------\nHere are the warning details:\n\n";
 	    $body .= "@Warnings";
 	  }
-	  send_mail($DaemonAddress, $DaemonName, $AdminAddress, $body);
+          my $mime = MIME::Entity->build(
+            From => "\"$DaemonName\" <$DaemonAddress>",
+            To => "\"$AdminName\" <$AdminAddress>",
+            Subject => $QuarantineSubject,
+            Encoding => 'quoted-printable',
+            Data => [$body],
+            Type => "text/plain");
+          $mime->head->add('Auto-Submitted', 'auto-generated');
+          $mime->head->add('Precedence', 'bulk');
+          send_mail($DaemonAddress, $DaemonName, $AdminAddress, $mime->stringify);
   }
 }
 
@@ -982,34 +985,35 @@ Also mails any quarantine notifications and sender notifications.
 sub signal_complete {
   # Send notification to sender, if required
   if ($Sender ne '<>' && -r "NOTIFICATION") {
-	  my($body);
-	  my $hostname = Mail::MIMEDefang::Net::get_host_name();
-	  $body = "From: $DaemonName <$DaemonAddress>\n";
-	  $body .= "To: $Sender\n";
-	  $body .= Mail::MIMEDefang::RFC2822::gen_date_msgid_headers($QueueID, $hostname);
-	  $body .= "Auto-Submitted: auto-generated\n";
-	  $body .= "MIME-Version: 1.0\nContent-Type: text/plain\n";
-	  $body .= "Precedence: bulk\n";
-	  $body .= "Subject: $NotifySenderSubject\n\n";
-	  unless($NotifyNoPreamble) {
-	    $body .= "An e-mail you sent with message-id $MessageID\n";
-	    $body .= "was modified by our mail scanning software.\n\n";
-	    $body .= "The recipients were:";
-	    foreach my $recip (@Recipients) {
-		    $body .= " $recip";
-	    }
-	    $body .= "\n\n";
-	  }
-	  if (open(FILE, "<", "NOTIFICATION")) {
-	    unless($NotifyNoPreamble) {
-		    $body .= "Here are the details of the modification:\n\n";
-	    }
-	    while(<FILE>) {
-		    $body .= $_;
-	    }
-	    close(FILE);
-	  }
-	  send_mail($DaemonAddress, $DaemonName, $Sender, $body);
+    my $body = "";
+    unless($NotifyNoPreamble) {
+      $body .= "An e-mail you sent with message-id $MessageID\n";
+      $body .= "was modified by our mail scanning software.\n\n";
+      $body .= "The recipients were:";
+      foreach my $recip (@Recipients) {
+	    $body .= " $recip";
+      }
+      $body .= "\n\n";
+    }
+    if (open(FILE, "<", "NOTIFICATION")) {
+      unless($NotifyNoPreamble) {
+	    $body .= "Here are the details of the modification:\n\n";
+      }
+      while(<FILE>) {
+	    $body .= $_;
+      }
+      close(FILE);
+    }
+    my $mime = MIME::Entity->build(
+      From => "\"$DaemonName\" <$DaemonAddress>",
+      To => $Sender,
+      Subject => $NotifySenderSubject,
+      Encoding => 'quoted-printable',
+      Data => [$body],
+      Type => "text/plain");
+    $mime->head->add('Auto-Submitted', 'auto-generated');
+    $mime->head->add('Precedence', 'bulk');
+    send_mail($DaemonAddress, $DaemonName, $Sender, $mime->stringify);
   }
 
   # Send notification to administrator, if required
@@ -1155,30 +1159,25 @@ sub send_multipart_mail {
 
   my @bset = ('A' .. 'Z');
   my $boundary = join '' => map $bset[rand @bset], 1 .. 10;
-  if ($fromAddr ne '<>') {
-    $body = "From: $fromName <$fromAddr>\n";
-    $body .= "To: $recipient\n";
-    $body .= gen_date_msgid_headers();
-    $body .= "Auto-Submitted: auto-generated\n";
-    $body .= "MIME-Version: 1.0\nContent-Type: multipart/alternative; boundary=$boundary\n";
-    $body .= "Precedence: bulk\n";
-    $body .= "Subject: $subject\n\n";
-    if (defined $extra_headers  and ($extra_headers ne '')) {
-      $body .= "$extra_headers";
+  if($fromAddr =~ /^\<(.*)\>$/) {
+    $fromAddr = $1;
+  }
+  if (defined $fromAddr and $fromAddr ne '') {
+    my $mime = MIME::Entity->build(
+      From => "\"$fromName\" <$fromAddr>",
+      To => $recipient,
+      Subject => $subject,
+      Type => "multipart/alternative");
+    $mime->attach(Data => $body_text,
+                  Type => "text/plain");
+    $mime->attach(Data => $body_html,
+                  Type => "text/html");
+    $mime->head->add('Auto-Submitted', 'auto-generated');
+    $mime->head->add('Precedence', 'bulk');
+    foreach (keys %{$extra_headers}) {
+      $mime->head->add($_, $extra_headers->{$_});
     }
-    $body .= sprintf("--%s
-Content-Type: text/plain; charset=utf-8
-
-%s
-
---%s
-Content-Type: text/html; charset=utf-8
-
-%s
-
---%s--
-\n", $boundary, $body_text, $boundary, $body_html, $boundary);
-    send_mail($fromAddr, $fromName, $recipient, $body);
+    send_mail($fromAddr, $fromName, $recipient, $mime->stringify);
   } else {
     md_syslog("Warning", "send_mail_multipart called with empty \"fromAddr\" parameter");
   }
@@ -1204,17 +1203,16 @@ sub send_admin_mail {
   my ($subject, $body) = @_;
 
   my $mail;
-  my $hostname = Mail::MIMEDefang::Net::get_host_name();
-  $mail = "From: $DaemonName <$DaemonAddress>\n";
-  $mail .= "To: \"$AdminName\" <$AdminAddress>\n";
-  $mail .= Mail::MIMEDefang::RFC2822::gen_date_msgid_headers($QueueID, $hostname);
-  $mail .= "Auto-Submitted: auto-generated\n";
-  $mail .= "MIME-Version: 1.0\nContent-Type: text/plain\n";
-  $mail .= "Precedence: bulk\n";
-  $mail .= "Subject: $subject\n\n";
-  $mail .= $body;
-
-  send_mail($DaemonAddress, $DaemonName, $AdminAddress, $mail);
+  my $mime = MIME::Entity->build(
+    To => "\"$AdminName\" <$AdminAddress>",
+    From => "$DaemonName <$DaemonAddress>",
+    Subject => $subject,
+    Encoding => 'quoted-printable',
+    Data => [$body],
+    Type => "text/plain");
+  $mime->head->add('Auto-Submitted', 'auto-generated');
+  $mime->head->add('Precedence', 'bulk');
+  send_mail($DaemonAddress, $DaemonName, $AdminAddress, $mime->stringify);
 }
 
 =back
