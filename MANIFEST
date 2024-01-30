@@ -45,7 +45,6 @@ contrib/word-to-html
 cpanfile
 docker-compose-postfix.yml
 docker-compose-sendmail.yml
-docker/sendmail/supervisord.conf
 drop_privs.c
 dynbuf.c
 dynbuf.h
