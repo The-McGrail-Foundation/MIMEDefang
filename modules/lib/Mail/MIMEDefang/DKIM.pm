@@ -105,7 +105,7 @@ sub md_dkim_sign {
   $method = defined $method ? $method : 'relaxed';
   $selector = defined $selector ? $selector : 'default';
 
-  my ($fh, $h, $v);
+  my ($fh);
 
   if(not -f $keyfile) {
     md_syslog('err', "Could not open private DKIM key in md_dkim_sign: $!");
@@ -129,8 +129,7 @@ sub md_dkim_sign {
   # or read an email and pass it into the signer, one line at a time
   while (<$fh>) {
     # remove local line terminators
-    chomp;
-    s/\015$//;
+    s/\015?\012$//;
 
     # use SMTP line terminators
     $dkim->PRINT("$_\015\012");
@@ -138,12 +137,13 @@ sub md_dkim_sign {
   $dkim->CLOSE;
   close($fh);
 
-  my $signature = $dkim->signature;
-  if($signature->as_string =~ /^(.*):\s(.*)$/s) {
-    $h = $1;
-    $v = $2;
-    $v =~ s/\r//gs;
-    return ($h, $v);
+  my $signature = $dkim->signature->as_string;
+  # canonicalize newlines and trim trailing newline
+  $signature =~ s/\015(?=\012)//gs;
+  $signature =~ s/\012$//;
+
+  if($signature =~ /^(.*):\s(.*)$/s) {
+    return ($1, $2);
   }
   return;
 }
@@ -181,8 +181,7 @@ sub md_dkim_verify {
     };
     while (<$fh>) {
       # remove local line terminators
-      chomp;
-      s/\015$//;
+      s/\015?\012$//;
 
       # use SMTP line terminators
       $dkim->PRINT("$_\015\012");
