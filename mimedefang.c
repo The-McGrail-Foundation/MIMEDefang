@@ -1586,6 +1586,32 @@ body(SMFICTX *ctx, u_char *text, size_t len)
 }
 
 /**********************************************************************
+*%FUNCTION: remove_carriage_return
+*%ARGUMENTS:
+* str -- pointer to string to modify
+*%DESCRIPTION:
+* removes carriage returns from a string, header values should not
+* contain "\r" chars
+***********************************************************************/
+static void remove_carriage_return(char *str)
+{
+    char t = '\r';
+    int i,j;
+    i = 0;
+    while(i < strlen(str))
+    {
+        if (str[i] == t)
+        {
+            for (j = i; j < strlen(str); j++) {
+                str[j] = str[j+1];
+	    }
+        } else {
+	    i++;
+	}
+    }
+}
+
+/**********************************************************************
 *%FUNCTION: eom
 *%ARGUMENTS:
 * ctx -- Sendmail filter mail context
@@ -1879,6 +1905,7 @@ eom(SMFICTX *ctx)
 		if (hdr && val) {
 		    percent_decode(hdr);
 		    percent_decode(val);
+		    remove_carriage_return(val);
 		    MD_SMFI_TRY(smfi_addheader, (ctx, hdr, val));
 		}
 	    }
@@ -1892,6 +1919,7 @@ eom(SMFICTX *ctx)
 		    percent_decode(hdr);
 		    percent_decode(count);
 		    percent_decode(val);
+		    remove_carriage_return(val);
 		    if (sscanf(count, "%d", &j) != 1 || j < 0) {
 			j = 0; /* 0 means add header at the top */
 		    }
@@ -1915,6 +1943,7 @@ eom(SMFICTX *ctx)
 		    percent_decode(hdr);
 		    percent_decode(count);
 		    percent_decode(val);
+		    remove_carriage_return(val);
 		    if (sscanf(count, "%d", &j) != 1 || j < 1) {
 			j = 1;
 		    }
