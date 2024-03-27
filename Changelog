@@ -2,6 +2,13 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2024-03-26 Giovanni Bechis <g.bechis@snb.it>
+       * remove CR from multiline header's values
+
+2024-03-15 Philip Prindeville <philipp@redfish-solutions.com>
+
+       * simplify newline and return/newline handling (#79)
+
 2024-01-23 Giovanni Bechis <gbechis@pccc.com>
 
 	* add a sub to send a multipart mail message using Sendmail
