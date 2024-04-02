@@ -491,7 +491,7 @@ sub detect_and_load_perl_modules() {
       }
       $Features{"Net::DNS"} = $use_dns;
       if(exists &Mail::MIMEDefang::Actions::md_init) {
-        Mail::MIMEDefang::Action::md_init();
+        Mail::MIMEDefang::Actions::md_init();
       }
       if(exists &Mail::MIMEDefang::Antispam::md_init) {
         Mail::MIMEDefang::Antispam::md_init();
