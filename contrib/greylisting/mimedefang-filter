@@ -1,0 +1,24 @@
+my $dbh;
+
+sub filter_initialize {
+    my($entity) = @_;
+
+    $dbh = DBI->connect($dsn, $username, $auth, {attr => val});
+}
+
+sub filter_recipient {
+    my ($recipient, $sender, $ip, $hostname, $first, $helo,
+        $rcpt_mailer, $rcpt_host, $rcpt_addr) = @_;
+    my $ret = Mail::MIMEDefang::Actions::action_greylist($dbh, $sender, $recipient, $ip);
+    if($ret eq "tempfail") {
+      return('TEMPFAIL', "Email greylisted, please come back later");
+    } elsif($ret eq "reject") {
+      return('REJECT', "Go away or deliver email faster");
+    } else {
+      return ('CONTINUE', "ok");
+    }
+}
+
+sub filter_cleanup {
+    $dbh->disconnect();
+}

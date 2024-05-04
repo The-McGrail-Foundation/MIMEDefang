@@ -40,7 +40,7 @@ our @EXPORT_OK;
   action_bounce action_accept action_defang action_discard action_add_part
   action_tempfail action_add_header action_add_entity action_quarantine
   action_quarantine_entire_message action_change_header action_delete_header
-  action_external_filter get_quarantine_dir action_sm_quarantine
+  action_external_filter get_quarantine_dir action_sm_quarantine action_greylist
   action_accept_with_warning action_notify_administrator action_replace_with_warning
   action_replace_with_url action_drop_with_warning action_delete_all_headers
   message_rejected process_added_parts add_recipient delete_recipient change_sender
@@ -758,6 +758,80 @@ sub get_quarantine_dir {
     }
 
     return $QuarantineSubdir;
+}
+
+=item action_greylist($dbh, $sender, $recipient, $ip, $min_retry, $max_retry)
+
+$dbh is a DBI handle connected to the greylist database.
+$dbh object should be initialized in filter_initialize sub.
+$min_delay and $max_delay are the minimum and maximum retry delays
+respectively, those parameters are optional (default values are 300 and 14400 seconds).
+If an SMTP client tries to deliver email faster, it
+will continue to be greylisted.
+$ip, $sender and $recipient are used to identify a unique connection.
+If it waits longer, it will begin the greylisting test from scratch.
+$ip is the IP address of the connecting SMTP client.
+In filter_cleanup sub, the database connection should be closed.
+
+Returns "tempfail" if a new sender sends the email from a new ip address,
+"continue" if the email is allowed to pass or "reject" if the email has been
+greylisted for too much time.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: action_greylist
+# %ARGUMENTS:
+#  dbh -- db handle
+#  sender -- sender's email
+#  recipient -- recipient's email
+#  ip -- ip address of the sender
+#  min_retry -- minimum retry time
+#  max_retry -- maximum retry time
+# %RETURNS:
+#  continue, reject or tempfail
+# %DESCRIPTION:
+# Returns "tempfail" if a new sender sends the email from a new ip address,
+# "continue" if the email is allowed to pass or "reject" if the email has been
+# greylisted for too much time.
+#***********************************************************************
+sub action_greylist {
+    my ($dbh, $sender, $recipient, $ip, $min_retry, $max_retry) = @_;
+
+    $min_retry //= 300;
+    $max_retry //= (4*3600);
+
+    my $now = time;
+
+    # skip greylisting if ip address has passed greylisting in the last 31 days
+    my $res = $dbh->selectrow_hashref(q{SELECT sender_host_ip FROM greylist WHERE sender = ? AND recipient = ? AND sender_host_ip = ? AND last_received >= ? AND known_ip = 1}, 
+	    undef, $sender, $recipient, $ip, ($now - 31*86400));
+    if ($res) {
+      md_syslog('Warning', "[greylist] Skip greylisting for sender $sender, sender is in our skiplist");
+      return "continue";
+    }
+
+    $res = $dbh->selectrow_hashref(q{SELECT last_received FROM greylist WHERE sender = ? AND recipient = ? AND sender_host_ip = ?}, undef, $sender, $recipient, $ip);
+    if ($res) {
+      if ($now - $res->{last_received} > $max_retry) {
+         # message arrived too late
+         $dbh->do(q{DELETE FROM greylist WHERE sender = ? AND recipient = ? AND sender_host_ip = ?}, undef, $sender, $recipient, $ip);
+         md_syslog('Warning', "[greylist] Reject sender $sender, email has arrived too late");
+	 return "reject";
+      }
+      if ($now - $res->{last_received} < $min_retry) {
+         # message arrived too soon
+         md_syslog('Warning', "[greylist] Tempfail sender $sender, email has arrived too soon");
+	 return "tempfail";
+      }
+      # Ip can continue and we can add it to skip-list
+      $dbh->do(q{UPDATE greylist SET known_ip=1, last_received=? WHERE sender = ? AND recipient = ? AND sender_host_ip = ?}, undef, $now, $sender, $recipient, $ip);
+      md_syslog('Warning', "[greylist] Sender $sender has been added to our skiplist");
+      return "continue";
+    }
+    $dbh->do(q{INSERT INTO greylist(sender_host_ip, sender, recipient, first_received, last_received, known_ip) VALUES(?, ?, ?, ?, ?, ?)}, undef, $ip, $sender, $recipient, $now, $now, 0);
+    md_syslog('Warning', "[greylist] Tempfail sender $sender, please come back later");
+    return "tempfail";
 }
 
 =item action_quarantine_entire_message
