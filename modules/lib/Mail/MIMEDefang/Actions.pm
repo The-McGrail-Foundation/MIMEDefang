@@ -770,7 +770,8 @@ If an SMTP client tries to deliver email faster, it
 will continue to be greylisted.
 $ip, $sender and $recipient are used to identify a unique connection.
 If it waits longer, it will begin the greylisting test from scratch.
-$ip is the IP address of the connecting SMTP client.
+$ip is the IP address of the connecting SMTP client, to greylist an entire
+subnet you can pass the subnet instead.
 In filter_cleanup sub, the database connection should be closed.
 
 Returns "tempfail" if a new sender sends the email from a new ip address,
@@ -785,7 +786,7 @@ greylisted for too much time.
 #  dbh -- db handle
 #  sender -- sender's email
 #  recipient -- recipient's email
-#  ip -- ip address of the sender
+#  ip -- ip address or subnet of the sender
 #  min_retry -- minimum retry time
 #  max_retry -- maximum retry time
 # %RETURNS:

@@ -9,7 +9,15 @@ sub filter_initialize {
 sub filter_recipient {
     my ($recipient, $sender, $ip, $hostname, $first, $helo,
         $rcpt_mailer, $rcpt_host, $rcpt_addr) = @_;
-    my $ret = Mail::MIMEDefang::Actions::action_greylist($dbh, $sender, $recipient, $ip);
+
+    my $ip_address = $ip;
+
+    # Greylist all the /24 subnet
+    #
+    # my @ip = split(/\./, $ip);
+    # $ip_address = $ip[0] . '.' . $ip[1] . '.' . $ip[2] . '.0';
+
+    my $ret = Mail::MIMEDefang::Actions::action_greylist($dbh, $sender, $recipient, $ip_address);
     if($ret eq "tempfail") {
       return('TEMPFAIL', "Email greylisted, please come back later");
     } elsif($ret eq "reject") {
