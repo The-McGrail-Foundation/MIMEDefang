@@ -2445,7 +2445,8 @@ main(int argc, char **argv)
 	    break;
 	case 'X':
 	    if (scan_body) {
-		free(scan_body);
+                fprintf(stderr, "%s: Cannot use multiple '-X' options\n", argv[0]);
+                exit(EXIT_FAILURE);
 	    }
 	    scan_body = strdup("");
 	    if (!scan_body) {
@@ -2456,7 +2457,8 @@ main(int argc, char **argv)
 
 	case 'L':
 	    if (EquivToLoopback) {
-		free(EquivToLoopback);
+                fprintf(stderr, "%s: Cannot use multiple '-L' options\n", argv[0]);
+                exit(EXIT_FAILURE);
 	    }
 	    EquivToLoopback = strdup(optarg);
 	    if (!EquivToLoopback) {
@@ -2467,7 +2469,8 @@ main(int argc, char **argv)
 
 	case 'x':
 	    if (scan_body) {
-		free(scan_body);
+                fprintf(stderr, "%s: Cannot use multiple '-x' options\n", argv[0]);
+                exit(EXIT_FAILURE);
 	    }
 	    scan_body = strdup(optarg);
 	    if (!scan_body) {
@@ -2483,7 +2486,8 @@ main(int argc, char **argv)
 	case 'U':
 	    /* User to run as */
 	    if (user) {
-		free(user);
+                fprintf(stderr, "%s: Cannot use multiple '-U' options\n", argv[0]);
+                exit(EXIT_FAILURE);
 	    }
 	    user = strdup(optarg);
 	    if (!user) {
@@ -2493,7 +2497,10 @@ main(int argc, char **argv)
 	    break;
 	case 'o':
 	    /* Use this as our lock file */
-	    if (lockfile != NULL) free(lockfile);
+	    if (lockfile != NULL) {
+                fprintf(stderr, "%s: Cannot use multiple '-o' options\n", argv[0]);
+                exit(EXIT_FAILURE);
+            }
 
 	    lockfile = strdup(optarg);
 	    if (!lockfile) {
@@ -2503,7 +2510,10 @@ main(int argc, char **argv)
 	    break;
 	case 'P':
 	    /* Write our pid to this file */
-	    if (pidfile != NULL) free(pidfile);
+	    if (pidfile != NULL) {
+                fprintf(stderr, "%s: Cannot use multiple '-P' options\n", argv[0]);
+                exit(EXIT_FAILURE);
+            }
 
 	    pidfile = strdup(optarg);
 	    if (!pidfile) {
@@ -2528,6 +2538,10 @@ main(int argc, char **argv)
 	    break;
 	case 'm':
 	    /* Multiplexor */
+            if (MultiplexorSocketName) {
+                fprintf(stderr, "%s: Cannot use multiple '-m' options\n", argv[0]);
+                exit(EXIT_FAILURE);
+            }
 	    MultiplexorSocketName = strdup(optarg);
 	    if (!MultiplexorSocketName) {
 		fprintf(stderr, "%s: Out of memory\n", argv[0]);
