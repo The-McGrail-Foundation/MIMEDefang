@@ -218,6 +218,7 @@ distclean:: clean
 	mimedefang.8 mimedefang.pl.8 mimedefang-release.8 md-mx-ctrl.8 watch-mimedefang \
 	redhat/mimedefang-init redhat/mimedefang-spec redhat/mimedefang-sysconfig \
 	script/mimedefang-util.1 modules/man/*.3
+	rm -rf autom4te.cache
 
 install-redhat: install
 	$(INSTALL) -m 755 -d $(DESTDIR)${sysconfdir}/rc.d/init.d
