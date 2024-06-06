@@ -1,9 +1,6 @@
-.gitignore
 Changelog
 config.h
 config.h.in
-config.log
-config.status
 configure
 configure.ac
 contrib/fang.pl
@@ -42,7 +39,6 @@ contrib/linuxorg/spam-trusted-hosts
 contrib/munin/mimedefang_munin_plugin
 contrib/README
 contrib/word-to-html
-cpanfile
 docker-compose-postfix.yml
 docker-compose-sendmail.yml
 drop_privs.c
@@ -67,7 +63,6 @@ LICENSE
 Makefile
 Makefile.in
 MANIFEST
-MANIFEST.bak
 MANIFEST.SKIP
 md-mx-ctrl
 md-mx-ctrl.8
@@ -142,7 +137,6 @@ rm_r.c
 script/mimedefang-util
 script/mimedefang-util.1
 script/mimedefang-util.in
-sign.sh
 SpamAssassin/spamassassin.cf
 syslog-fac.c
 systemd-units/mimedefang-multiplexor.service
