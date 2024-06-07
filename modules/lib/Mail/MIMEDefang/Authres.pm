@@ -93,7 +93,7 @@ sub md_authres {
       if($ksize > 0) {
         $authres .= "\r\n\tdkim=$dkimres ($ksize-bit key) header.d=$dkimdom";
         if(defined($dkimb)) {
-          $authres .= " header.b=\"$dkimb\"";
+          $authres .= " header.b=$dkimb";
         }
         $authres .= ";";
       }
