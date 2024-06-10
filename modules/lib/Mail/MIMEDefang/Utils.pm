@@ -35,7 +35,7 @@ our @EXPORT = qw(time_str date_str hour_str
                  synthesize_received_header copy_or_link
                  re_match re_match_ext re_match_in_rar_directory re_match_in_zip_directory
                  re_match_in_7zip_directory re_match_in_tgz_directory md_copy_orig_msg_to_work_dir_as_mbox_file read_results);
-our @EXPORT_OK = qw(md_init gen_mx_id md_load_sendmail_macros);
+our @EXPORT_OK = qw(md_init gen_mx_id);
 
 =item time_str
 
@@ -569,51 +569,5 @@ sub gen_mx_id {
 =back
 
 =cut
-
-=item md_load_sendmail_macros
-
-Load sendmail macros early so that macros can be used in filter_relay, filter_sender,
-and filter_recipient subroutines.
-
-=cut
-
-#***********************************************************************
-# %PROCEDURE: md_load_sendmail_macros
-# source: http://novosial.org/mimedefang/macro-pass/index.html
-# %ARGUMENTS:
-#  None
-# %DESCRIPTION:
-#  Loads Sendmail macros early
-# %RETURNS:
-#  None
-#***********************************************************************
-sub md_load_sendmail_macros {
-  open COMMANDS, '< ./COMMANDS' or return 0;
-  while (<COMMANDS>) {
-    chomp;
-    my $rawcmd = $_;
-    my $cmd    = percent_decode($rawcmd);
-    my $arg    = substr($cmd, 1);
-    $cmd = substr($cmd, 0, 1);
-    my $rawarg = substr($rawcmd, 1);
-    if ($cmd eq "=") {
-      my ($macro, $value);
-      ($macro, $value) = split(' ', $rawarg);
-      $value = "" unless defined($value);
-      $macro = "" unless defined($macro);
-      if ($macro ne "") {
-        $macro                  = percent_decode($macro);
-        $value                  = percent_decode($value);
-        $SendmailMacros{$macro} = $value;
-      }
-    }
-  }
-  return 1;
-}
-
-=back
-
-=cut
-
 
 1;
