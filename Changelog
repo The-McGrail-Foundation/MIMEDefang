@@ -4,6 +4,11 @@ affect your filter.
 
 2024-06-10 Giovanni Bechis <g.bechis@snb.it>
 
+       * add md_load_sendmail_macros to be able to access
+       Sendmail macros early
+
+2024-06-10 Giovanni Bechis <g.bechis@snb.it>
+
        * add action_greylist to support basic greylisting
 
 2024-03-26 Giovanni Bechis <g.bechis@snb.it>
