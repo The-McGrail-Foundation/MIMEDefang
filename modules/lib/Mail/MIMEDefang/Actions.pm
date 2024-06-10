@@ -808,6 +808,8 @@ sub action_greylist {
     my $res = $dbh->selectrow_hashref(q{SELECT sender_host_ip FROM greylist WHERE sender = ? AND recipient = ? AND sender_host_ip = ? AND last_received >= ? AND known_ip = 1}, 
 	    undef, $sender, $recipient, $ip, ($now - 31*86400));
     if ($res) {
+      # update received date
+      $dbh->do(q{UPDATE greylist SET known_ip=1, last_received=? WHERE sender = ? AND recipient = ? AND sender_host_ip = ?}, undef, $now, $sender, $recipient, $ip);
       md_syslog('Warning', "[greylist] Skip greylisting for sender $sender, sender is in our skiplist");
       return "continue";
     }
