@@ -88,7 +88,7 @@ our $VERSION = '3.4.1';
       write_result_line in_message_context in_filter_context in_filter_wrapup
       in_filter_end percent_decode percent_encode percent_encode_for_graphdefang
       send_mail send_multipart_mail send_quarantine_notifications signal_complete send_admin_mail
-      md_version set_status_tag
+      md_version set_status_tag read_commands_file
     };
 
 @EXPORT_OK = qw{
@@ -1216,6 +1216,159 @@ sub send_admin_mail {
   $mime->head->add('Auto-Submitted', 'auto-generated');
   $mime->head->add('Precedence', 'bulk');
   send_mail($DaemonAddress, $DaemonName, $AdminAddress, $mime->stringify);
+}
+
+=item read_commands_file()
+
+This function should only be called from C<filter_sender> and
+C<filter_recipient>. This will read the C<COMMANDS> file (as
+described in L<mimedefang-protocol(7)>), and will fill or update the
+following global variables: $Sender, @Recipients, %RecipientMailers,
+$RelayAddr, $RealRelayAddr, $RelayHostname, $RealRelayHostname,
+$QueueID, $Helo, %SendmailMacros.
+
+If you do not call C<read_commands_file>, then the only information
+available in C<filter_sender> and C<filter_recipient> is that
+which is passed as an argument to the function.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: read_commands_file
+# %ARGUMENTS:
+#  needf - if true, will return an error when no closing "F" was found.
+#          (optional, default is false). needf should not be set when
+#          called from within filter_relay, filter_sender, filter_recipient.
+# %RETURNS:
+#  true if parse went well,
+#  false otherwise
+# %DESCRIPTION:
+#  Parses the COMMANDS file, and sets these global variables based
+#  upon the contents of that file:
+#    $Sender
+#    @Recipients
+#    %RecipientMailers
+#    $SuspiciousCharsInHeaders
+#    $SuspiciousCharsInBody
+#    $RelayAddr
+#    $RealRelayAddr
+#    $WasResent
+#    $RelayHostname
+#    $RealRelayHostname
+#    $QueueID
+#    $Subject
+#    $MessageID
+#    $Helo
+#    %SendmailMacros
+#
+#***********************************************************************
+sub read_commands_file {
+    my $needF = shift;
+    $needF = 0 unless defined($needF);
+
+    if (!open(IN, "<", "COMMANDS")) {
+	    fatal("Cannot open COMMANDS file from mimedefang: $!");
+	    return 0;
+    }
+
+    my($cmd, $arg, $rawcmd, $rawarg, $seenF);
+
+    # Save current recipient if called from filter_recipient
+    my @tmp_recipients = @Recipients;
+    @Recipients = ();
+    $seenF = 0;
+    my $recent_recip = "";
+
+    while(<IN>) {
+	    chomp;
+	    $rawcmd = $_;
+	    $cmd = percent_decode($rawcmd);
+	    $arg = substr($cmd, 1);
+	    $cmd = substr($cmd, 0, 1);
+	    $rawarg = substr($rawcmd, 1);
+
+	    if ($cmd eq "S") {
+	      $Sender = $arg;
+	    } elsif ($cmd eq "s") {
+	      push(@SenderESMTPArgs, $arg);
+	    } elsif ($cmd eq "F") {
+	      $seenF = 1;
+	      last;
+	    } elsif ($cmd eq "R") {
+	      my($recip, $rcpt_mailer, $rcpt_host, $rcpt_addr);
+	      ($recip, $rcpt_mailer, $rcpt_host, $rcpt_addr) = split(' ', $rawarg);
+	      $rcpt_mailer = "?" unless (defined($rcpt_mailer) and ($rcpt_mailer ne ""));
+	      $rcpt_host = "?" unless (defined($rcpt_host) and ($rcpt_host ne ""));
+	      $rcpt_addr = "?" unless (defined($rcpt_addr) and ($rcpt_addr ne ""));
+	      $recip = percent_decode($recip);
+	      $rcpt_mailer = percent_decode($rcpt_mailer);
+	      $rcpt_host = percent_decode($rcpt_host);
+	      $rcpt_addr = percent_decode($rcpt_addr);
+	      push(@Recipients, $recip);
+	      $RecipientMailers{$recip} = [$rcpt_mailer, $rcpt_host, $rcpt_addr];
+	      $recent_recip = $recip;
+	    } elsif ($cmd eq "r") {
+	      push (@{$RecipientESMTPArgs{$recent_recip}}, $arg);
+	    } elsif ($cmd eq "!") {
+	      $SuspiciousCharsInHeaders = 1;
+	    } elsif ($cmd eq "?") {
+	      $SuspiciousCharsInBody    = 1;
+	    } elsif ($cmd eq "I") {
+	      $RelayAddr = $arg;
+	      $RealRelayAddr = $arg;
+	    } elsif ($cmd eq "J") {
+	      $WasResent = 1;
+	      $RelayAddr = $arg;
+	      my($iaddr, $iname);
+	      $iaddr = inet_aton($RelayAddr);
+	      $iname = gethostbyaddr($iaddr, AF_INET);
+	      if (defined($iname)) {
+		      $RelayHostname = $iname;
+	      } else {
+		      $RelayHostname = "[$RelayAddr]";
+	      }
+	    } elsif ($cmd eq "H") {
+	      $RelayHostname = $arg;
+	      $RealRelayHostname = $arg;
+	    } elsif ($cmd eq "Q") {
+	      $QueueID = $arg;
+	    } elsif ($cmd eq "U") {
+	      $SubjectCount++;
+	      if ($SubjectCount > 1) {
+		      md_syslog('warning', "Message contains more than one Subject: header: $Subject --> $arg");
+  	    } else {
+		      $Subject = $arg;
+	      }
+	    } elsif ($cmd eq "X") {
+	      $MessageID = $arg;
+	    } elsif ($cmd eq "E") {
+	      $Helo = $arg;
+	    } elsif ($cmd eq "=") {
+	      my($macro, $value);
+	      ($macro, $value) = split(' ', $rawarg);
+	      $value = "" unless defined($value);
+	      $macro = "" unless defined($macro);
+	      if ($macro ne "") {
+		      $macro = percent_decode($macro);
+		      $value = percent_decode($value);
+		      $SendmailMacros{$macro} = $value;
+	      }
+	    } elsif ($cmd eq "i") {
+		    $MIMEDefangID = $arg;
+	    } else {
+	      md_syslog('warning', "Unknown command $cmd from mimedefang");
+	    }
+    }
+    close(IN);
+
+    if ( $needF && !$seenF ) {
+	    md_syslog('err', "COMMANDS file from mimedefang did not terminate with 'F' -- check disk space in spool directory");
+	    fatal("COMMANDS file did not end with F");
+      return 0;
+    }
+
+    push @Recipients, @tmp_recipients;
+    return 1;
 }
 
 =back
