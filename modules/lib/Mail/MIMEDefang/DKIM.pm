@@ -27,7 +27,6 @@ require Exporter;
 
 use Mail::DKIM::Signer;
 use Mail::DKIM::Verifier;
-use Mail::DKIM::TextWrap;
 
 use Mail::MIMEDefang;
 
@@ -93,17 +92,29 @@ The headers to sign, by default the headers are:
                List-Id List-Help List-Unsubscribe List-Subscribe
                List-Post List-Owner List-Archive
 
+=item C<$wrap>
+
+Option to disable DKIM header wrap.
+
 =back
 
 =cut
 
 sub md_dkim_sign {
 
-  my ($keyfile, $algorithm, $method, $domain, $selector, $headers) = @_;
+  my ($keyfile, $algorithm, $method, $domain, $selector, $headers, $wrap) = @_;
 
   $algorithm = defined $algorithm ? $algorithm : 'rsa-sha1';
   $method = defined $method ? $method : 'relaxed';
   $selector = defined $selector ? $selector : 'default';
+  $wrap //= 1;
+
+  eval {
+    if($wrap) {
+      require Mail::DKIM::TextWrap;
+      Mail::DKIM::TextWrap->import();
+    }
+  };
 
   my ($fh);
 

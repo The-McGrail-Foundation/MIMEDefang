@@ -2,6 +2,10 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2024-06-14 Giovanni Bechis <gbechis@pccc.com>
+
+       * add an option to disable DKIM header text wrap
+
 2024-06-10 Giovanni Bechis <g.bechis@snb.it>
 
        * add action_greylist to support basic greylisting

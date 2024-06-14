@@ -10,18 +10,31 @@ use Mail::MIMEDefang::DKIM;
 
 use File::Copy;
 
-sub dkim_sign : Test(2)
+sub dkim_sign : Test(3)
 {
   copy('t/data/uri.eml', './INPUTMSG');
 
   my $correct_signature;
+  # disable DKIM TextWrap, must be the first call
+  # otherwise Mail::DKIM::TextWrap will be loaded and cannot be disabled
+  open(FD, '<', 't/data/dkim_sig2a.txt') or die("Cannot open signature file: $!");
+  while(<FD>) {
+    local $/;
+    $correct_signature .= $_;
+  }
+  close(FD);
+  my ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem', 'rsa-sha256', undef, 'example.com', 'selector', undef, 0);
+  is($dkim_sig, $correct_signature);
+  undef $correct_signature;
+
   open(FD, '<', 't/data/dkim_sig.txt') or die("Cannot open signature file: $!");
   while(<FD>) {
     local $/;
     $correct_signature .= $_;
   }
   close(FD);
-  my ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem');
+
+  ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem');
   is($dkim_sig, $correct_signature);
   undef $correct_signature;
 
