@@ -4,7 +4,7 @@ affect your filter.
 
 2024-06-14 Giovanni Bechis <gbechis@pccc.com>
 
-       * add an option to disable DKIM header text wrap
+       * add an option to disable DKIM header lines wrap
 
 2024-06-10 Giovanni Bechis <g.bechis@snb.it>
 

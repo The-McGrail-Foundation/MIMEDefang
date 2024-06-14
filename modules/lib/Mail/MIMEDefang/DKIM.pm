@@ -94,7 +94,7 @@ The headers to sign, by default the headers are:
 
 =item C<$wrap>
 
-Option to disable DKIM header wrap.
+Option to disable DKIM header lines wrap.
 
 =back
 
