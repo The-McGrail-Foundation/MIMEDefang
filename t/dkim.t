@@ -23,7 +23,7 @@ sub dkim_sign : Test(3)
     $correct_signature .= $_;
   }
   close(FD);
-  my ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem', 'rsa-sha256', undef, 'example.com', 'selector', undef, 0);
+  my ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem', 'rsa-sha256', 'relaxed', 'example.com', 'selector', undef, 0);
   is($dkim_sig, $correct_signature);
   undef $correct_signature;
 

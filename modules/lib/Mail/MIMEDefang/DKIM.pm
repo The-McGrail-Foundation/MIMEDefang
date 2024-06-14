@@ -70,7 +70,7 @@ The algorithm to be used to sign the message, by default is 'rsa-sha1'
 
 =item C<$method>
 
-The method used to sign the message, by default is 'relaxed'
+The method used to sign the message, by default is 'relaxed/simple'
 
 =item C<$domain>
 
@@ -105,7 +105,7 @@ sub md_dkim_sign {
   my ($keyfile, $algorithm, $method, $domain, $selector, $headers, $wrap) = @_;
 
   $algorithm = defined $algorithm ? $algorithm : 'rsa-sha1';
-  $method = defined $method ? $method : 'relaxed';
+  $method = defined $method ? $method : 'relaxed/simple';
   $selector = defined $selector ? $selector : 'default';
   $wrap //= 1;
 

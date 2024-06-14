@@ -1,8 +1,9 @@
-v=1; a=rsa-sha256; c=relaxed; d=example.com; h=from:to
-	:subject:mime-version:content-type; s=selector; bh=xWkDNGdajbyHm
-	dMPMgjYBPaKILYNC1EIC1dFBnpM8Ck=; b=nFL7A0ndt9kpKnwbJZpBIKDFf0Ekv
-	FTL+be3+Me0mKWcKF5LSNMewdfqwJw6A6EqJi4k5fTwZBa6fmXXe70klrNl4Eyk6
-	tCzlxvom4SonsJew7eSknkhNOENrDsnB6PypkYMf2CPyqCgyD886mCegNC1Il+B4
-	M5pQgKa0V28nzbH27w66qUwWna/KTB1jOyyhpYJ+7LJkz1rLemeROSB7+6QXKobs
-	hin3l+DTbAMuN1vssLareduIr90wQaMBbr2vWR50gZbL4mWtxcqRTXvzSoIkU0Yo
-	w5HRpSCdBrGGMfWffcd3Q4SJPtuk925rWvPGVDFiZ76ywofGT/w/eAVcQ==
+v=1; a=rsa-sha256; c=relaxed/simple; d=example.com; h=
+	from:to:subject:mime-version:content-type; s=selector; bh=xWkDNG
+	dajbyHmdMPMgjYBPaKILYNC1EIC1dFBnpM8Ck=; b=FvlYrU75ffEDsAcwK1pOj0
+	Lk7hrJXfw3KE/lyK4pqaeQlzwGt9b/Xg5ZxLJvtiCjQ2JECjYXtxdk1ZjVBMxvGH
+	OQQ4lv6dN4KJy7jKdlLwn1SH5959shaRSPl4sje73C1c22RTMwdU7N5xbi6uRyR6
+	Zmyc6MIkmo/WL48uQHIKOftP5MR16hrmeDqXrwxYDS+DwNatC9CO0Bt8c86rBSI1
+	KG7H5Lry35yV0Fl9K7IxQUnvI/eloyNsEeDqkIXTZckYTPceA4g6l9Stc3i3XYJN
+	pnMUcH8imjsmBmjpc5coe3sTsCiJwO8bcnWmgmArQsWmmSevz1PCs+kg5zpSrlFg
+	==
