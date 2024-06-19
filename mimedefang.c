@@ -2296,6 +2296,7 @@ main(int argc, char **argv)
     int nodaemon = 0;
     char buf[SMALLBUF];
     int got_p_option = 0;
+    char *sockfile = NULL;
     int kidpipe[2];
     char kidmsg[256];
     int pidfile_fd = -1;
@@ -2558,6 +2559,12 @@ main(int argc, char **argv)
 			argv[0], optarg);
 		exit(EXIT_FAILURE);
 	    }
+	    if (sockfile) free(sockfile);
+	    sockfile = strdup(optarg);
+	    if (!sockfile) {
+		fprintf(stderr, "%s: Out of memory\n", argv[0]);
+		exit(EXIT_FAILURE);
+	    }
 	    got_p_option = 1;
 	    /* Remove socket from file system if it's a local socket */
 	    (void) remove_local_socket(optarg);
@@ -2807,6 +2814,9 @@ main(int argc, char **argv)
     }
     if (lockfile) {
 	unlink(lockfile);
+    }
+    if (sockfile) {
+	remove_local_socket(sockfile);
     }
     return rc;
 }
