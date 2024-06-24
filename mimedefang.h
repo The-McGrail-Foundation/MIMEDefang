@@ -69,7 +69,7 @@ extern int make_listening_socket(char const *str, int backlog, int must_be_unix)
 extern void do_delay(char const *sleepstr);
 extern int is_localhost(struct sockaddr *);
 extern int remove_local_socket(char const *str);
-extern int write_and_lock_pidfile(char const *pidfile, char *lockfile, int fd);
+extern int write_and_lock_pidfile(char const *pidfile, char **lockfile, int fd);
 #ifdef EMBED_PERL
 extern int make_embedded_interpreter(char const *progPath,
 				     char const *subFilter,

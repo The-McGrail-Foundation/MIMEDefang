@@ -2744,7 +2744,7 @@ main(int argc, char **argv)
 
     /* Do the locking */
     if (pidfile || lockfile) {
-	if ( (lockfile_fd = write_and_lock_pidfile(pidfile, lockfile, pidfile_fd)) < 0) {
+	if ( (lockfile_fd = write_and_lock_pidfile(pidfile, &lockfile, pidfile_fd)) < 0) {
 	    /* Signal the waiting parent */
 	    REPORT_FAILURE("Cannot lock lockfile: Is another copy running?");
 	    exit(EXIT_FAILURE);

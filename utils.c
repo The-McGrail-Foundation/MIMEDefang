@@ -1305,29 +1305,31 @@ free_debug(void *ctx, void *x, char const *fname, int line)
 #endif
 
 int
-write_and_lock_pidfile(char const *pidfile, char *lockfile, int pidfile_fd)
+write_and_lock_pidfile(char const *pidfile, char **lockfile, int pidfile_fd)
 {
     struct flock fl;
     char buf[64];
     int lockfile_fd;
     size_t len;
 
-    if (!lockfile) {
+    if (!*lockfile) {
 	if (!pidfile) {
 	    return -1;
 	}
 	len = strlen(pidfile) + 6;
 	/* If no lockfile was supplied, construct one based on pidfile */
-	lockfile = malloc(len);
-	if (!lockfile) {
+	*lockfile = malloc(len);
+	if (!*lockfile) {
 	    return -1;
 	}
 
-	snprintf(lockfile, len, "%s.lock", pidfile);
+	snprintf(*lockfile, len, "%s.lock", pidfile);
     }
 
-    lockfile_fd = open(lockfile, O_RDWR|O_CREAT, 0666);
+    lockfile_fd = open(*lockfile, O_RDWR|O_CREAT, 0666);
     if (lockfile_fd < 0) {
+      free(*lockfile);
+      *lockfile = NULL;
       return -1;
     }
 
@@ -1337,7 +1339,7 @@ write_and_lock_pidfile(char const *pidfile, char *lockfile, int pidfile_fd)
     fl.l_len = 0;
 
     if (fcntl(lockfile_fd, F_SETLK, &fl) < 0) {
-      syslog(LOG_ERR, "Could not lock lockfile file %s: %m.  Is another copy running?", lockfile);
+      syslog(LOG_ERR, "Could not lock lockfile file %s: %m.  Is another copy running?", *lockfile);
       return -1;
     }
     if (pidfile_fd >= 0) {
