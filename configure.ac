@@ -36,6 +36,16 @@ if test "$ac_have_socklen_t" = "yes" ; then
    AC_DEFINE(HAVE_SOCKLEN_T,[],["Whether we have the variable type socklen_t"])
 fi
 
+dnl Check if clock_gettime can use CLOCK_MONOTONIC
+AC_MSG_CHECKING(whether clock_gettime can use CLOCK_MONOTONIC)
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <time.h>
+]], [[struct timespec s; clock_gettime(CLOCK_MONOTONIC, &s);]])],[ac_have_clock_monotonic=yes],[ac_have_clock_monotonic=no])
+AC_MSG_RESULT($ac_have_clock_monotonic)
+if test "$ac_have_clock_monotonic" = "yes" ; then
+   AC_DEFINE(HAVE_CLOCK_MONOTONIC,[],["Whether clock_gettime can use CLOCK_MONOTONIC"])
+fi
+
 AC_MSG_CHECKING(whether fPIC compiler option is accepted)
 OLD_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -fPIC -Werror"
