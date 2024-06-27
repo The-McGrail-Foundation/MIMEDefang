@@ -1643,12 +1643,14 @@ eom(SMFICTX *ctx)
 
     struct stat statbuf;
     dynamic_buffer dbuf;
-    struct timeval start, finish;
+    struct timespec start, finish, diff;
     int rejecting;
 
     DEBUG_ENTER("eom");
     if (LogTimes) {
-	gettimeofday(&start, NULL);
+	if(clock_gettime(CLOCK_MONOTONIC, &start) == -1) {
+	  syslog(LOG_INFO, "%s: Error in clock_gettime", data->qid);
+	}
     }
 
     /* Close output file */
@@ -2047,21 +2049,17 @@ eom(SMFICTX *ctx)
     if (rbuf != result) free(rbuf);
 
     if (LogTimes) {
-	long sec_diff, usec_diff;
+	long msec_diff;
 
-	gettimeofday(&finish, NULL);
-
-	sec_diff = finish.tv_sec - start.tv_sec;
-	usec_diff = finish.tv_usec - start.tv_usec;
-
-	if (usec_diff < 0) {
-	    usec_diff += 1000000;
-	    sec_diff--;
+	if(clock_gettime(CLOCK_MONOTONIC, &finish) != -1) {
+	  timespecsub(&finish, &start, &diff);
+	  // convert to milliseconds
+          msec_diff = diff.tv_nsec / 1000000;
+	  syslog(LOG_INFO, "%s: Filter time is %ldms", data->qid, msec_diff);
+	} else {
+	  syslog(LOG_INFO, "%s: Filter time cannot be calculated", data->qid);
 	}
 
-	/* Convert to milliseconds */
-	sec_diff = sec_diff * 1000 + (usec_diff / 1000);
-	syslog(LOG_INFO, "%s: Filter time is %ldms", data->qid, sec_diff);
     }
 
     DEBUG(syslog(LOG_DEBUG, "%p: %s(%d): EXIT %s: %d", ctx, __FILE__, __LINE__, "eom", r));
