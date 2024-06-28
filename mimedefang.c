@@ -1648,9 +1648,15 @@ eom(SMFICTX *ctx)
 
     DEBUG_ENTER("eom");
     if (LogTimes) {
+#ifdef HAVE_CLOCK_MONOTONIC
 	if(clock_gettime(CLOCK_MONOTONIC, &start) == -1) {
 	  syslog(LOG_INFO, "%s: Error in clock_gettime", data->qid);
 	}
+#else
+	if(clock_gettime(CLOCK_REALTIME, &start) == -1) {
+	  syslog(LOG_INFO, "%s: Error in clock_gettime", data->qid);
+	}
+#endif
     }
 
     /* Close output file */
@@ -2051,6 +2057,7 @@ eom(SMFICTX *ctx)
     if (LogTimes) {
 	long msec_diff;
 
+#ifdef HAVE_CLOCK_MONOTONIC
 	if(clock_gettime(CLOCK_MONOTONIC, &finish) != -1) {
 	  timespecsub(&finish, &start, &diff);
 	  // convert to milliseconds
@@ -2059,7 +2066,16 @@ eom(SMFICTX *ctx)
 	} else {
 	  syslog(LOG_INFO, "%s: Filter time cannot be calculated", data->qid);
 	}
-
+#else
+	if(clock_gettime(CLOCK_REALTIME, &finish) != -1) {
+	  timespecsub(&finish, &start, &diff);
+	  // convert to milliseconds
+          msec_diff = diff.tv_nsec / 1000000;
+	  syslog(LOG_INFO, "%s: Filter time is %ldms", data->qid, msec_diff);
+	} else {
+	  syslog(LOG_INFO, "%s: Filter time cannot be calculated", data->qid);
+	}
+#endif
     }
 
     DEBUG(syslog(LOG_DEBUG, "%p: %s(%d): EXIT %s: %d", ctx, __FILE__, __LINE__, "eom", r));

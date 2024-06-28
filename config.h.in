@@ -54,6 +54,9 @@
 /* "Whether we have the variable type socklen_t" */
 #undef HAVE_SOCKLEN_T
 
+/* "Whether we have CLOCK_MONOTONIC defined" */
+#undef HAVE_CLOCK_MONOTONIC
+
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 
