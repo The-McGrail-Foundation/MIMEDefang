@@ -2,6 +2,10 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2024-07-03 Giovanni Bechis <gbechis@pccc.com>
+
+       * improve how filter elapsed time is calculated
+
 2024-06-19 Marc Aurèle La France <tsi@tuyoix.net>
 
        * remove socket file on exit
