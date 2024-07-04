@@ -3964,6 +3964,9 @@ if test "$ac_have_clock_monotonic" = "yes" ; then
 
 printf "%s\n" "#define HAVE_CLOCK_MONOTONIC /**/" >>confdefs.h
 
+else
+   OLDLIBS="$LIBS"
+   LIBS="$LIBS -lrt"
 fi
 
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether fPIC compiler option is accepted" >&5
@@ -3992,6 +3995,23 @@ printf "%s\n" "no" >&6; }
      CFLAGS="$OLD_CFLAGS"
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+
+if test -z "$PERL" ; then
+   as_fn_error $? "*** Cannot continue without Perl.  Sorry." "$LINENO" 5
+   exit 1
+fi
+
+if test -f "${PERL}" ; then
+    perl_version=`${PERL} -e "print $]"`
+    long_perl_version=`${PERL} -e "print ($] * 1000000)"`
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking Perl version" >&5
+printf %s "checking Perl version... " >&6; }
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: ${perl_version}" >&5
+printf "%s\n" "${perl_version}" >&6; }
+    if test ${long_perl_version} -lt 5010000 ; then
+      as_fn_error $? "At least Perl 5.10 is required" "$LINENO" 5
+    fi
+fi
 
 for thing in prefix siteprefix vendorprefix vendorlib installarchlib installprivlib installbin installman1dir installman3dir installscript installsitearch installsitelib; do
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl installation variable $thing" >&5
@@ -4104,11 +4124,6 @@ printf "%s\n" "#define HAVE_WAIT3 1" >>confdefs.h
 
 fi
 
-
-if test -z "$PERL" ; then
-   as_fn_error $? "*** Cannot continue without Perl.  Sorry." "$LINENO" 5
-   exit 1
-fi
 
 # Extract the first word of "nm", so it can be a program name with args.
 set dummy nm; ac_word=$2
@@ -4620,11 +4635,6 @@ printf "%s\n" "$ac_cv_prog_cc_pthread" >&6; }
    rm -f conftest*
 else
    PTHREAD_FLAG=""
-fi
-
-if test "$GCC" = yes ; then
-   OLDLIBS="$LIBS"
-   LIBS="-lrt $LIBS"
 fi
 
 if test "$HAVE_EXTUTILS_EMBED" = "yes" ; then

@@ -58,6 +58,21 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdio.h>]], [[return 0;]])],
     [AC_MSG_RESULT(no)
      CFLAGS="$OLD_CFLAGS"])
 
+if test -z "$PERL" ; then
+   AC_MSG_ERROR([*** Cannot continue without Perl.  Sorry.])
+   exit 1
+fi
+
+if test -f "${PERL}" ; then
+    perl_version=`${PERL} -e "print $]"`
+    long_perl_version=`${PERL} -e "print ($] * 1000000)"`
+    AC_MSG_CHECKING([Perl version])
+    AC_MSG_RESULT(${perl_version})
+    if test ${long_perl_version} -lt 5010000 ; then
+      AC_MSG_ERROR([At least Perl 5.10 is required])
+    fi
+fi
+
 for thing in prefix siteprefix vendorprefix vendorlib installarchlib installprivlib installbin installman1dir installman3dir installscript installsitearch installsitelib; do
     AC_MSG_CHECKING([for Perl installation variable $thing])
     val=`$PERL -V:$thing | sed -e "s/^.*='//" -e "s/';$//"`
@@ -76,11 +91,6 @@ if test "$un" = "SunOS 5.9" ; then
 fi
 
 AC_FUNC_WAIT3
-
-if test -z "$PERL" ; then
-   AC_MSG_ERROR([*** Cannot continue without Perl.  Sorry.])
-   exit 1
-fi
 
 AC_PATH_PROG(NM, nm)
 
