@@ -44,6 +44,9 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 AC_MSG_RESULT($ac_have_clock_monotonic)
 if test "$ac_have_clock_monotonic" = "yes" ; then
    AC_DEFINE(HAVE_CLOCK_MONOTONIC,[],["Whether clock_gettime can use CLOCK_MONOTONIC"])
+else
+   OLDLIBS="$LIBS"
+   LIBS="$LIBS -lrt"
 fi
 
 AC_MSG_CHECKING(whether fPIC compiler option is accepted)

@@ -4622,6 +4622,11 @@ else
    PTHREAD_FLAG=""
 fi
 
+if test "$GCC" = yes ; then
+   OLDLIBS="$LIBS"
+   LIBS="-lrt $LIBS"
+fi
+
 if test "$HAVE_EXTUTILS_EMBED" = "yes" ; then
    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking if we can embed a Perl interpreter in C" >&5
 printf %s "checking if we can embed a Perl interpreter in C... " >&6; }
