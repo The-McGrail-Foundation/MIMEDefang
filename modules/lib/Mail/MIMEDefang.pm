@@ -38,12 +38,12 @@ no warnings qw(once uninitialized);
 require Exporter;
 
 use Carp;
-use Socket;
-use IO::File;
 use Errno qw(ENOENT EACCES);
 use File::Spec;
+use IO::File;
 use MIME::Entity;
 use MIME::WordDecoder;
+use Socket;
 
 our @ISA = qw(Exporter);
 our @EXPORT;
