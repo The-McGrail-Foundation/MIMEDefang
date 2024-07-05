@@ -38,6 +38,7 @@ no warnings qw(once uninitialized);
 require Exporter;
 
 use Carp;
+use Socket;
 use Errno qw(ENOENT EACCES);
 use File::Spec;
 use MIME::Entity;
