@@ -39,6 +39,7 @@ require Exporter;
 
 use Carp;
 use Socket;
+use IO::File;
 use Errno qw(ENOENT EACCES);
 use File::Spec;
 use MIME::Entity;
