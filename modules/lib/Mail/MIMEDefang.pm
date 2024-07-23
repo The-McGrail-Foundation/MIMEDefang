@@ -1375,10 +1375,6 @@ sub read_commands_file {
 
 =back
 
-=over 4
-
-=back
-
 =head2 SEE ALSO
 
 L<Mail::MIMEDefang::Actions(3)>
