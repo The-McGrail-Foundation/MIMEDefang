@@ -772,7 +772,7 @@ $ip, $sender and $recipient are used to identify a unique connection.
 If it waits longer, it will begin the greylisting test from scratch.
 $ip is the IP address of the connecting SMTP client, to greylist an entire
 subnet you can pass the subnet instead.
-In filter_cleanup sub, the database connection should be closed.
+In C<filter_cleanup> sub, the database connection should be closed.
 
 Returns "tempfail" if a new sender sends the email from a new ip address,
 "continue" if the email is allowed to pass or "reject" if the email has been
