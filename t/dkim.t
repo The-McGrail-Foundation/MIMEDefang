@@ -10,11 +10,12 @@ use Mail::MIMEDefang::DKIM;
 
 use File::Copy;
 
-sub dkim_sign : Test(3)
+sub dkim_sign : Test(4)
 {
   copy('t/data/uri.eml', './INPUTMSG');
 
-  my $correct_signature;
+  my ($correct_signature, $dkim_sig, $dkim_sig_notw, $header);
+
   # disable DKIM TextWrap, must be the first call
   # otherwise Mail::DKIM::TextWrap will be loaded and cannot be disabled
   open(FD, '<', 't/data/dkim_sig2a.txt') or die("Cannot open signature file: $!");
@@ -23,8 +24,8 @@ sub dkim_sign : Test(3)
     $correct_signature .= $_;
   }
   close(FD);
-  my ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem', 'rsa-sha256', 'relaxed', 'example.com', 'selector', undef, 0);
-  is($dkim_sig, $correct_signature);
+  ($header, $dkim_sig_notw) = md_dkim_sign('t/data/dkim.pem', 'rsa-sha256', 'relaxed', 'example.com', 'selector', undef, 0);
+  is($dkim_sig_notw, $correct_signature);
   undef $correct_signature;
 
   open(FD, '<', 't/data/dkim_sig.txt') or die("Cannot open signature file: $!");
@@ -44,9 +45,11 @@ sub dkim_sign : Test(3)
     $correct_signature .= $_;
   }
   close(FD);
-  ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem', 'rsa-sha256', undef, 'example.com', 'selector');
+  ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem', 'rsa-sha256', 'relaxed/simple', 'example.com', 'selector');
   is($dkim_sig, $correct_signature);
   undef $correct_signature;
+
+  isnt($dkim_sig, $dkim_sig_notw);
 
   unlink('./INPUTMSG');
 }
