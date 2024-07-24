@@ -10,7 +10,7 @@ use Mail::MIMEDefang::DKIM;
 
 use File::Copy;
 
-sub dkim_sign : Test(4)
+sub dkim_sign : Test(5)
 {
   copy('t/data/uri.eml', './INPUTMSG');
 
@@ -26,6 +26,11 @@ sub dkim_sign : Test(4)
   close(FD);
   ($header, $dkim_sig_notw) = md_dkim_sign('t/data/dkim.pem', 'rsa-sha256', 'relaxed', 'example.com', 'selector', undef, 0);
   is($dkim_sig_notw, $correct_signature);
+  if($dkim_sig_notw =~ /(?<!;)\s/) {
+    ko("DKIM without text wrap");
+  } else {
+    ok("DKIM without text wrap");
+  }
   undef $correct_signature;
 
   open(FD, '<', 't/data/dkim_sig.txt') or die("Cannot open signature file: $!");
@@ -37,6 +42,11 @@ sub dkim_sign : Test(4)
 
   ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem');
   is($dkim_sig, $correct_signature);
+  if($dkim_sig =~ /(?<!;)\s/) {
+    ok("DKIM with text wrap");
+  } else {
+    ko("DKIM with text wrap");
+  }
   undef $correct_signature;
 
   open(FD, '<', 't/data/dkim_sig2.txt') or die("Cannot open signature file: $!");
@@ -48,8 +58,6 @@ sub dkim_sign : Test(4)
   ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem', 'rsa-sha256', 'relaxed/simple', 'example.com', 'selector');
   is($dkim_sig, $correct_signature);
   undef $correct_signature;
-
-  isnt($dkim_sig, $dkim_sig_notw);
 
   unlink('./INPUTMSG');
 }
