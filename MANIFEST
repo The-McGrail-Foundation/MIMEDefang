@@ -114,6 +114,7 @@ t/authres.t
 t/data/arc1.eml
 t/data/arc2.eml
 t/data/arc-wrong.eml
+t/data/COMMANDS
 t/data/dkim1.eml
 t/data/dkim2.eml
 t/data/dkim3.eml

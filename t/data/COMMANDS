@@ -1,0 +1,23 @@
+icQdy59i
+S<15522-813-61658-597@mail.example.com>
+sBODY=8BITMIME
+=_ [1.2.3.4]
+=daemon_name MTA
+=daemon_port 25
+=i 46QDY4CT972760
+=if_addr 192.168.0.172
+=if_name s1.domain.com
+=j s1.domain.com
+=mail_addr 15522-813-61658-597@mail.example.com
+=mail_host mail.example.com.
+=mail_mailer esmtp
+=client_port 33870
+=load_avg 1
+=mail_host mail.example.com.
+=mail_addr 15522-813-61658-597@example.com
+Q46QDY4CT972760
+USubject
+H[1.2.3.4]
+I1.2.3.4
+Egamma.example.com
+R<user@domain.com> esmtp [junior.example.net] user@domain.com

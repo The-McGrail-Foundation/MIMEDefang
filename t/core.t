@@ -7,6 +7,8 @@ use Test::Most;
 
 use Mail::MIMEDefang;
 
+use File::Copy;
+
 sub t_init_globals1 : Test(1)
 {
   $::main::Changed = 1;
@@ -52,6 +54,19 @@ sub t_detect_and_load_perl_modules : Test(1)
 sub t_mimedefang_version : Test(1)
 {
   like(md_version(), qr/[0-9]\.[0-9]{1,2}/);
+}
+
+sub t_read_commands_file : Test(5)
+{
+  copy('t/data/COMMANDS', './COMMANDS');
+  init_globals();
+  read_commands_file();
+  is($Sender, '<15522-813-61658-597@mail.example.com>');
+  is($RelayAddr, '1.2.3.4');
+  is($Subject, 'Subject');
+  is($QueueID, '46QDY4CT972760');
+  is($SendmailMacros{load_avg}, 1);
+  unlink('./COMMANDS');
 }
 
 __PACKAGE__->runtests();
