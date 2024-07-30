@@ -19,7 +19,7 @@ mimedefang-release - a tool to release quarantined email messages
 
 =head1 DESCRIPTION
 
-mimedefang-release is a tool that permits to release quarantined
+mimedefang-release(8) is a tool that permits to release quarantined
 messages or to attach the messages to a new email message.
 
 =head1 SYNOPSIS
