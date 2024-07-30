@@ -74,7 +74,7 @@ use constant HAS_NET_SMTP => eval { require Net::SMTP; };
 init_globals();
 detect_and_load_perl_modules();
 
-$Features{'Path:SENDMAIL'}  = '@SENDMAILPROG@';
+$Features{'Path:SENDMAIL'} = '@SENDMAILPROG@';
 $Features{'Path:QUARANTINEDIR'} = '@QDIR@';
 
 my %opts = ();
