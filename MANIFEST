@@ -31,6 +31,7 @@ contrib/graphdefang-0.91/TODO
 contrib/graphdefang-0.91/web/graphdefang.cgi
 contrib/graphdefang-0.91/web/index.php
 contrib/greylisting/greylist-mysql.sql
+contrib/greylisting/greylist-pgsql.sql
 contrib/greylisting/greylist-sqlite.sql
 contrib/greylisting/mimedefang-filter
 contrib/linuxorg/filter
