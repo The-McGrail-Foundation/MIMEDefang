@@ -351,7 +351,7 @@ sub re_match_in_7zip_directory {
   my($zname, $regexp) = @_;
   my ($rf, $beginmark, $file);
 
-  my @unz_args = ("7z", "l", $zname);
+  my @unz_args = ("7za", "l", $zname);
 
   unless ($Features{"7zip"}) {
           md_syslog('err', "Attempted to use re_match_in_7zip_directory, but 7zip binary is not installed.");
