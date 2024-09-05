@@ -366,7 +366,6 @@ sub re_match_in_7zip_directory {
       if ( $beginmark and ( $rf !~ /^\-\-\-/ ) ) {
         $rf =~ /([0-9-]+)\s+([0-9\:]+)\s+([\.[A-Za-z]+)\s+([0-9]+)\s+([0-9]+)\s+(.*)/;
         $file = $6;
-        print $file;
               return 1 if ((defined $file) and ($file =~ /$regexp/i));
       }
       last if ( $beginmark and ( $rf !~ /^\-\-\-/ ) );
