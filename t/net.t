@@ -10,6 +10,9 @@ use Sys::Hostname;
 use Mail::MIMEDefang;
 use Mail::MIMEDefang::Net;
 
+init_globals;
+$Features{"Net::DNS"} = 1;
+
 sub t_expand_ipv6_address : Test(1)
 {
   my $ipv6 = expand_ipv6_address('2a00:1450:4009:816::200e');
@@ -47,6 +50,12 @@ sub t_reverse_ip : Test(2)
   my $ipv6 = 'fe80::1121:34db:fb39:a64e';
   is(reverse_ip_address_for_rbl($ipv4), '2.0.168.192');
   is(reverse_ip_address_for_rbl($ipv6), 'e.4.6.a.9.3.b.f.b.d.4.3.1.2.1.1.0.0.0.0.0.0.0.0.0.0.0.0.0.8.e.f');
+}
+
+sub t_get_ptr_record : Test(1)
+{
+  my $ipv4 = '1.1.1.1';
+  is(Mail::MIMEDefang::Net::get_ptr_record($ipv4), 'one.one.one.one');
 }
 
 sub t_relay_is_blacklisted_multi : Test(1)

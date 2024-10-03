@@ -106,8 +106,12 @@ sub synthesize_received_header {
     my $strdate = Mail::MIMEDefang::RFC2822::rfc2822_date($CachedTimezone);
 
     $hn = Mail::MIMEDefang::Net::get_host_name() unless (defined($hn) and ($hn ne ""));
-    if ($RealRelayHostname ne "[$RealRelayAddr]") {
-      $hdr = "Received: from $Helo ($RealRelayHostname [$RealRelayAddr])\n";
+    my $relay = $RealRelayHostname;
+    if($relay eq "") {
+      $relay = Mail::MIMEDefang::Net::get_ptr_record($RealRelayAddr);
+    }
+    if ($relay ne "[$RealRelayAddr]") {
+      $hdr = "Received: from $Helo ($relay [$RealRelayAddr])\n";
     } else {
       $hdr = "Received: from $Helo ([$RealRelayAddr])\n";
     }

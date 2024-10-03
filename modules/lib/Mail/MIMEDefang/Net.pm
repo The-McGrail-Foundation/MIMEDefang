@@ -36,7 +36,7 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_blacklisted email_is_blacklisted
                  relay_is_blacklisted_multi relay_is_blacklisted_multi_count relay_is_blacklisted_multi_list
                  is_public_ip4_address is_public_ip6_address md_get_bogus_mx_hosts get_mx_ip_addresses);
-our @EXPORT_OK = qw(get_host_name md_init);
+our @EXPORT_OK = qw(get_host_name get_ptr_record md_init);
 
 sub md_init {
   my $digest_md5 = 0;
@@ -371,6 +371,39 @@ sub md_get_bogus_mx_hosts {
 		}
 	}
 	return @bogus_hosts;
+}
+
+=item get_ptr_record $domain [$resolver_object]
+
+Get PTR record for given IP address.
+
+=cut
+
+sub get_ptr_record {
+        my($ip, $res) = @_;
+        unless ($Features{"Net::DNS"}) {
+                md_syslog('err', "Attempted to call get_ptr_record, but Perl module Net::DNS is not installed");
+                return;
+        }
+        if (!defined($res)) {
+                $res = Net::DNS::Resolver->new;
+                $res->defnames(0);
+        }
+
+        my $packet = $res->query(reverse_ip_address_for_rbl($ip) . ".in-addr.arpa", 'PTR');
+        if (!defined($packet) ||
+            $packet->header->rcode eq 'SERVFAIL' ||
+            $packet->header->rcode eq 'NXDOMAIN' ||
+            !defined($packet->answer)) {
+	           return;
+        }
+        my $answer = ($packet->answer)[0];
+        if(defined $answer) {
+          my $res = $answer->rdstring;
+          $res =~ s/\.$//;
+          return $res;
+        }
+        return;
 }
 
 =item relay_is_blacklisted_multi
