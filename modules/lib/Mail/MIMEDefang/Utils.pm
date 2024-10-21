@@ -110,7 +110,7 @@ sub synthesize_received_header {
     if($relay eq "") {
       $relay = Mail::MIMEDefang::Net::get_ptr_record($RealRelayAddr);
     }
-    if ($relay ne "[$RealRelayAddr]") {
+    if ((defined $relay) and ($relay ne "[$RealRelayAddr]")) {
       $hdr = "Received: from $Helo ($relay [$RealRelayAddr])\n";
     } else {
       $hdr = "Received: from $Helo ([$RealRelayAddr])\n";
