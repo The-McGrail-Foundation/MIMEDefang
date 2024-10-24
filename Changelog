@@ -2,6 +2,11 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2024-10-03 Giovanni Bechis <gbechis@pccc.com>
+
+        * improve synthesize_received_header sub to avoid
+	FPs in rdns checks
+
 2024-07-30 Giovanni Bechis <g.bechis@snb.it>
 
 	* MIMEDefang 3.5 RELEASED
