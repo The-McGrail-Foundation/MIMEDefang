@@ -126,7 +126,11 @@ sub md_arc_sign {
       my $warn = $_[0];
       $warn =~ s/\n//g;
       $warn =~ s/\bat .{10,100} line \d+\.//g;
-      md_syslog("Warning", "md_arc_sign: $warn");
+      if($warn =~ /message not signed/) {
+        md_syslog("Warning", "md_arc_sign: cannot ARC sign a message that is not DKIM signed");
+      } else {
+        md_syslog("Warning", "md_arc_sign: $warn");
+      }
     };
     # or read an email and pass it into the signer, one line at a time
     while (<$fh>) {
