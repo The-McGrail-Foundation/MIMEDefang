@@ -41,13 +41,28 @@ our @EXPORT_OK = qw(get_host_name get_ptr_record md_init);
 sub md_init {
   my $digest_md5 = 0;
   my $digest_sha = 0;
+  local $@;
   if (!defined($Features{"Digest::MD5"}) or ($Features{"Digest::MD5"} eq 1)) {
-    (eval 'use Digest::MD5 qw(md5_hex); $digest_md5 = 1;')
-    or $digest_md5 = 0;
+    eval {
+      require Digest::MD5;
+      $digest_md5 = 1;
+    };
+    if($@) {
+      $digest_md5 = 0;
+    } else {
+      Digest::MD5->import(qw(md5_hex));
+    }
   }
   if (!defined($Features{"Digest::SHA"}) or ($Features{"Digest::SHA"} eq 1)) {
-    (eval 'use Digest::SHA qw(sha1_hex); $digest_sha = 1;')
-    or $digest_sha = 0;
+    eval {
+      require Digest::SHA;
+      $digest_sha = 1;
+    };
+    if($@) {
+      $digest_sha = 0;
+    } else {
+      Digest::SHA->import(qw(sha1_hex));
+    }
   }
   $Features{"Digest::MD5"} = $digest_md5;
   $Features{"Digest::SHA"} = $digest_sha;

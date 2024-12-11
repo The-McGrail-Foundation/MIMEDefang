@@ -213,9 +213,9 @@ sub spam_assassin_mail {
 	return;
     }
 
-    open(IN, "<", "./INPUTMSG") or return;
-    my @msg = <IN>;
-    close(IN);
+    open(my $in, "<", "./INPUTMSG") or return;
+    my @msg = <$in>;
+    close($in);
 
     # Synthesize a "Return-Path" and "Received:" header
     my @sahdrs;
@@ -268,7 +268,15 @@ sub md_spamc_init {
     my ($host, $port, $spamc_user, $spamc_max_size) = @_;
 
     my $spamc;
-    (eval 'use Mail::SpamAssassin::Client (); $spamc = 1;') or $spamc = 0;
+    eval {
+      require Mail::SpamAssassin::Client;
+      $spamc = 1;
+    };
+    if($@) {
+      $spamc = 0;
+    } else {
+      Mail::SpamAssassin::Client->import();
+    }
     if($spamc eq 0) {
       md_syslog('err', "Attempt to call Apache SpamAssassin function, but Apache SpamAssassin is not installed.");
       return;
@@ -338,9 +346,9 @@ sub md_spamc_check {
       return;
     }
 
-    open(IN, "<", "./INPUTMSG") or return;
-    my @msg = <IN>;
-    close(IN);
+    open(my $in, "<", "./INPUTMSG") or return;
+    my @msg = <$in>;
+    close($in);
 
     # Synthesize a "Return-Path" and "Received:" header
     my @sahdrs;
@@ -423,8 +431,19 @@ sub rspamd_check {
     $uri = 'http://127.0.0.1:11333' if not defined $uri;
 
     # Check if required modules are available
+    local $@;
     my $rspamc;
-    (eval 'use JSON (); use LWP::UserAgent (); $rspamc = 1;') or $rspamc = 0;
+    eval {
+      require JSON;
+      require LWP::UserAgent;
+      $rspamc = 1;
+    };
+    if($@) {
+      $rspamc = 0;
+    } else {
+      JSON->import();
+      LWP::UserAgent->import();
+    }
 
     unless ($Features{"Path:RSPAMC"} or $rspamc = 1) {
         md_syslog('err', "Attempt to call Rspamd function, but Rspamd is not installed or JSON and LWP modules not available.");
@@ -475,9 +494,9 @@ sub rspamd_check {
       my @rs = ($Features{"Path:RSPAMC"}, "./INPUTMSG");
 
       if ( -f $Features{"Path:RSPAMC"} ) {
-        open(RSPAMD_PIPE, "-|", @rs)
+        open(my $rspamd_pipe, "-|", @rs)
                         || croak "can't open rspamc: $!";
-        while(<RSPAMD_PIPE>) {
+        while(<$rspamd_pipe>) {
           $rp = $_;
           {
             if($rp =~ /Action: (.*)/) {
@@ -503,7 +522,7 @@ sub rspamd_check {
           $report .= $rp . "\n";
         }
         $tests =~ s/\, $//;
-        close(RSPAMD_PIPE);
+        close($rspamd_pipe);
       }
     }
 
