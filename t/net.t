@@ -104,4 +104,11 @@ sub t_email_is_blacklisted : Test(1)
   }
 }
 
+sub t_md_get_bogus_mx_hosts : Test(1)
+{
+  my $domain = 'multihomed.dnsbltest.spamassassin.org';
+  my @res = md_get_bogus_mx_hosts($domain);
+  is(scalar @res, 1);
+}
+
 __PACKAGE__->runtests();
