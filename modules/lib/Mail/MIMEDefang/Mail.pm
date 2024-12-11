@@ -89,32 +89,33 @@ sub resend_message_specifying_mode {
   }
 
   # Fork and exec for safety instead of involving shell
-  my $pid = open(CHILD, "|-");
+  my $pid = open(my $child, "|-");
   if (!defined($pid)) {
 	  md_syslog('err', "Cannot fork to resend message");
 	  return 0;
   }
 
   if ($pid) {   # In the parent -- pipe mail message to the child
-	  unless (open(IN, "<", "INPUTMSG")) {
+	  my $in;
+	  unless (open($in, "<", "INPUTMSG")) {
 	    md_syslog('err', "Could not open INPUTMSG in resend_message: $!");
 	    return 0;
 	  }
 
 	  # Preserve relay's IP address if possible...
 	  if ($ValidateIPHeader =~ /^X-MIMEDefang-Relay/) {
-	    print CHILD "$ValidateIPHeader: $RelayAddr\n"
+	    print $child "$ValidateIPHeader: $RelayAddr\n"
 	  }
 
 	  # Synthesize a Received: header
-	  print CHILD synthesize_received_header();
+	  print $child synthesize_received_header();
 
 	  # Copy message over
-	  while(<IN>) {
-	    print CHILD;
+	  while(<$in>) {
+	    print $child;
 	  }
-	  close(IN);
-	  if (!close(CHILD)) {
+	  close($in);
+	  if (!close($child)) {
 	    if ($!) {
 		    md_syslog('err', "sendmail failure in resend_message: $!");
 	    } else {
@@ -129,7 +130,7 @@ sub resend_message_specifying_mode {
 
   # Direct stdout to stderr, or we will screw up communication with
   # the multiplexor..
-  open(STDOUT, ">&STDERR");
+  open(STDOUT, ">&", \*STDERR);
 
   my(@cmd);
   if ($Sender eq "") {
@@ -221,12 +222,12 @@ sub pretty_print_mail {
 	  return $chunk unless (defined($body));
 	  my($path) = $body->path;
 	  return $chunk unless (defined($path));
-	  return $chunk unless (open(IN, "<", "$path"));
-	  while (<IN>) {
+	  return $chunk unless (open(my $in, "<", "$path"));
+	  while (<$in>) {
 	    $chunk .= $_;
 	    last if (length($chunk) >= $size);
 	  }
-	  close(IN);
+	  close($in);
   }
   return $chunk;
 }
