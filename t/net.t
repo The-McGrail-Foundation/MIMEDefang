@@ -111,4 +111,11 @@ sub t_md_get_bogus_mx_hosts : Test(1)
   is(scalar @res, 1);
 }
 
+sub t_get_mx_ip_addresses : Test(1)
+{
+  my $domain = 'mimedefang.org';
+  my @res = get_mx_ip_addresses($domain);
+  is(scalar @res, 2);
+}
+
 __PACKAGE__->runtests();
