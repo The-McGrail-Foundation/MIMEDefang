@@ -161,17 +161,18 @@ sub copy_or_link {
     return 1 if link($src, $dst);
 
     # Link failed; do it the hard way
-    open(IN, "<", "$src") or return 0;
-    if (!open(OUT, ">", "$dst")) {
-        close(IN);
+    my ($in,$out);
+    open($in, "<", "$src") or return 0;
+    if (!open($out, ">", "$dst")) {
+        close($in);
         return 0;
     }
     my($n, $string);
-    while (($n = read(IN, $string, 4096)) > 0) {
-        print OUT $string;
+    while (($n = read($in, $string, 4096)) > 0) {
+        print $out $string;
     }
-    close(IN);
-    close(OUT);
+    close($in);
+    close($out);
     return 1;
 }
 
@@ -363,9 +364,9 @@ sub re_match_in_7zip_directory {
   }
 
   if ( -f $zname ) {
-    open(UNZ_PIPE, "-|", @unz_args)
+    open(my $unz_pipe, "-|", @unz_args)
                         || croak "can't open @unz_args|: $!";
-    while(<UNZ_PIPE>) {
+    while(<$unz_pipe>) {
       $rf = $_;
       if ( $beginmark and ( $rf !~ /^\-\-\-/ ) ) {
         $rf =~ /([0-9-]+)\s+([0-9\:]+)\s+([\.[A-Za-z]+)\s+([0-9]+)\s+([0-9]+)\s+(.*)/;
@@ -375,7 +376,7 @@ sub re_match_in_7zip_directory {
       last if ( $beginmark and ( $rf !~ /^\-\-\-/ ) );
       $beginmark = 1 if ( $rf =~ /^\-\-\-/ );
     }
-    close(UNZ_PIPE);
+    close($unz_pipe);
   }
 
   return 0;
@@ -422,15 +423,15 @@ sub re_match_in_tgz_directory {
   }
 
   if ( -f $zname ) {
-    open(UNZ_PIPE, "-|", @unz_args)
+    open(my $tar_pipe, "-|", @unz_args)
                         || croak "can't open @unz_args|: $!";
-    while(<UNZ_PIPE>) {
+    while(<$tar_pipe>) {
       if(/(?:[a-z-]+)\s+(?:.*)\s+(?:\d+)\s+(?:\d+\-\d+\-\d+)\s+(?:\d+\:\d+)\s+(.*)/) {
         $file = $1;
-              return 1 if ((defined $file) and ($file =~ /$regexp/i));
+        return 1 if ((defined $file) and ($file =~ /$regexp/i));
       }
     }
-    close(UNZ_PIPE);
+    close($tar_pipe);
   }
 
   return 0;
@@ -459,8 +460,15 @@ sub dummy_zip_error_handler {} ;
 sub md_init {
   my $use_zip = 0;
   if (!defined($Features{"Archive::Zip"}) or ($Features{"Archive::Zip"} eq 1)) {
-    (eval 'use Archive::Zip qw( :ERROR_CODES ); $use_zip = 1;')
-    or $use_zip = 0;
+    eval {
+      require Archive::Zip;
+    };
+    if($@) {
+      $use_zip = 0;
+    } else {
+      Archive::Zip->import(qw(:ERROR_CODES));
+      $use_zip = 1;
+    }
   }
   $Features{"Archive::Zip"} = $use_zip;
 }
@@ -505,9 +513,11 @@ as a valid mbox file.
 #***********************************************************************
 sub md_copy_orig_msg_to_work_dir_as_mbox_file {
   return if (!in_message_context("md_copy_orig_msg_to_work_dir_as_mbox_file"));
-  open(IN, "<", "INPUTMSG") or return 0;
-  unless (open(OUT, ">", "Work/INPUTMBOX")) {
-	  close(IN);
+
+  my ($in, $out);
+  open($in, "<", "INPUTMSG") or return 0;
+  unless (open($out, ">", "Work/INPUTMBOX")) {
+	  close($in);
 	  return 0;
   }
 
@@ -516,13 +526,13 @@ sub md_copy_orig_msg_to_work_dir_as_mbox_file {
   $s =~ s/^<//;
   $s =~ s/>$//;
 
-  print OUT "From $s " . Mail::MIMEDefang::RFC2822::rfc2822_date($CachedTimezone) . "\n";
+  print $out "From $s " . Mail::MIMEDefang::RFC2822::rfc2822_date($CachedTimezone) . "\n";
   my($n, $string);
-  while (($n = read(IN, $string, 4096)) > 0) {
-	  print OUT $string;
+  while (($n = read($in, $string, 4096)) > 0) {
+    print $out $string;
   }
-  close(IN);
-  close(OUT);
+  close($in);
+  close($out);
   return 1;
 }
 
