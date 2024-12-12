@@ -319,9 +319,9 @@ sub re_match_in_rar_directory {
     while(<$unrar_pipe>) {
       $rf = $_;
       if ( $beginmark and ( $rf !~ /^\-\-\-/ ) ) {
-        $rf =~ /([12]\d{3}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]))\s(\d+\:\d+)\s+(.*)/;
-        $file = $5;
-	      return 1 if ((defined $file) and ($file =~ /$regexp/i));
+        $rf =~ /(?:[12]\d{3}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01]))\s(?:\d+\:\d+)\s+(.*)/;
+        $file = $1;
+        return 1 if ((defined $file) and ($file =~ /$regexp/i));
       }
       last if ( $beginmark and ( $rf !~ /^\-\-\-/ ) );
       $beginmark = 1 if ( $rf =~ /^\-\-\-/ );
