@@ -314,9 +314,9 @@ sub re_match_in_rar_directory {
   }
 
   if ( -f $rarname ) {
-    open(UNRAR_PIPE, "-|", @unrar_args)
+    open(my $unrar_pipe, "-|", @unrar_args)
                         || croak "can't open @unrar_args|: $!";
-    while(<UNRAR_PIPE>) {
+    while(<$unrar_pipe>) {
       $rf = $_;
       if ( $beginmark and ( $rf !~ /^\-\-\-/ ) ) {
         $rf =~ /([12]\d{3}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]))\s(\d+\:\d+)\s+(.*)/;
@@ -326,7 +326,7 @@ sub re_match_in_rar_directory {
       last if ( $beginmark and ( $rf !~ /^\-\-\-/ ) );
       $beginmark = 1 if ( $rf =~ /^\-\-\-/ );
     }
-    close(UNRAR_PIPE);
+    close($unrar_pipe);
   }
 
   return 0;
