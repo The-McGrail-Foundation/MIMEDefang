@@ -167,9 +167,9 @@ sub append_to_part {
   return 0 unless defined($part->bodyhandle);
   my($path) = $part->bodyhandle->path;
   return 0 unless (defined($path));
-  return 0 unless (open(OUT, ">>", "$path"));
-  print OUT "\n$boilerplate\n";
-  close(OUT);
+  return 0 unless (open(my $OUT, ">>", "$path"));
+  print $OUT "\n$boilerplate\n";
+  close($OUT);
   $Changed = 1;
   return 1;
 }
@@ -245,26 +245,26 @@ sub remove_redundant_html_parts {
 
 # HTML parser callbacks
 sub html_echo {
-  my($text) = @_;
-  print OUT $text;
+  my($p, $text) = @_;
+  $p->{ofh}->print($text);
 }
 
 sub html_end {
-  my($text) = @_;
+  my($p, $text) = @_;
   if (!$HTMLFoundEndBody) {
   	if ($text =~ m+<\s*/body+i) {
-	    print OUT "$HTMLBoilerplate\n";
+	    $p->{ofh}->print("$HTMLBoilerplate\n");
 	    $HTMLFoundEndBody = 1;
 	  }
   }
   if (!$HTMLFoundEndBody) {
 	  if ($text =~ m+<\s*/html+i) {
-	    print OUT "$HTMLBoilerplate\n";
+	    $p->{ofh}->print("$HTMLBoilerplate\n");
 	    $HTMLFoundEndBody = 1;
 	  }
   }
 
-  print OUT $text;
+  $p->{ofh}->print($text);
 }
 
 =item append_to_html_part
@@ -288,6 +288,7 @@ parsing HTML and adding the text before </body> or </html> tags.
 sub append_to_html_part {
   my($part, $boilerplate) = @_;
 
+  my ($ifh, $ofh);
   if (!$Features{"HTML::Parser"}) {
 	  md_syslog('warning', "Attempt to call append_to_html_part, but HTML::Parser Perl module not installed");
 	  return 0;
@@ -295,9 +296,9 @@ sub append_to_html_part {
   return 0 unless defined($part->bodyhandle);
   my($path) = $part->bodyhandle->path;
   return 0 unless (defined($path));
-  return 0 unless (open(IN, "<", "$path"));
-  if (!open(OUT, ">", "$path.tmp")) {
-	  close(IN);
+  return 0 unless (open($ifh, "<", "$path"));
+  if (!open($ofh, ">", "$path.tmp")) {
+	  close($ifh);
 	  return(0);
   }
 
@@ -305,15 +306,20 @@ sub append_to_html_part {
   $HTMLBoilerplate = $boilerplate;
   my($p);
   $p = HTML::Parser->new(api_version => 3,
-		   default_h   => [\&html_echo, "text"],
-		   end_h       => [\&html_end,  "text"]);
+		   default_h   => [\&html_echo, "self,text"],
+		   end_h       => [\&html_end,  "self,text"]);
+
+  $p->{ifh} = $ifh;
+  $p->{ofh} = $ofh;
+
   $p->unbroken_text(1);
-  $p->parse_file(*IN);
+  $p->parse_file($ifh);
   if (!$HTMLFoundEndBody) {
-	  print OUT "\n$boilerplate\n";
+	  print $ofh "\n$boilerplate\n";
   }
-  close(IN);
-  close(OUT);
+
+  close($ifh);
+  close($ofh);
 
   # Rename the path
   return 0 unless rename($path, "$path.old");
@@ -473,22 +479,22 @@ sub _anonymize_text_uri {
 }
 
 sub html_utm_filter {
-  my($text) = @_;
+  my($p, $text) = @_;
 
   my $nline;
   if($text =~ /https?\:\/\/.{3,512}\/(.{1,30})?(\&|\?)utm([_a-z0-9=]+)/) {
     my @params = split(/(\?|\&|\s+|\>|\"|\')/, $text);
-    foreach my $p ( @params ) {
-      if($p =~ /(\?|\&)?utm_.{1,20}\=.{1,64}/) {
+    foreach my $par ( @params ) {
+      if($par =~ /(\?|\&)?utm_.{1,20}\=.{1,64}/) {
         next;
       } else {
-        $nline .= $p;
+        $nline .= $par;
       }
     }
     $nline =~ s/(\&{2,}|\?{2,}|\n)//g;
-    print OUT $nline;
+    $p->{ofh}->print($nline);
   } else {
-    print OUT $text;
+    $p->{ofh}->print($text);
   }
 }
 
@@ -500,24 +506,29 @@ sub _anonymize_html_uri {
           return 0;
   }
 
+  my ($ifh, $ofh);
   return 0 unless defined($part->bodyhandle);
   my($path) = $part->bodyhandle->path;
   return 0 unless (defined($path));
-  return 0 unless (open(IN, "<", "$path"));
-  if (!open(OUT, ">", "$path.tmp")) {
-          close(IN);
+  return 0 unless (open($ifh, "<", "$path"));
+  if (!open($ofh, ">", "$path.tmp")) {
+          close($ifh);
           return(0);
   }
 
-  my($p);
+  my $p;
   $p = HTML::Parser->new(api_version => 3,
-                         default_h   => [\&html_utm_filter, "text"],
-                         end_h       => [\&html_echo,  "text"]);
-  $p->unbroken_text(1);
-  $p->parse_file(*IN);
+                         default_h   => [\&html_utm_filter, "self,text"],
+                         end_h       => [\&html_echo,  "self,text"]);
 
-  close(IN);
-  close(OUT);
+  $p->{ifh} = $ifh;
+  $p->{ofh} = $ofh;
+
+  $p->unbroken_text(1);
+  $p->parse_file($ifh);
+
+  close($ifh);
+  close($ofh);
 
   # Rename the path
   return 0 unless rename($path, "$path.old");
