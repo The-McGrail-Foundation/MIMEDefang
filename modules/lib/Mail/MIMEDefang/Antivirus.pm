@@ -1011,7 +1011,8 @@ sub message_contains_virus_fprotd_v6
     my($host) = @_;
     $host ||= $Fprotd6Host;
 
-    if (!opendir(my $dir, "./Work")) {
+    my $dir;
+    if (!opendir($dir, "./Work")) {
 	md_syslog('err', "message_contains_virus_fprotd_v6: Could not open ./Work directory: $!");
 	return (wantarray ? (999, 'swerr', 'tempfail') : 1);
     }
@@ -1046,7 +1047,8 @@ sub message_contains_virus_carrier_scan {
     $host = shift if (@_ > 0);
     $host = '127.0.0.1:7777:local' if (!defined($host));
 
-    if (!opendir(my $dir, "./Work")) {
+    my $dir;
+    if (!opendir($dir, "./Work")) {
 	md_syslog('err', "message_contains_virus_carrier_scan: Could not open ./Work directory: $!");
 	return (wantarray ? (999, 'swerr', 'tempfail') : 1);
     }
