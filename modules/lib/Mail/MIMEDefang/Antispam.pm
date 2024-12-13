@@ -461,7 +461,7 @@ sub rspamd_check {
 
       # slurp the mail message
       open my $fh, '<', "./INPUTMSG" or return;
-      $/ = undef;
+      local $/;
       my $mail = <$fh>;
       close $fh;
       my $req = HTTP::Request->new(POST => "$uri/checkv2");
