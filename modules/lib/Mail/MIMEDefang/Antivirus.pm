@@ -874,6 +874,7 @@ sub scan_file_using_carrier_scan {
     }
 
     # Cool; send our stuff!
+    my $in;
     if ($local) {
 	if (!$sock->print("Version 2\nAVSCANLOCAL\n$fname\n")) {
 	    $sock->close;
@@ -893,7 +894,7 @@ sub scan_file_using_carrier_scan {
 	    $sock->close;
 	    return (999, 'swerr', 'tempfail');
 	}
-	unless(open(IN, "<", "$fname")) {
+	unless(open($in, "<", "$fname")) {
 	    md_syslog('warning', "Cannot open $fname: $!");
 	    $sock->close;
 	    return(999, 'swerr', 'tempfail');
@@ -904,17 +905,17 @@ sub scan_file_using_carrier_scan {
 	    } else {
 		$chunksize = 8192;
 	    }
-	    $nread = read(IN, $chunk, $chunksize);
+	    $nread = read($in, $chunk, $chunksize);
 	    unless(defined($nread)) {
 		md_syslog('warning', "Error reading $fname: $!");
 		$sock->close;
-                close(IN);
+                close($in);
 		return(999, 'swerr', 'tempfail');
 	    }
 	    last if ($nread == 0);
 	    if (!$sock->print($chunk)) {
 		$sock->close;
-                close(IN);
+                close($in);
 		return (999, 'swerr', 'tempfail');
 	    }
 	    $size -= $nread;
@@ -922,13 +923,13 @@ sub scan_file_using_carrier_scan {
 	if ($size > 0) {
 	    md_syslog('warning', "Error reading $fname: $!");
 	    $sock->close;
-            close(IN);
+            close($in);
 	    return(999, 'swerr', 'tempfail');
 	}
     }
     if (!$sock->flush) {
 	$sock->close;
-        close(IN);
+        close($in);
 	return (999, 'swerr', 'tempfail');
     }
 
@@ -938,7 +939,7 @@ sub scan_file_using_carrier_scan {
     unless ($line =~ /^230/) {
 	md_syslog('warning', "Unexpected response to AVSCAN or AVSCANLOCAL command: $line");
 	$sock->close;
-        close(IN);
+        close($in);
 	return(999, 'swerr', 'tempfail');
     }
     # Get infection status
@@ -946,7 +947,7 @@ sub scan_file_using_carrier_scan {
     $line =~ s/\r//g;
     if ($line == 0) {
 	$sock->close;
-        close(IN);
+        close($in);
 	return (0, 'ok', 'ok');
     }
 
@@ -959,7 +960,7 @@ sub scan_file_using_carrier_scan {
     # Get virus name
     chomp($line = $sock->getline);
     $line =~ s/\r//g;
-    close(IN);
+    close($in);
     $sock->close;
 
     $VirusName = $line;
@@ -1010,15 +1011,15 @@ sub message_contains_virus_fprotd_v6
     my($host) = @_;
     $host ||= $Fprotd6Host;
 
-    if (!opendir(DIR, "./Work")) {
+    if (!opendir(my $dir, "./Work")) {
 	md_syslog('err', "message_contains_virus_fprotd_v6: Could not open ./Work directory: $!");
 	return (wantarray ? (999, 'swerr', 'tempfail') : 1);
     }
 
     # Scan all files in Work
     my(@files);
-    @files = grep { -f "./Work/$_" } readdir(DIR);
-    closedir(DIR);
+    @files = grep { -f "./Work/$_" } readdir($dir);
+    closedir($dir);
 
     my($code, $category, $action);
     foreach my $file (@files) {
@@ -1045,15 +1046,15 @@ sub message_contains_virus_carrier_scan {
     $host = shift if (@_ > 0);
     $host = '127.0.0.1:7777:local' if (!defined($host));
 
-    if (!opendir(DIR, "./Work")) {
+    if (!opendir(my $dir, "./Work")) {
 	md_syslog('err', "message_contains_virus_carrier_scan: Could not open ./Work directory: $!");
 	return (wantarray ? (999, 'swerr', 'tempfail') : 1);
     }
 
     # Scan all files in Work
     my(@files);
-    @files = grep { -f "./Work/$_" } readdir(DIR);
-    closedir(DIR);
+    @files = grep { -f "./Work/$_" } readdir($dir);
+    closedir($dir);
 
     my($code, $category, $action);
     foreach my $file (@files) {
@@ -3003,25 +3004,27 @@ sub run_virus_scanner {
     $CurrentVirusScannerMessage = "";
 
     $match = ".*" unless defined($match);
-    unless (open(SCANNER, "$cmd |")) {
+    my $scanner;
+    unless (open($scanner, "-|", "$cmd")) {
 	$msg = "Unable to execute $cmd: $!";
 	md_syslog('err', "run_virus_scanner: $msg");
 	$VirusScannerMessages .= "$msg\n";
 	$CurrentVirusScannerMessage = $msg;
 	return (999, 'cannot-execute', 'tempfail');
     }
-    while(<SCANNER>) {
+    while(<$scanner>) {
 	$msg .= $_ if /$match/i;
     }
-    close(SCANNER);
+    close($scanner);
     $retcode = $? / 256;
 
     # Some daemons are instructed to save output in a file
-    if (open(REPORT, "<", "DAEMON.RPT")) {
-	while(<REPORT>) {
+    my $report;
+    if (open($report, "<", "DAEMON.RPT")) {
+	while(<$report>) {
 	    $msg .= $_ if /$match/i;
 	}
-	close(REPORT);
+	close($report);
 	unlink("DAEMON.RPT");
     }
 
