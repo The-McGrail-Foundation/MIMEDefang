@@ -26,10 +26,11 @@ sub read_urandom($) {
   my $len = shift;
   my $junk;
 
+  my $in;
   if (-r "/dev/urandom") {
-    open(IN, "<", "/dev/urandom");
-    read(IN, $junk, $len);
-    close(IN);
+    open($in, "<", "/dev/urandom");
+    read($in, $junk, $len);
+    close($in);
   }
 
   return $junk;
