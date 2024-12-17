@@ -211,14 +211,21 @@ Prints a message to syslog(3) using the specified facility
 	{
 		my ($tag, $facility) = @_;
 
+		local $@;
 		if( ! defined $_openlogsub ) {
 			# Try Unix::Syslog first, then Sys::Syslog
-			eval qq{use Unix::Syslog qw( :macros ); };
+			eval {
+			  require Unix::Syslog;
+			};
 			if(!$@) {
+				Unix::Syslog->import(qw( :macros ));
 				($_openlogsub, $_syslogsub) = _wrap_for_unix_syslog();
 			} else {
-				eval qq{use Sys::Syslog ();};
+				eval {
+				  require Sys::Syslog;
+				};
 				if(!$@) {
+					Sys::Syslog->import();
 					($_openlogsub, $_syslogsub) = _wrap_for_sys_syslog();
 				} else {
 					croak q{Unable to detect either Unix::Syslog or Sys::Syslog};
@@ -342,6 +349,7 @@ Prints a message to syslog(3) using the specified facility
         sub _fac_to_num
 	{
 		my ($thing) = @_;
+		local $@;
 		return if exists $blacklisted{$thing};
 		$thing = $special{$thing} if exists $special{$thing};
 		$thing = 'LOG_' . uc($thing);
@@ -470,26 +478,55 @@ like SpamAssassin, rbl checks, zip file listing and HTML parsing.
 
 sub detect_and_load_perl_modules() {
     my ($use_sa, $use_html, $use_zip, $use_dns);
+    local $@;
     if (!defined($Features{"AutoDetectPerlModules"}) or
       $Features{"AutoDetectPerlModules"}) {
       if (!defined($Features{"SpamAssassin"}) or ($Features{"SpamAssassin"} eq 1)) {
-        (eval 'use Mail::SpamAssassin (); $use_sa = 1;')
-        or $use_sa = 0;
+        eval {
+	  require Mail::SpamAssassin;
+        };
+        if($@) {
+	  $use_sa = 0;
+	} else {
+	  Mail::SpamAssassin->import();
+	  $use_sa = 1;
+	}
       }
       $Features{"SpamAssassin"} = $use_sa;
       if (!defined($Features{"HTML::Parser"}) or ($Features{"HTML::Parser"} eq 1)) {
-        (eval 'use HTML::Parser; $use_html = 1;')
-        or $use_html = 0;
+        eval {
+	  require HTML::Parser;
+	};
+	if($@) {
+	  $use_html = 0;
+	} else {
+	  HTML::Parser->import();
+	  $use_html = 1;
+	}
       }
       $Features{"HTML::Parser"} = $use_html;
       if (!defined($Features{"Archive::Zip"}) or ($Features{"Archive::Zip"} eq 1)) {
-        (eval 'use Archive::Zip; $use_zip = 1;')
-        or $use_zip = 0;
+        eval {
+	  require Archive::Zip;
+        };
+	if($@) {
+	  $use_zip = 0;
+	} else {
+	  Archive::Zip->import();
+	  $use_zip = 1;
+	}
       }
       $Features{"Archive::Zip"} = $use_zip;
       if (!defined($Features{"Net::DNS"}) or ($Features{"Net::DNS"} eq 1)) {
-        (eval 'use Net::DNS; $use_dns = 1;')
-        or $use_dns = 0;
+        eval {
+	  require Net::DNS;
+	};
+	if($@) {
+	  $use_dns = 0;
+	} else {
+	  Net::DNS->import();
+	  $use_dns = 1;
+        }
       }
       $Features{"Net::DNS"} = $use_dns;
       if(exists &Mail::MIMEDefang::Actions::md_init) {
@@ -549,7 +586,7 @@ sub init_status_tag
 {
 	return unless $DoStatusTags;
 
-	if(open(STATUS_HANDLE, ">&=3")) {
+	if(open(STATUS_HANDLE, ">&=", 3)) {
 		STATUS_HANDLE->autoflush(1);
 	} else {
 		$DoStatusTags = 0;
@@ -919,37 +956,38 @@ sub send_quarantine_notifications {
 	    $body .= "Recipient: $recip\n";
 	  }
  	  my $donemsg = 0;
+	  my $in;
 	  my $i;
 	  for ($i=0; $i<=$QuarantineCount; $i++) {
-	    if (open(IN, "<", "$QuarantineSubdir/MSG.$i")) {
+	    if (open($in, "<", "$QuarantineSubdir/MSG.$i")) {
 		    if (!$donemsg) {
 		      $body .= "Quarantine Messages:\n";
 		      $donemsg = 1;
 	 	    }
-		    while(<IN>) {
+		    while(<$in>) {
 		      $body .= $_;
 		    }
-		    close(IN);
+		    close($in);
 	    }
 	  }
 	  if ($donemsg) {
 	    $body .= "\n";
 	  }
 
-	  if (open(IN, "<", "$QuarantineSubdir/HEADERS")) {
+	  if (open($in, "<", "$QuarantineSubdir/HEADERS")) {
 	    $body .= "\n----------\nHere are the message headers:\n";
-	    while(<IN>) {
+	    while(<$in>) {
 		    $body .= $_;
 	    }
-	    close(IN);
+	    close($in);
 	  }
 	  for ($i=1; $i<=$QuarantineCount; $i++) {
-	    if (open(IN, "<", "$QuarantineSubdir/PART.$i.HEADERS")) {
+	    if (open($in, "<", "$QuarantineSubdir/PART.$i.HEADERS")) {
 		    $body .= "\n----------\nHere are the headers for quarantined part $i:\n";
-		    while(<IN>) {
+		    while(<$in>) {
 		      $body .= $_;
 		    }
-		    close(IN);
+		    close($in);
 	    }
 	  }
 	  if ($#Warnings >= 0) {
@@ -1000,14 +1038,15 @@ sub signal_complete {
       }
       $body .= "\n\n";
     }
-    if (open(FILE, "<", "NOTIFICATION")) {
+    my $notify;
+    if (open($notify, "<", "NOTIFICATION")) {
       unless($NotifyNoPreamble) {
 	    $body .= "Here are the details of the modification:\n\n";
       }
-      while(<FILE>) {
+      while(<$notify>) {
 	    $body .= $_;
       }
-      close(FILE);
+      close($notify);
     }
     my $mime = MIME::Entity->build(
       From => "\"$DaemonName\" <$DaemonAddress>",
@@ -1022,11 +1061,12 @@ sub signal_complete {
   }
 
   # Send notification to administrator, if required
+  my $adm_notify;
   if (-r "ADMIN_NOTIFICATION") {
 	my $body = "";
-	  if (open(FILE, "<", "ADMIN_NOTIFICATION")) {
-	    $body .= join('', <FILE>);
-	    close(FILE);
+	  if (open($adm_notify, "<", "ADMIN_NOTIFICATION")) {
+	    $body .= join('', <$adm_notify>);
+	    close($adm_notify);
 	    send_admin_mail($NotifyAdministratorSubject, $body);
 	  }
   }
@@ -1090,15 +1130,16 @@ sub send_mail {
   my($pid);
 
   # Fork and exec for safety instead of involving shell
-  $pid = open(CHILD, "|-");
+  my $ch;
+  $pid = open($ch, "|-");
   if (!defined($pid)) {
 	  md_syslog('err', "Cannot fork to run sendmail");
 	  return;
   }
 
   if ($pid) {   # In the parent -- pipe mail message to the child
-	  print CHILD $body;
-	  close(CHILD);
+	  print $ch $body;
+	  close($ch);
 	  return;
   }
 
@@ -1268,7 +1309,8 @@ sub read_commands_file {
     my $needF = shift;
     $needF = 0 unless defined($needF);
 
-    if (!open(IN, "<", "COMMANDS")) {
+    my $in;
+    if (!open($in, "<", "COMMANDS")) {
 	    fatal("Cannot open COMMANDS file from mimedefang: $!");
 	    return 0;
     }
@@ -1281,7 +1323,7 @@ sub read_commands_file {
     $seenF = 0;
     my $recent_recip = "";
 
-    while(<IN>) {
+    while(<$in>) {
 	    chomp;
 	    $rawcmd = $_;
 	    $cmd = percent_decode($rawcmd);
@@ -1361,7 +1403,7 @@ sub read_commands_file {
 	      md_syslog('warning', "Unknown command $cmd from mimedefang");
 	    }
     }
-    close(IN);
+    close($in);
 
     if ( $needF && !$seenF ) {
 	    md_syslog('err', "COMMANDS file from mimedefang did not terminate with 'F' -- check disk space in spool directory");
