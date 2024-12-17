@@ -318,15 +318,16 @@ sub action_delete_all_headers {
     $header .= ":";
     $header = lc($header);
 
-    return unless(open(HDRS, "<", "HEADERS"));
+    my $hdrs;
+    return unless(open($hdrs, "<", "HEADERS"));
 
     $count = 0;
-    while(<HDRS>) {
+    while(<$hdrs>) {
 	if (lc(substr($_, 0, $len)) eq $header) {
 	    $count++;
 	}
     }
-    close(HDRS);
+    close($hdrs);
 
     # Delete in REVERSE order, in case Sendmail updates
     # its count as headers are deleted... paranoid but safe.
@@ -654,15 +655,16 @@ sub action_quarantine {
     copy_or_link($body->path, "$QuarantineSubdir/PART.$QuarantineCount.BODY");
 
     # Save the part's headers
-    if (open(OUT, ">", "$QuarantineSubdir/PART.$QuarantineCount.HEADERS")) {
-	$entity->head->print(\*OUT);
-	close(OUT);
+    my $out;
+    if (open($out, ">", "$QuarantineSubdir/PART.$QuarantineCount.HEADERS")) {
+	$entity->head->print($out);
+	close($out);
     }
 
     # Save the messages
-    if (open(OUT, ">", "$QuarantineSubdir/MSG.$QuarantineCount")) {
-	print OUT "$msg\n";
-	close(OUT);
+    if (open($out, ">", "$QuarantineSubdir/MSG.$QuarantineCount")) {
+	print $out "$msg\n";
+	close($out);
     }
     return 1;
 }
@@ -730,31 +732,32 @@ sub get_quarantine_dir {
     }
 
     # Write the sender and recipient info
-    if (open(OUT, ">", "$QuarantineSubdir/SENDER")) {
-	print OUT "$Sender\n";
-	close(OUT);
+    my ($in, $out);
+    if (open($out, ">", "$QuarantineSubdir/SENDER")) {
+	print $out "$Sender\n";
+	close($out);
     }
-    if (open(OUT, ">", "$QuarantineSubdir/SENDMAIL-QID")) {
-	print OUT "$QueueID\n";
-	close(OUT);
+    if (open($out, ">", "$QuarantineSubdir/SENDMAIL-QID")) {
+	print $out "$QueueID\n";
+	close($out);
     }
 
-    if (open(OUT, ">", "$QuarantineSubdir/RECIPIENTS")) {
+    if (open($out, ">", "$QuarantineSubdir/RECIPIENTS")) {
 	foreach my $s (@Recipients) {
-	    print OUT "$s\n";
+	    print $out "$s\n";
 	}
-	close(OUT);
+	close($out);
     }
 
     # Copy message headers
-    if (open(OUT, ">", "$QuarantineSubdir/HEADERS")) {
-	if (open(IN, "<", "HEADERS")) {
-	    while(<IN>) {
-		print OUT;
+    if (open($out, ">", "$QuarantineSubdir/HEADERS")) {
+	if (open($in, "<", "HEADERS")) {
+	    while(<$in>) {
+		print $out;
 	    }
-	    close(IN);
+	    close($in);
 	}
-	close(OUT);
+	close($out);
     }
 
     return $QuarantineSubdir;
@@ -869,10 +872,11 @@ sub action_quarantine_entire_message {
     }
 
     $Actions{'quarantine_entire_message'}++;
+    my $out;
     if (defined($msg) && ($msg ne "")) {
-	if (open(OUT, ">", "$QuarantineSubdir/MSG.0")) {
-	    print OUT "$msg\n";
-	    close(OUT);
+	if (open($out, ">", "$QuarantineSubdir/MSG.0")) {
+	    print $out "$msg\n";
+	    close($out);
 	}
     }
 
@@ -969,9 +973,10 @@ sub action_notify_sender {
 	return 0;
     }
 
-    if (open(FILE, ">>", "NOTIFICATION")) {
-	print FILE $msg;
-	close(FILE);
+    my $notify;
+    if (open($notify, ">>", "NOTIFICATION")) {
+	print $notify $msg;
+	close($notify);
 	$Actions{'notify_sender'}++;
 	return 1;
     }
@@ -1001,9 +1006,10 @@ sub action_notify_administrator {
 	send_admin_mail($NotifyAdministratorSubject, $msg);
 	return 1;
     }
-    if (open(FILE, ">>", "ADMIN_NOTIFICATION")) {
-	print FILE $msg;
-	close(FILE);
+    my $adm_notify;
+    if (open($adm_notify, ">>", "ADMIN_NOTIFICATION")) {
+	print $adm_notify $msg;
+	close($adm_notify);
 	$Actions{'notify_administrator'}++;
 	return 1;
     }
@@ -1135,17 +1141,18 @@ sub action_replace_with_url {
     my($path);
     my($fname, $ext, $name, $url);
     my $extension = "";
+    my $in;
 
     return 0 unless in_filter_context("action_replace_with_url");
     return 0 unless defined($entity->bodyhandle);
     $path = $entity->bodyhandle->path;
     return 0 unless defined($path);
-    open(IN, "<", "$path") or return 0;
+    open($in, "<", "$path") or return 0;
 
     $ctx = Digest::SHA->new;
-    $ctx->addfile(*IN);
+    $ctx->addfile($in);
     $ctx->add($salt) if defined($salt);
-    close(IN);
+    close($in);
 
     $fname = takeStabAtFilename($entity);
     $fname = "" unless defined($fname);
@@ -1172,10 +1179,11 @@ sub action_replace_with_url {
     }
 
     # save optional Content-Disposition data
+    my $cdf;
     if (defined($cd_data) and ($cd_data ne "")) {
-	if (open CDF, ">", "$doc_root/.$name") {
-	    print CDF $cd_data;
-	    close CDF;
+	if (open $cdf, ">", "$doc_root/.$name") {
+	    print $cdf $cd_data;
+	    close $cdf;
 	    chmod 0644, "$doc_root/.$name";
 	}
     }
