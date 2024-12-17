@@ -458,6 +458,7 @@ matches regexp.
 sub dummy_zip_error_handler {} ;
 
 sub md_init {
+  local $@;
   my $use_zip = 0;
   if (!defined($Features{"Archive::Zip"}) or ($Features{"Archive::Zip"} eq 1)) {
     eval {

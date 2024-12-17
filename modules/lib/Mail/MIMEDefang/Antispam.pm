@@ -267,6 +267,7 @@ SpamAssassin server and the maximum size of the email message.
 sub md_spamc_init {
     my ($host, $port, $spamc_user, $spamc_max_size) = @_;
 
+    local $@;
     my $spamc;
     eval {
       require Mail::SpamAssassin::Client;
