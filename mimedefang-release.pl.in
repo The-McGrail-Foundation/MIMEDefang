@@ -152,22 +152,22 @@ sub make_message {
   my $use_zip = $params{zip};
 
   my @to;
-  open(TO,"<$dir/RECIPIENTS")
+  my $toh;
+  open($toh, "<", "$dir/RECIPIENTS")
     || croak("Can't read $dir/RECIPIENTS: $!");
-  while (<TO>) { chomp; push @to,$_; }
-  close(TO);
+  while (<$toh>) { chomp; push @to,$_; }
+  close($toh);
 
-  my $from;
-  open(FROM,"<$dir/SENDER")
+  my ($from, $fromh);
+  open($fromh, "<", "$dir/SENDER")
     || croak("Can't read $dir/SENDER: $!");
-  $from = <FROM>;
-  close(FROM);
+  $from = <$fromh>;
+  close($fromh);
 
-  my $subject;
-  my $date;
-  open(HEADER,"<$dir/HEADERS")
+  my ($date, $headerh, $subject);
+  open($headerh, "<", "$dir/HEADERS")
     || croak("Can't read $dir/HEADERS: $!");
-  while (<HEADER>) {
+  while (<$headerh>) {
     chomp;
     SWITCH: {
 	/Date:/ && do {
@@ -181,17 +181,18 @@ sub make_message {
 	};
     }
   }
-  close(HEADER);
+  close($headerh);
 
   # use subject passed as parameter
   if(defined($subj)) {
     $subject = $subj;
   }
 
-  opendir(FOLDER,"$dir")
+  my $folderh;
+  opendir($folderh, "$dir")
     || Error("Can't list $dir: $!");
-  my @files = readdir(FOLDER);
-  close(FOLDER);
+  my @files = readdir($folderh);
+  close($folderh);
 
   my $msg = MIME::Entity->build(
 		  From    => $DaemonAddress,
