@@ -322,10 +322,11 @@ sub main {
     }
 
     $ValidateIPHeader = "";
-    if (open(IN, '<', '@CONFDIR_EVAL@/mimedefang-ip-key')) {
-	$ValidateIPHeader = <IN>;
+    my $in;
+    if (open($in, '<', '@CONFDIR_EVAL@/mimedefang-ip-key')) {
+	$ValidateIPHeader = <$in>;
 	chomp($ValidateIPHeader);
-	close(IN);
+	close($in);
     }
 
     # These are set unconditionally; filter() can change them.
@@ -839,7 +840,8 @@ sub do_scan {
     $parser->filer($filer);
 
     # Parse the input stream:
-    if (!open(FILE, '<', $file)) {
+    my $fileh;
+    if (!open($fileh, '<', $file)) {
 	fatal("couldn't open $file: $!");
 	signal_complete();
 	return -1;
@@ -849,9 +851,9 @@ sub do_scan {
 	$parser->max_parts($MaxMIMEParts);
     }
     push_status_tag("Parsing Message");
-    $entity = $parser->parse(\*FILE);
+    $entity = $parser->parse($fileh);
     pop_status_tag();
-    close FILE;
+    close($fileh);
 
     if (!defined($entity) && $MaxMIMEParts > 0) {
 	# Message is too complex; bounce it
@@ -985,8 +987,9 @@ sub do_scan {
 	undef $FilterEndReplacementEntity;
     }
 
+    my $out;
     if ($Changed || $Rebuild) {
-	if (!open(OUT, ">", "NEWBODY")) {
+	if (!open($out, ">", "NEWBODY")) {
 	    fatal("Can't open NEWBODY: $!");
 	    signal_complete();
 	    return -1;
@@ -1002,9 +1005,9 @@ sub do_scan {
 		$rebuilt->make_singlepart();
 	}
 	push_status_tag("Writing new body");
-	$rebuilt->print_body(\*OUT);
+	$rebuilt->print_body($out);
 	pop_status_tag();
-	close(OUT);
+	close($out);
 
 
 	# Write new content-type header in case we've changed the type.
