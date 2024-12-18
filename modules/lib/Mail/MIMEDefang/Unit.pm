@@ -84,6 +84,25 @@ sub smtp_mail
   return $messages;
 }
 
+=item get_abs_path
+
+Method which returns the absolute path of a file by reading $PATH.
+
+=cut
+
+sub get_abs_path {
+  my $prog = shift;
+
+  my $full_path;
+  for my $dir (split(':', $ENV{PATH})) {
+    $full_path = "$dir/$prog";
+    if (-x $full_path) {
+      return $full_path;
+    }
+  }
+  return;
+}
+
 =back
 
 =cut

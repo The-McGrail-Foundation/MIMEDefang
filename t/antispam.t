@@ -16,15 +16,8 @@ sub md_spamc : Test(1)
     if ( -f "/.dockerenv" or (defined $ENV{GITHUB_ACTIONS}) ) {
       skip "Spamd test disabled on Docker", 1
     }
-    my $spamd = 'spamd';
-    for my $dir (split(':', $ENV{PATH})) {
-      my $full_path = "$dir/$spamd";
-      if (-x $full_path) {
-        $spamd = $full_path;
-        last;
-      }
-    }
-    if(not -f $spamd) {
+    my $spamd = Mail::MIMEDefang::Unit::get_abs_path('spamd');
+    if(not defined $spamd or not -f $spamd) {
       skip "Spamd binary not found", 1
     }
     init_globals();
@@ -46,15 +39,8 @@ sub md_rspamd : Test(1)
     if ( -f "/.dockerenv" or (defined $ENV{GITHUB_ACTIONS}) ) {
       skip "Spamd test disabled on Docker", 1
     }
-    my $rspamd = 'rspamd';
-    for my $dir (split(':', $ENV{PATH})) {
-      my $full_path = "$dir/$rspamd";
-      if (-x $full_path) {
-        $rspamd = $full_path;
-        last;
-      }
-    }
-    if(not -f $rspamd) {
+    my $rspamd = Mail::MIMEDefang::Unit::get_abs_path('rspamd');
+    if(not defined $rspamd or not -f $rspamd) {
       skip "Rspamd binary not found", 1
     }
     init_globals();
