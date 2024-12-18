@@ -128,6 +128,7 @@ t/data/md.conf
 t/data/mimedefang-test-filter
 t/data/multipart.eml
 t/data/spf1.eml
+t/data/rspamd.conf
 t/data/uri-html.eml
 t/data/uri.eml
 t/data/tgz.eml
@@ -137,6 +138,7 @@ t/dkim.t
 t/dockerPostfix.sh
 t/dockerSendmail.sh
 t/headers.t
+t/critic.t
 t/mime.t
 t/net.t
 t/relay.t
