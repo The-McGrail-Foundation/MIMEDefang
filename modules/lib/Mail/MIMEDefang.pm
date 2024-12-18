@@ -1147,7 +1147,7 @@ sub send_mail {
 
   # Direct stdout to stderr, or we will screw up communication with
   # the multiplexor..
-  open(STDOUT, ">&STDERR");
+  open(STDOUT, ">&", \*STDERR);
 
   my(@cmd);
   if ($fromAddr ne "") {
