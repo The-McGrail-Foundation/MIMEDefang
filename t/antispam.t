@@ -16,8 +16,19 @@ sub md_spamc : Test(1)
     if ( -f "/.dockerenv" or (defined $ENV{GITHUB_ACTIONS}) ) {
       skip "Spamd test disabled on Docker", 1
     }
+    my $spamd = 'spamd';
+    for my $dir (split(':', $ENV{PATH})) {
+      my $full_path = "$dir/$spamd";
+      if (-x $full_path) {
+        $spamd = $full_path;
+        last;
+      }
+    }
+    if(not -f $spamd) {
+      skip "Spamd binary not found", 1
+    }
     init_globals();
-    system("spamd -L -s stderr -p 7830 -d");
+    system("$spamd -L -s stderr -p 7830 -d");
     copy('t/data/gtube.eml', './INPUTMSG');
 
     my $spamc = md_spamc_init('127.0.0.1', 7830);
@@ -28,4 +39,33 @@ sub md_spamc : Test(1)
     system("pkill spamd");
   }
 }
+
+sub md_rspamd : Test(1)
+{
+  SKIP: {
+    if ( -f "/.dockerenv" or (defined $ENV{GITHUB_ACTIONS}) ) {
+      skip "Spamd test disabled on Docker", 1
+    }
+    my $rspamd = 'rspamd';
+    for my $dir (split(':', $ENV{PATH})) {
+      my $full_path = "$dir/$rspamd";
+      if (-x $full_path) {
+        $rspamd = $full_path;
+        last;
+      }
+    }
+    if(not -f $rspamd) {
+      skip "Rspamd binary not found", 1
+    }
+    init_globals();
+    system("$rspamd -u $ENV{USER} -c t/data/rspamd.conf 1>/dev/null 2>&1");
+    copy('t/data/gtube.eml', './INPUTMSG');
+
+    my ($hits, $req, $tests, $report, $action, $is_spam) = rspamd_check();
+    is($is_spam, 'true');
+    unlink('./INPUTMSG');
+    system("pkill rspamd");
+  }
+}
+
 __PACKAGE__->runtests();
