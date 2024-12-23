@@ -657,7 +657,7 @@ sub action_quarantine {
     # Save the part's headers
     my $out;
     if (open($out, ">", "$QuarantineSubdir/PART.$QuarantineCount.HEADERS")) {
-	$entity->head->print($out);
+	print $out $entity->head->stringify;
 	close($out);
     }
 
@@ -752,8 +752,8 @@ sub get_quarantine_dir {
     # Copy message headers
     if (open($out, ">", "$QuarantineSubdir/HEADERS")) {
 	if (open($in, "<", "HEADERS")) {
-	    while(<$in>) {
-		print $out;
+	    while(my $line = <$in>) {
+		print $out $line;
 	    }
 	    close($in);
 	}
