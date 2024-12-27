@@ -24,6 +24,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <time.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -293,6 +294,66 @@ doStatus(char const *sock)
     return EXIT_SUCCESS;
 }
 
+static int
+doJsonStatus(char const *sock)
+{
+    char ans[4096];
+    char *s;
+    int i, l;
+    time_t ltime;
+    struct tm result;
+    char stime[32];
+    char hostname[1024];
+
+    hostname[1023] = '\0';
+    gethostname(hostname, 1023);
+
+    if (MXCommand(sock, "status\n", ans, sizeof(ans)) < 0) {
+	return EXIT_FAILURE;
+    }
+    if (*ans != 'I' && *ans != 'K' && *ans != 'S' && *ans != 'B') {
+	fprintf(errfp, "ERROR %s", ans);
+	return EXIT_FAILURE;
+    }
+
+    /* Chop off message and activation count */
+    s = ans;
+    while (*s && *s != ' ') s++;
+    *s = 0;
+
+    ltime = time(NULL);
+    localtime_r(&ltime, &result);
+    asctime_r(&result, stime);
+
+    l = strlen(ans);
+    printf("{");
+    printf("\"timestamp\": \"%.24s\",", stime); 
+    printf("\"hostname\": \"%s\",", hostname); 
+    for (i=0; i<l; i++) {
+	printf("\"Worker%d\": ", i);
+	switch(ans[i]) {
+	case 'I':
+	    printf("\"idle\"");
+	    break;
+	case 'K':
+	    printf("\"killed\"");
+	    break;
+	case 'S':
+	    printf("\"stopped\"");
+	    break;
+	case 'B':
+	    printf("\"busy\"");
+	    break;
+	default:
+	    printf("\"unknown state '%c'\"", ans[i]);
+	}
+	if(i < (l-1)) {
+	  printf(",");
+	}
+    }
+    printf("}");
+    return EXIT_SUCCESS;
+}
 #define BARLEN 25
 #define QBARLEN 20
 static int
@@ -466,6 +527,54 @@ doLoad1(char const *sock,
 }
 
 static int
+doJsonLoad1(char const *sock,
+	char const *cmd)
+{
+    char ans[4096];
+    time_t ltime;
+    struct tm result;
+    char stime[32];
+    char hostname[1024];
+
+    hostname[1023] = '\0';
+    gethostname(hostname, 1023);
+
+    int num_scans, num_relayoks, num_senderoks, num_recipoks;
+    double avg_scans, avg_relayoks, avg_senderoks, avg_recipoks;
+    double ms_scans, ms_relayoks, ms_senderoks, ms_recipoks;
+    int busy_workers, idle_workers, stopped_workers, killed_workers;
+    int msgs_processed, activations, queue_size, queued_requests, uptime, back;
+    int cscan, crelayok, csenderok, crecipok;
+
+    if (MXCommand(sock, cmd, ans, sizeof(ans)) < 0) {
+	return EXIT_FAILURE;
+    }
+    if (sscanf(ans, "%d %lf %lf %d %lf %lf %d %lf %lf %d %lf %lf %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
+	       &num_scans, &avg_scans, &ms_scans,
+	       &num_relayoks, &avg_relayoks, &ms_relayoks,
+	       &num_senderoks, &avg_senderoks, &ms_senderoks,
+	       &num_recipoks, &avg_recipoks, &ms_recipoks,
+	       &busy_workers, &idle_workers, &stopped_workers, &killed_workers,
+	       &msgs_processed, &activations, &queue_size, &queued_requests, &uptime, &back, &cscan, &crelayok, &csenderok, &crecipok) != 26) {
+	printf("Could not interpret response: %s", ans);
+	return EXIT_FAILURE;
+    }
+
+    ltime = time(NULL);
+    localtime_r(&ltime, &result);
+    asctime_r(&result, stime);
+
+    printf("{");
+    printf("\"timestamp\": \"%.24s\",", stime); 
+    printf("\"hostname\": \"%s\",", hostname); 
+    printf("\"busyworkers\":%d, \"idleworkers\":%d, \"stoppedworkers\":%d, \"killedworkers\":%d,", busy_workers, idle_workers, stopped_workers, killed_workers);
+    printf("\"scan\":%d, \"relayok\":%d, \"senderok\":%d, \"recipok\":%d,", cscan, crelayok, csenderok, crecipok);
+    printf("\"queue_size\":%d, \"queued_requests\":%d", queue_size, queued_requests);
+    printf("}\n");
+    return EXIT_SUCCESS;
+}
+
+static int
 doLoad(char const *rawcmd,
        char const *msgstr,
        char const *scanstr,
@@ -579,6 +688,8 @@ process(char const *sock, char const *cmd) {
 	return doStatus(sock);
     } else if (!strcmp(cmd, "barstatus\n")) {
 	return doBarStatus(sock);
+    } else if (!strcmp(cmd, "jsonstatus\n")) {
+	return doJsonStatus(sock);
     } else if (!strcmp(cmd, "reread\n")) {
 	return doCmd(sock, "reread\n", 0);
     } else if (!strcmp(cmd, "rawstatus\n")) {
@@ -593,6 +704,8 @@ process(char const *sock, char const *cmd) {
 	return doCmd(sock, cmd+3, 0);
     } else if (!strncmp(cmd, "load1 ", 6)) {
 	return doLoad1(sock, cmd);
+    } else if (!strncmp(cmd, "jsonload1 ", 10)) {
+	return doJsonLoad1(sock, cmd+4);
     } else if (!strcmp(cmd, "rawload-senderok\n")) {
 	return doCmd(sock, "load-senderok\n", 0);
     } else if (!strcmp(cmd, "rawload-recipok\n")) {
