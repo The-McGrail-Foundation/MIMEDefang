@@ -52,6 +52,7 @@ event.h
 event_tcp.c
 event_tcp.h
 eventpriv.h
+examples/filebeat.yml
 examples/init-script.in
 examples/README
 examples/redhat-logrotate-file
