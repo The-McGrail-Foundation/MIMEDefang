@@ -568,7 +568,7 @@ doJsonLoad1(char const *sock,
     printf("\"timestamp\": \"%.24s\",", stime); 
     printf("\"hostname\": \"%s\",", hostname); 
     printf("\"busyworkers\":%d, \"idleworkers\":%d, \"stoppedworkers\":%d, \"killedworkers\":%d,", busy_workers, idle_workers, stopped_workers, killed_workers);
-    printf("\"scan\":%d, \"relayok\":%d, \"senderok\":%d, \"recipok\":%d,", cscan, crelayok, csenderok, crecipok);
+    printf("\"scan\":%d, \"relayok\":%d, \"senderok\":%d, \"recipok\":%d,", num_scans, num_relayoks, num_senderoks, num_recipoks);
     printf("\"queue_size\":%d, \"queued_requests\":%d", queue_size, queued_requests);
     printf("}\n");
     return EXIT_SUCCESS;
