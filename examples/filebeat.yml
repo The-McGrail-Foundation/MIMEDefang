@@ -1,0 +1,23 @@
+---
+- type: filestream
+  id: mimedefang
+  # sample filebeat configuration file to store MIMEDefang status
+  # to ELK stack
+  paths:
+  - /var/log/mimedefang.json
+  encoding: plain
+  document_type: json-logs
+  prospector:
+     scanner:
+        check_interval: 10s
+  harvester_buffer_size: 16384
+  message_max_bytes: 10485760
+
+  ### JSON configuration
+  json:
+      keys_under_root: true
+      add_error_key: true
+  tail_files: false
+  fields:
+    logtype: json-logs
+  fields_under_root: true
