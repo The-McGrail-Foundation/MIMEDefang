@@ -76,6 +76,10 @@ like this:
 .fi
 
 .TP
+.B jsonstatus
+Prints the status of all worker Perl processes in JSON format.
+
+.TP
 .B histo
 Prints a histogram showing the number of workers that were busy each time
 a request was processed.  A single line is printed for the numbers
@@ -228,6 +232,10 @@ number is a copy of \fInsecs\fR for convenience.
 
 The twenty-third through twenty-sixth numbers are the number of workers
 currently executing a scan, relayok, senderok and recipok command respectively.
+
+.TP
+.B jsonload1 \fInsecs\fR
+Returns the \fBload1\fR data in JSON format.
 
 .TP
 .B workers

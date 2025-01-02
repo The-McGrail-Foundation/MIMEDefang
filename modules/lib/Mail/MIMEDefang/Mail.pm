@@ -95,8 +95,8 @@ sub resend_message_specifying_mode {
 	  return 0;
   }
 
+  my $in;
   if ($pid) {   # In the parent -- pipe mail message to the child
-	  my $in;
 	  unless (open($in, "<", "INPUTMSG")) {
 	    md_syslog('err', "Could not open INPUTMSG in resend_message: $!");
 	    return 0;
@@ -111,8 +111,8 @@ sub resend_message_specifying_mode {
 	  print $child synthesize_received_header();
 
 	  # Copy message over
-	  while(<$in>) {
-	    print $child;
+	  while(my $line = <$in>) {
+	    print $line $child;
 	  }
 	  close($in);
 	  if (!close($child)) {
