@@ -3,6 +3,7 @@ config.h.in
 configure
 configure.ac
 contrib/fang.pl
+contrib/filebeat.yml
 contrib/graphdefang-0.91/ChangeLog
 contrib/graphdefang-0.91/COPYING
 contrib/graphdefang-0.91/event/dovecot/general
@@ -52,7 +53,6 @@ event.h
 event_tcp.c
 event_tcp.h
 eventpriv.h
-examples/filebeat.yml
 examples/init-script.in
 examples/README
 examples/redhat-logrotate-file
