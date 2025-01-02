@@ -112,7 +112,7 @@ sub resend_message_specifying_mode {
 
 	  # Copy message over
 	  while(my $line = <$in>) {
-	    print $line $child;
+	    print $child $line;
 	  }
 	  close($in);
 	  if (!close($child)) {
