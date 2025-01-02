@@ -1005,7 +1005,7 @@ sub do_scan {
 		$rebuilt->make_singlepart();
 	}
 	push_status_tag("Writing new body");
-	$rebuilt->print_body($out);
+	$out = $rebuilt->stringify_body;
 	pop_status_tag();
 	close($out);
 

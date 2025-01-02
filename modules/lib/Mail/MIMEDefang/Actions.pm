@@ -1150,7 +1150,7 @@ sub action_replace_with_url {
     open($in, "<", "$path") or return 0;
 
     $ctx = Digest::SHA->new;
-    $ctx->addfile($in);
+    $ctx->add($in);
     $ctx->add($salt) if defined($salt);
     close($in);
 
