@@ -18,12 +18,12 @@ sub dkim_sign : Test(5)
 
   # disable DKIM TextWrap, must be the first call
   # otherwise Mail::DKIM::TextWrap will be loaded and cannot be disabled
-  open(FD, '<', 't/data/dkim_sig2a.txt') or die("Cannot open signature file: $!");
-  while(<FD>) {
+  open(my $fd, '<', 't/data/dkim_sig2a.txt') or die("Cannot open signature file: $!");
+  while(<$fd>) {
     local $/;
     $correct_signature .= $_;
   }
-  close(FD);
+  close($fd);
   ($header, $dkim_sig_notw) = md_dkim_sign('t/data/dkim.pem', 'rsa-sha256', 'relaxed', 'example.com', 'selector', undef, 0);
   is($dkim_sig_notw, $correct_signature);
   if($dkim_sig_notw =~ /(?<!;)\s/) {
@@ -33,12 +33,12 @@ sub dkim_sign : Test(5)
   }
   undef $correct_signature;
 
-  open(FD, '<', 't/data/dkim_sig.txt') or die("Cannot open signature file: $!");
-  while(<FD>) {
+  open($fd, '<', 't/data/dkim_sig.txt') or die("Cannot open signature file: $!");
+  while(<$fd>) {
     local $/;
     $correct_signature .= $_;
   }
-  close(FD);
+  close($fd);
 
   ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem');
   is($dkim_sig, $correct_signature);
@@ -49,12 +49,12 @@ sub dkim_sign : Test(5)
   }
   undef $correct_signature;
 
-  open(FD, '<', 't/data/dkim_sig2.txt') or die("Cannot open signature file: $!");
-  while(<FD>) {
+  open($fd, '<', 't/data/dkim_sig2.txt') or die("Cannot open signature file: $!");
+  while(<$fd>) {
     local $/;
     $correct_signature .= $_;
   }
-  close(FD);
+  close($fd);
   ($header, $dkim_sig) = md_dkim_sign('t/data/dkim.pem', 'rsa-sha256', 'relaxed/simple', 'example.com', 'selector');
   is($dkim_sig, $correct_signature);
   undef $correct_signature;
