@@ -3879,6 +3879,7 @@ doHelp(EventSelector *es, int fd, int unpriv)
 	reply_to_mimedefang(es, fd,
 	"help             -- List available multiplexor commands\n"
 	"status           -- Display worker status\n"
+	"jsonstatus       -- Display worker status in JSON format\n"
 	"rawstatus        -- Display worker status in computer-readable format\n"
 	"barstatus        -- Display worker status as bar graph\n"
 	"free             -- Display number of free workers\n"
