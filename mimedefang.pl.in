@@ -18,7 +18,6 @@
 #***********************************************************************
 
 use warnings;
-use strict;
 
 # Move site library directory ahead of default library directory in @INC.
 # That's so we can sanely package our own version of MIME::Base64 that
