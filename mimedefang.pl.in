@@ -839,8 +839,7 @@ sub do_scan {
     $parser->filer($filer);
 
     # Parse the input stream:
-    my $fileh;
-    if (!open($fileh, '<', $file)) {
+    if (!open(FILE, '<', $file)) {
 	fatal("couldn't open $file: $!");
 	signal_complete();
 	return -1;
@@ -850,9 +849,9 @@ sub do_scan {
 	$parser->max_parts($MaxMIMEParts);
     }
     push_status_tag("Parsing Message");
-    $entity = $parser->parse($fileh);
+    $entity = $parser->parse(\*FILE);
     pop_status_tag();
-    close($fileh);
+    close(FILE);
 
     if (!defined($entity) && $MaxMIMEParts > 0) {
 	# Message is too complex; bounce it
@@ -1003,7 +1002,7 @@ sub do_scan {
 		$rebuilt->make_singlepart();
 	}
 	push_status_tag("Writing new body");
-	$rebuilt->print_body(OUT);
+	$rebuilt->print_body(\*OUT);
 	pop_status_tag();
 	close(OUT);
 
