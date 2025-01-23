@@ -987,9 +987,8 @@ sub do_scan {
 	undef $FilterEndReplacementEntity;
     }
 
-    my $out;
     if ($Changed || $Rebuild) {
-	if (!open($out, ">", "NEWBODY")) {
+	if (!open(OUT, ">", "NEWBODY")) {
 	    fatal("Can't open NEWBODY: $!");
 	    signal_complete();
 	    return -1;
@@ -1005,9 +1004,9 @@ sub do_scan {
 		$rebuilt->make_singlepart();
 	}
 	push_status_tag("Writing new body");
-	$out = $rebuilt->stringify_body;
+	$rebuilt->print_body(OUT);
 	pop_status_tag();
-	close($out);
+	close(OUT);
 
 
 	# Write new content-type header in case we've changed the type.

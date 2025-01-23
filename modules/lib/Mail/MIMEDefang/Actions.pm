@@ -1147,12 +1147,12 @@ sub action_replace_with_url {
     return 0 unless defined($entity->bodyhandle);
     $path = $entity->bodyhandle->path;
     return 0 unless defined($path);
-    open($in, "<", "$path") or return 0;
+    open(IN, "<", "$path") or return 0;
 
     $ctx = Digest::SHA->new;
-    $ctx->add($in);
+    $ctx->addfile(IN);
     $ctx->add($salt) if defined($salt);
-    close($in);
+    close(IN);
 
     $fname = takeStabAtFilename($entity);
     $fname = "" unless defined($fname);
