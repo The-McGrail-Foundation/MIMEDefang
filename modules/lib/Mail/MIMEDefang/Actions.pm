@@ -20,7 +20,6 @@ from F<mimedefang-filter> to accept or reject the email message.
 
 package Mail::MIMEDefang::Actions;
 
-use strict;
 use warnings;
 
 use Digest::SHA;
