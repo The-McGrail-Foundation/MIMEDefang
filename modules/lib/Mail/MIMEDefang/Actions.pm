@@ -1140,7 +1140,6 @@ sub action_replace_with_url {
     my($path);
     my($fname, $ext, $name, $url);
     my $extension = "";
-    my $in;
 
     return 0 unless in_filter_context("action_replace_with_url");
     return 0 unless defined($entity->bodyhandle);
@@ -1149,7 +1148,7 @@ sub action_replace_with_url {
     open(IN, "<", "$path") or return 0;
 
     $ctx = Digest::SHA->new;
-    $ctx->addfile(IN);
+    $ctx->addfile(*IN);
     $ctx->add($salt) if defined($salt);
     close(IN);
 
