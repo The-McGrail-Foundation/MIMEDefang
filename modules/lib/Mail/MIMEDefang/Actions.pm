@@ -20,6 +20,7 @@ from F<mimedefang-filter> to accept or reject the email message.
 
 package Mail::MIMEDefang::Actions;
 
+use strict;
 use warnings;
 
 use Digest::SHA;
@@ -1145,12 +1146,10 @@ sub action_replace_with_url {
     return 0 unless defined($entity->bodyhandle);
     $path = $entity->bodyhandle->path;
     return 0 unless defined($path);
-    open(IN, "<", "$path") or return 0;
 
     $ctx = Digest::SHA->new;
-    $ctx->addfile(*IN);
+    $ctx->addfile($path);
     $ctx->add($salt) if defined($salt);
-    close(IN);
 
     $fname = takeStabAtFilename($entity);
     $fname = "" unless defined($fname);
