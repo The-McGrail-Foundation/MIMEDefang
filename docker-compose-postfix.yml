@@ -1,5 +1,6 @@
+name: mimedefang-postfix
 services:
-    mimedefang:
+    mimedefang-postfix:
         container_name: mimedefang-postfix
         image: mimedefang/postfix:v3.3
         working_dir: /tests

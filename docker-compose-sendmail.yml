@@ -1,5 +1,6 @@
+name: mimedefang-sendmail
 services:
-    mimedefang:
+    mimedefang-sendmail:
         container_name: mimedefang-sendmail
         image: mimedefang/sendmail:v3.3
         working_dir: /tests

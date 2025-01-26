@@ -1,0 +1,26 @@
+Date: Sun, 26 Jan 2025 15:19:27 +0100
+From: Giovanni <giovanni@domain.tld>
+To: Giovanni <giovanni@domain.tld>
+Subject: Test .exe
+Message-ID: <Z5ZEb1mvE-qOlBLF@domain.tld>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="TMN48Ckxl6bFmFWo"
+Content-Disposition: inline
+Content-Length: 278
+Lines: 14
+
+
+--TMN48Ckxl6bFmFWo
+Content-Type: text/plain; charset=utf-8
+Content-Disposition: inline
+
+Test
+
+--TMN48Ckxl6bFmFWo
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="test.exe"
+Content-Transfer-Encoding: quoted-printable
+
+MZ=0A
+--TMN48Ckxl6bFmFWo--
+
