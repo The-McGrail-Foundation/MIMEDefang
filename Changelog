@@ -6,10 +6,19 @@ affect your filter.
 
         * add the possibility to output some stats in JSON format
 
+2024-12-13 Giovanni Bechis <g.bechis@snb.it>
+
+        * fix hang on next request after call to rspamd_check()
+	issue #81
+
 2024-10-03 Giovanni Bechis <gbechis@pccc.com>
 
         * improve synthesize_received_header sub to avoid
 	FPs in rdns checks
+
+2024-09-05 Giovanni Bechis <g.bechis@snb.it>
+
+        * fix re_match_in_7zip_directory crash
 
 2024-07-30 Giovanni Bechis <g.bechis@snb.it>
 
