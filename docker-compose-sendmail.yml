@@ -2,7 +2,7 @@ name: mimedefang-sendmail
 services:
     mimedefang-sendmail:
         container_name: mimedefang-sendmail
-        image: mimedefang/sendmail:v3.3
+        image: mimedefang/sendmail:latest
         working_dir: /tests
         volumes:
          - .:/tests

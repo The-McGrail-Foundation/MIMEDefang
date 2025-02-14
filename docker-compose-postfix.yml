@@ -2,7 +2,7 @@ name: mimedefang-postfix
 services:
     mimedefang-postfix:
         container_name: mimedefang-postfix
-        image: mimedefang/postfix:v3.3
+        image: mimedefang/postfix:latest
         working_dir: /tests
         volumes:
          - .:/tests
