@@ -120,7 +120,7 @@ gen_id.o: gen_id.c mimedefang.h
 	$(CC) $(CFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o gen_id.o $(srcdir)/gen_id.c
 
 clean:: FORCE
-	rm -f *~ *.o mimedefang mimedefang-multiplexor md-mx-ctrl xs_init.c
+	rm -f *~ *.o mimedefang mimedefang-multiplexor md-mx-ctrl xs_init.c INPUTMSG
 
 pod2man:: script/mimedefang-util.1 lib/manpages
 
