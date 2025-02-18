@@ -327,8 +327,8 @@ doJsonStatus(char const *sock)
 
     l = strlen(ans);
     printf("{");
-    printf("\"timestamp\": \"%.24s\",", stime); 
-    printf("\"hostname\": \"%s\",", hostname); 
+    printf("\"timestamp\": \"%.24s\",", stime);
+    printf("\"hostname\": \"%s\",", hostname);
     for (i=0; i<l; i++) {
 	printf("\"Worker%d\": ", i);
 	switch(ans[i]) {
@@ -565,8 +565,8 @@ doJsonLoad1(char const *sock,
     asctime_r(&result, stime);
 
     printf("{");
-    printf("\"timestamp\": \"%.24s\",", stime); 
-    printf("\"hostname\": \"%s\",", hostname); 
+    printf("\"timestamp\": \"%.24s\",", stime);
+    printf("\"hostname\": \"%s\",", hostname);
     printf("\"busyworkers\":%d, \"idleworkers\":%d, \"stoppedworkers\":%d, \"killedworkers\":%d,", busy_workers, idle_workers, stopped_workers, killed_workers);
     printf("\"scan\":%d, \"relayok\":%d, \"senderok\":%d, \"recipok\":%d,", num_scans, num_relayoks, num_senderoks, num_recipoks);
     printf("\"queue_size\":%d, \"queued_requests\":%d", queue_size, queued_requests);
