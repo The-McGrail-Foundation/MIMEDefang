@@ -388,7 +388,7 @@ sub md_get_bogus_mx_hosts {
 	return @bogus_hosts;
 }
 
-=item get_ptr_record $domain [$resolver_object]
+=item get_ptr_record $ip_address [$resolver_object]
 
 Get PTR record for given IP address.
 
