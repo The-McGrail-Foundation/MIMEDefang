@@ -32,6 +32,7 @@ You're limited only by your imagination. If you can think of it and code it in P
 
 package Mail::MIMEDefang;
 
+## no critic (TestingAndDebugging::RequireUseStrict)
 use warnings;
 no warnings qw(once uninitialized);
 
@@ -354,7 +355,7 @@ Prints a message to syslog(3) using the specified facility
 		$thing = $special{$thing} if exists $special{$thing};
 		$thing = 'LOG_' . uc($thing);
 		return unless grep { $_ eq $thing } @ {$Unix::Syslog::EXPORT_TAGS{macros} };
-		return eval "Unix::Syslog::$thing()";
+		return eval "Unix::Syslog::$thing()"; ## no critic
 	}
 }
 
@@ -586,7 +587,7 @@ sub init_status_tag
 {
 	return unless $DoStatusTags;
 
-	if(open(STATUS_HANDLE, ">&=", 3)) {
+	if(open(STATUS_HANDLE, ">&=", 3)) { ## no critic
 		STATUS_HANDLE->autoflush(1);
 	} else {
 		$DoStatusTags = 0;
