@@ -1,4 +1,6 @@
 \.git/
+\.github/
+\.gitignore
 ^autom4te.cache/
 \.o$
 \.tar.gz$
