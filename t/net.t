@@ -55,7 +55,13 @@ sub t_reverse_ip : Test(2)
 sub t_get_ptr_record : Test(1)
 {
   my $ipv4 = '1.1.1.1';
-  is(Mail::MIMEDefang::Net::get_ptr_record($ipv4), 'one.one.one.one');
+
+  SKIP: {
+    if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
+      skip "Net test disabled", 1
+    }
+    is(Mail::MIMEDefang::Net::get_ptr_record($ipv4), 'one.one.one.one');
+  }
 }
 
 sub t_relay_is_blacklisted_multi : Test(1)
@@ -107,15 +113,27 @@ sub t_email_is_blacklisted : Test(1)
 sub t_md_get_bogus_mx_hosts : Test(1)
 {
   my $domain = 'multihomed.dnsbltest.spamassassin.org';
-  my @res = md_get_bogus_mx_hosts($domain);
-  is(scalar @res, 1);
+
+  SKIP: {
+    if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
+      skip "Net test disabled", 1
+    }
+    my @res = md_get_bogus_mx_hosts($domain);
+    is(scalar @res, 1);
+  }
 }
 
 sub t_get_mx_ip_addresses : Test(1)
 {
   my $domain = 'mimedefang.org';
-  my @res = get_mx_ip_addresses($domain);
-  is(scalar @res, 2);
+
+  SKIP: {
+    if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
+      skip "Net test disabled", 1
+    }
+    my @res = get_mx_ip_addresses($domain);
+    is(scalar @res, 2);
+  }
 }
 
 __PACKAGE__->runtests();
