@@ -37,6 +37,9 @@ our @EXPORT_OK;
 
 Returns code and explanation of Sender Policy Framework
 check.
+Additional optional return values are code and explanation
+of helo SPF query, 5th and 6th return values are the SPF dns
+records if they are available;
 
 Possible return code values are:
 "pass", "fail", "softfail", "neutral", "none", "error", "permerror", "temperror", "invalid"
@@ -116,10 +119,15 @@ sub md_spf_verify {
       $helo_spfres = $spf_server->process($helo_request);
     };
   }
+  my $spf_record;
+  my $helospf_record;
   if(defined $helo) {
-    return ($spfres->code, $spfres->local_explanation, $helo_spfres->code, $helo_spfres->local_explanation);
+    $spf_record = $spfres->request->record->text;
+    $helospf_record = $helo_spfres->request->record->text;
+    return ($spfres->code, $spfres->local_explanation, $helo_spfres->code, $helo_spfres->local_explanation, $spf_record, $helospf_record);
   } else {
-    return ($spfres->code, $spfres->local_explanation);
+    $spf_record = $spfres->request->record->text;
+    return ($spfres->code, $spfres->local_explanation, undef, undef, $spf_record);
   }
 }
 
