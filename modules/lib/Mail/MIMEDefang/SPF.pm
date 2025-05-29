@@ -121,12 +121,13 @@ sub md_spf_verify {
   }
   my $spf_record;
   my $helospf_record;
-  if(defined $helo) {
+  eval {
     $spf_record = $spfres->request->record->text;
-    $helospf_record = $helo_spfres->request->record->text;
+    $helospf_record = $helo_spfres->request->record->text();
+  };
+  if(defined $helo) {
     return ($spfres->code, $spfres->local_explanation, $helo_spfres->code, $helo_spfres->local_explanation, $spf_record, $helospf_record);
   } else {
-    $spf_record = $spfres->request->record->text;
     return ($spfres->code, $spfres->local_explanation, undef, undef, $spf_record);
   }
 }
