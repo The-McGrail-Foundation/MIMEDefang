@@ -132,7 +132,7 @@ sub t_get_mx_ip_addresses : Test(1)
       skip "Net test disabled", 1
     }
     my @res = get_mx_ip_addresses($domain);
-    is(scalar @res, 2);
+    is(scalar @res, 1);
   }
 }
 
