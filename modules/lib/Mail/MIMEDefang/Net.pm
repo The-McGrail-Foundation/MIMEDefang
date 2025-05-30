@@ -35,7 +35,8 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_blacklisted email_is_blacklisted
                  relay_is_blacklisted_multi relay_is_blacklisted_multi_count relay_is_blacklisted_multi_list
-                 is_public_ip4_address is_public_ip6_address md_get_bogus_mx_hosts get_mx_ip_addresses);
+                 is_public_ip4_address is_public_ip6_address md_get_bogus_mx_hosts get_mx_ip_addresses
+                 md_get_dmarc_record);
 our @EXPORT_OK = qw(get_host_name get_ptr_record md_init);
 
 sub md_init {
@@ -416,6 +417,46 @@ sub get_ptr_record {
         if(defined $answer) {
           my $res = $answer->rdstring;
           $res =~ s/\.$//;
+          return $res;
+        }
+        return;
+}
+
+=item md_get_dmarc_record $domain
+
+Returns the DMARC record of a domain.
+
+=cut
+
+sub md_get_dmarc_record {
+        my ($domain) = @_;
+        my $res;
+
+        unless ($Features{"Net::DNS"}) {
+                md_syslog('err', "Attempted to call md_get_dmarc_record, but Perl module Net::DNS is not installed");
+                return;
+        }
+        if (!defined($res)) {
+                $res = Net::DNS::Resolver->new;
+                $res->defnames(0);
+        }
+
+        my $packet = $res->query('_dmarc.' . $domain, 'TXT');
+        if (!defined($packet) ||
+            $packet->header->rcode eq 'NXDOMAIN') {
+	    my @dots = $domain =~ /\./g;
+	    return if (scalar @dots eq 1);
+            $domain =~ s/(.*?)\.//;
+	    return md_get_dmarc_record($domain);
+        } elsif ($packet->header->rcode eq 'SERVFAIL' ||
+            !defined($packet->answer)) {
+	      return;
+	}
+        my $answer = ($packet->answer)[0];
+        if(defined $answer) {
+          my $res = $answer->rdstring;
+	  chomp $res;
+          $res =~ s/^"|"$//g;
           return $res;
         }
         return;

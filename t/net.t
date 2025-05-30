@@ -123,6 +123,22 @@ sub t_md_get_bogus_mx_hosts : Test(1)
   }
 }
 
+sub t_md_get_dmarc_record : Test(2)
+{
+  my $domain = 'dmarc4.spamassassin.org';
+  my $subdomain = 'multihomed.dnsbltest.spamassassin.org';
+
+  SKIP: {
+    if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
+      skip "Net test disabled", 1
+    }
+    my $res = md_get_dmarc_record($domain);
+    is($res, 'v=DMARC1; p=reject; adkim=s; aspf=s;');
+    $res = md_get_dmarc_record($subdomain);
+    is($res, undef);
+  }
+}
+
 sub t_get_mx_ip_addresses : Test(1)
 {
   my $domain = 'mimedefang.org';
