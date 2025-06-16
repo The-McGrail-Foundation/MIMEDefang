@@ -386,6 +386,7 @@ sub re_match_in_7zip_directory {
 
 Method that returns 1 if the EXTENSION part of any file in the tgz archive
 matches regexp.
+Files with extensione .tar.gz, .tar.bz2 and .tbz are also checked.
 To enable the check $Features{'tar'} should be enabled.
 
 =cut
@@ -408,7 +409,7 @@ sub re_match_in_tgz_directory {
   my @unz_args;
   if($zname =~ /\.tar/) {
     @unz_args = ("tar", "tvf", $zname);
-  } elsif($zname =~ /\.tar\.bz2/) {
+  } elsif($zname =~ /\.(?:tar\.bz2|tbz)/) {
     @unz_args = ("tar", "jtvf", $zname);
   } elsif($zname =~ /\.(?:tar\.gz|tgz)/) {
     @unz_args = ("tar", "ztvf", $zname);
