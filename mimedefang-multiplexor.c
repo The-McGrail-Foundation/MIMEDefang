@@ -1409,7 +1409,7 @@ handleWorkerStderr(EventSelector *es,
 		  void *data)
 {
     Worker *s = (Worker *) data;
-    char buffer[64];
+    char buffer[1024];
     int n;
     char const *qid;
 
