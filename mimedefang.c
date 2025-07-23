@@ -2060,7 +2060,7 @@ eom(SMFICTX *ctx)
 #ifdef HAVE_CLOCK_MONOTONIC
 	if(clock_gettime(CLOCK_MONOTONIC, &finish) != -1) {
 	  timespecsub(&finish, &start, &diff);
-	  // convert to milliseconds
+	  /* convert to milliseconds */
           msec_diff = diff.tv_nsec / 1000000;
 	  syslog(LOG_INFO, "%s: Filter time is %ldms", data->qid, msec_diff);
 	} else {
@@ -2069,7 +2069,7 @@ eom(SMFICTX *ctx)
 #else
 	if(clock_gettime(CLOCK_REALTIME, &finish) != -1) {
 	  timespecsub(&finish, &start, &diff);
-	  // convert to milliseconds
+	  /* convert to milliseconds */
           msec_diff = diff.tv_nsec / 1000000;
 	  syslog(LOG_INFO, "%s: Filter time is %ldms", data->qid, msec_diff);
 	} else {

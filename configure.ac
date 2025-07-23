@@ -10,7 +10,14 @@ dnl the default to other than ${prefix}/etc
 
 echo $* | fgrep -e '--sysconfdir' > /dev/null 2>&1 || sysconfdir='/etc'
 
-AC_PROG_CC                      dnl Find C compiler
+AC_PROG_CC
+# Enforce C89 standard
+AC_PROG_CC_C89
+if test "$ac_cv_prog_cc_c89" = "no"; then
+    AC_MSG_ERROR([C89 support is required])
+fi
+CFLAGS="$CFLAGS -std=c89 -D_BSD_SOURCE -D_DEFAULT_SOURCE"
+
 AC_CHECK_PROGS(AR, ar, no)
 AC_CONFIG_HEADERS([config.h])
 
