@@ -175,6 +175,8 @@ The third return value is the size of the DKIM public key.
 
 The forth return value is the value of the "b" tag of the DKIM signature.
 
+If the sub is called in scalar context, the C<$dkim> object is returned.
+
 =back
 
 =cut
@@ -214,9 +216,17 @@ sub md_dkim_verify {
     my $pk = $dkim->signature->get_public_key;
        $pk && $pk->cork && $pk->cork->size * 8 };
   if(defined $dkim->signature and defined $key_size) {
-    return ($dkim->result, $dkim->signature->domain, $key_size, $dkim->signature->get_tag('b'));
+    if(wantarray) {
+      return ($dkim->result, $dkim->signature->domain, $key_size, $dkim->signature->get_tag('b'));
+    } else {
+      return $dkim;
+    }
   } else {
-    return ($dkim->result, undef, 0, undef);
+    if(wantarray) {
+      return ($dkim->result, undef, 0, undef, undef);
+    } else {
+      return $dkim;
+    }
   }
 }
 

@@ -62,16 +62,16 @@ sub dkim_sign : Test(5)
   unlink('./INPUTMSG');
 }
 
-sub dkim_verify : Test(5)
+sub dkim_verify : Test(7)
 {
-  my ($result, $domain, $ksize);
+  my ($result, $domain, $ksize, $selector);
 
   SKIP: {
     if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
       skip "Net test disabled", 1
     }
     copy('t/data/dkim1.eml', './INPUTMSG');
-    ($result, $domain, $ksize) = md_dkim_verify();
+    ($result, $domain, $ksize, undef) = md_dkim_verify();
     is($result, "pass");
     is($ksize, 768);
     unlink('./INPUTMSG');
@@ -79,6 +79,9 @@ sub dkim_verify : Test(5)
     copy('t/data/dkim2.eml', './INPUTMSG');
     ($result, $domain, $ksize) = md_dkim_verify();
     is($result, "fail");
+    my $dkim_verify = md_dkim_verify();
+    is($dkim_verify->result, "fail");
+    is($dkim_verify->signature->get_tag('s'), 't0768');
     unlink('./INPUTMSG');
 
     copy('t/data/dkim3.eml', './INPUTMSG');
