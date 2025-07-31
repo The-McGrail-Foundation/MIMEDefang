@@ -92,6 +92,10 @@ The headers to sign, by default the headers are:
                List-Id List-Help List-Unsubscribe List-Subscribe
                List-Post List-Owner List-Archive
 
+C<$headers> parameter is a colon separated list of headers to sign,
+
+this is added to the list of default headers as shown in in the DKIM specification.
+
 =item C<$wrap>
 
 Option to enable or disable DKIM header lines wrap (enabled by default).
