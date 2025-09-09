@@ -62,7 +62,7 @@ sub dkim_sign : Test(5)
   unlink('./INPUTMSG');
 }
 
-sub dkim_verify : Test(7)
+sub dkim_verify : Test(9)
 {
   my ($result, $domain, $ksize, $selector);
 
@@ -87,11 +87,15 @@ sub dkim_verify : Test(7)
     copy('t/data/dkim3.eml', './INPUTMSG');
     ($result, $domain, $ksize) = md_dkim_verify();
     like($result, qr/fail|invalid/);
+    my $res = md_dkim_verify();
+    is($res->signature->selector, "20210112");
     unlink('./INPUTMSG');
 
     copy('t/data/spf1.eml', './INPUTMSG');
     ($result, $domain, $ksize) = md_dkim_verify();
+    $res = md_dkim_verify();
     is($result, "none");
+    is($res->result, "none");
     unlink('./INPUTMSG');
   };
 }
