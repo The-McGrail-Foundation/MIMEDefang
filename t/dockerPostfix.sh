@@ -17,6 +17,8 @@ rm -rf ~/rpmbuild/RPMS/x86_64/mimedefang-* 1>/dev/null 2>&1
 rpmbuild -bb redhat/mimedefang.spec 1>/dev/null 2>&1
 dnf -y install ~/rpmbuild/RPMS/x86_64/mimedefang-* 1>/dev/null 2>&1
 cp t/data/mimedefang-test-filter /etc/mail/mimedefang-filter
+touch /etc/mail/mimedefang-filter.conf
+chown root /etc/mail/mimedefang-filter.conf
 
 . /etc/rc.d/init.d/functions
 daemon /usr/bin/mimedefang-multiplexor -m 4 -x 10 -y 1 -U defang -l -d -s /var/spool/MIMEDefang/mimedefang-multiplexor.sock
