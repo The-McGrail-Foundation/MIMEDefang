@@ -440,23 +440,23 @@ sub md_get_dmarc_record {
                 $res = Net::DNS::Resolver->new;
                 $res->defnames(0);
         }
-	return if not defined $domain;
+	      return if not defined $domain;
 
         my $packet = $res->query('_dmarc.' . $domain, 'TXT');
         if (!defined($packet) ||
             $packet->header->rcode eq 'NXDOMAIN') {
-	    my @dots = $domain =~ /\./g;
-	    return if (scalar @dots eq 1);
+	          my @dots = $domain =~ /\./g;
+	          return if (scalar @dots eq 1);
             $domain =~ s/(.*?)\.//;
-	    return md_get_dmarc_record($domain);
+	          return md_get_dmarc_record($domain);
         } elsif ($packet->header->rcode eq 'SERVFAIL' ||
             !defined($packet->answer)) {
-	      return;
-	}
+	          return;
+	      }
         my $answer = ($packet->answer)[0];
         if(defined $answer) {
           my $res = $answer->rdstring;
-	  chomp $res;
+	        chomp $res;
           $res =~ s/^"|"$//g;
           return $res;
         }
