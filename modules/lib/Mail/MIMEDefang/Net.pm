@@ -440,6 +440,7 @@ sub md_get_dmarc_record {
                 $res = Net::DNS::Resolver->new;
                 $res->defnames(0);
         }
+	return if not defined $domain;
 
         my $packet = $res->query('_dmarc.' . $domain, 'TXT');
         if (!defined($packet) ||
