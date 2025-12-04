@@ -91,7 +91,7 @@ our $VERSION = '3.6';
       write_result_line in_message_context in_filter_context in_filter_wrapup
       in_filter_end percent_decode percent_encode percent_encode_for_graphdefang
       send_mail send_multipart_mail send_quarantine_notifications signal_complete send_admin_mail
-      md_version set_status_tag read_commands_file read_config
+      md_version set_status_tag read_commands_file
     };
 
 @EXPORT_OK = qw{
@@ -1414,50 +1414,6 @@ sub read_commands_file {
 
     push @Recipients, @tmp_recipients;
     return 1;
-}
-
-=over 4
-
-=item read_config(file_path)
-
-Loads a config file where global variables can be stored.
-
-=back
-
-=cut
-
-#***********************************************************************
-# %PROCEDURE: read_config
-# %ARGUMENTS:
-#  configuration file path
-# %RETURNS:
-#  return 1 if configuration file cannot be loaded; 0 otherwise
-# %DESCRIPTION:
-#  loads a configuration file to overwrite global variables values
-#***********************************************************************
-# Derivative work from amavisd-new read_config_file($$)
-# Copyright (C) 2002-2018 Mark Martinec
-sub read_config {
-  my ($config_file) = @_;
-
-  $config_file = File::Spec->rel2abs($config_file);
-
-  my(@stat_list) = stat($config_file);  # symlinks-friendly
-  my $errn = @stat_list ? 0 : 0+$!;
-  my $owner_uid = $stat_list[4];
-  my $msg;
-
-  if ($errn == ENOENT) { $msg = "does not exist" }
-  elsif ($errn)        { $msg = "is inaccessible: $!" }
-  elsif (-d _)         { $msg = "is a directory" }
-  elsif (-S _ || -b _ || -c _) { $msg = "is not a regular file or pipe" }
-  elsif ($owner_uid) { $msg = "should be owned by root (uid 0)" }
-  if (defined $msg)    {
-    md_syslog("crit", "Config file \"$config_file\" $msg");
-    return 1;
-  }
-  if (defined(do $config_file)) {}
-  return 0;
 }
 
 =back

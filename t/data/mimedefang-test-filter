@@ -113,8 +113,6 @@ sub filter_bad_filename  {
 #***********************************************************************
 sub filter_begin {
     my($entity) = @_;
-
-    read_config('/etc/mail/mimedefang-filter.conf');
     # ALWAYS drop messages with suspicious chars in headers
     if ($SuspiciousCharsInHeaders) {
         md_graphdefang_log('suspicious_chars');

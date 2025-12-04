@@ -36,7 +36,7 @@ sub t_read_config : Test(1)
         = stat($conf_fname);
     # Set correct owner to config file
     chown(0, 0, $conf_fname);
-    read_config($conf_fname);
+    ::main::read_config($conf_fname);
     is($SALocalTestsOnly, 0);
     # Set back original owner
     chown($uid, $gid, $conf_fname);
