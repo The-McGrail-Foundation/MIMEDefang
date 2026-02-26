@@ -835,6 +835,9 @@ sub action_greylist {
       md_syslog('Warning', "[greylist] Sender $sender has been added to our skiplist");
       return "continue";
     }
+    # Clear any previous non-whitelisted records for this sender/recipient pair
+    # from different IPs, so stale records don't affect future emails
+    $dbh->do(q{DELETE FROM greylist WHERE sender = ? AND recipient = ? AND sender_host_ip != ? AND known_ip = 0}, undef, $sender, $recipient, $ip);
     $dbh->do(q{INSERT INTO greylist(sender_host_ip, sender, recipient, first_received, last_received, known_ip) VALUES(?, ?, ?, ?, ?, ?)}, undef, $ip, $sender, $recipient, $now, $now, 0);
     md_syslog('Warning', "[greylist] Tempfail sender $sender, please come back later");
     return "tempfail";
