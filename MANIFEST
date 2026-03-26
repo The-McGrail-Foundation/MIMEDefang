@@ -62,6 +62,8 @@ gen_id.c
 gen-ip-validator.pl
 install-sh
 LICENSE
+MANIFEST
+MANIFEST.SKIP
 Makefile.PL
 md-mx-ctrl.8.in
 md-mx-ctrl.c
