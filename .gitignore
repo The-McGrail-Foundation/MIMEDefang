@@ -31,3 +31,5 @@ script/mimedefang-util.1
 watch-mimedefang
 xs_init.c
 autom4te.cache
+blib/
+MIMEDefang.bs

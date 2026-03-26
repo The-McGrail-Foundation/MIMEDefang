@@ -5,3 +5,8 @@
 \.o$
 \.tar.gz$
 \.tar.gz.sig$
+^blib/
+xs_init.c
+script/mimedefang-util.1
+redhat/mimedefang.spec
+^MYMETA.(json|yml)$

@@ -7,8 +7,8 @@ VER=$(perl -I modules/lib -e 'use Mail::MIMEDefang; print Mail::MIMEDefang::md_v
 dnf install -y initscripts 1>/dev/null 2>&1
 dnf remove -y --noautoremove mimedefang 1>/dev/null 2>&1
 make distclean 1>/dev/null 2>&1
-./configure 1>/dev/null 2>&1
-make distro 1>/dev/null 2>&1
+perl Makefile.PL MAKEMETA=1 INSTALLDIRS=vendor 1>/dev/null 2>&1
+make tardist 1>/dev/null 2>&1
 mkdir -p ~/rpmbuild/SOURCES
 mkdir -p ~/rpmbuild/BUILD
 cp mimedefang-${VER}.tar.gz ~/rpmbuild/SOURCES
