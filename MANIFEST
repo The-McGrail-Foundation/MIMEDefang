@@ -102,7 +102,6 @@ redhat/mimedefang-init.in
 redhat/mimedefang-sysconfig.in
 redhat/mimedefang-spec.in
 rm_r.c
-script/mimedefang-util.1
 script/mimedefang-util.in
 SpamAssassin/spamassassin.cf
 syslog-fac.c
@@ -150,9 +149,7 @@ t/smtp.t
 t/spf.t
 t/utils.t
 utils.c
-watch-mimedefang
 watch-mimedefang.8
 watch-mimedefang.in
 watch-multiple-mimedefangs.8
 watch-multiple-mimedefangs.tcl
-xs_init.c

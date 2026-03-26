@@ -33,3 +33,5 @@ xs_init.c
 autom4te.cache
 blib/
 MIMEDefang.bs
+MYMETA.json
+MYMETA.yml

@@ -8,5 +8,6 @@
 ^blib/
 xs_init.c
 script/mimedefang-util.1
+^watch-mimedefang$
 redhat/mimedefang.spec
 ^MYMETA.(json|yml)$
