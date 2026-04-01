@@ -74,4 +74,50 @@ sub change_header_ok : Test(3)
         unlink('./RESULTS') if -f './RESULTS';
 }
 
+sub insert_header_ok : Test(2)
+{
+	my @results;
+
+	$InMessageContext = 1;
+
+	action_insert_header('X-Test', 'val', 2);
+	undef $results_fh;
+	@results = Mail::MIMEDefang::Utils::read_results();
+	cmp_deeply( \@results, [ ['N', 'X-Test', 2, 'val'] ], 'action_insert_header() wrote correct N line with explicit position');
+	unlink('./RESULTS') if -f './RESULTS';
+
+	action_insert_header('X-Other', 'foo');
+	undef $results_fh;
+	@results = Mail::MIMEDefang::Utils::read_results();
+	cmp_deeply( \@results, [ ['N', 'X-Other', 0, 'foo'] ], 'action_insert_header() defaults to position 0');
+	unlink('./RESULTS') if -f './RESULTS';
+}
+
+sub delete_all_headers_ok : Test(2)
+{
+	$InMessageContext = 1;
+
+	# Create a HEADERS file with two X-Spam lines
+	open(my $h, '>', './HEADERS') or die "Cannot create HEADERS: $!";
+	print $h "X-Spam: yes\n";
+	print $h "X-Spam: maybe\n";
+	close($h);
+
+	unlink('./RESULTS') if -f './RESULTS';
+	undef $results_fh;
+	action_delete_all_headers('X-Spam');
+
+	undef $results_fh;
+	my @results = Mail::MIMEDefang::Utils::read_results();
+	# Deletes in reverse order: index 2 first, then index 1
+	cmp_deeply( \@results, [ ['J', 'X-Spam', 2], ['J', 'X-Spam', 1] ], 'action_delete_all_headers() deletes all instances in reverse order');
+	unlink('./RESULTS') if -f './RESULTS';
+	unlink('./HEADERS') if -f './HEADERS';
+
+	# Returns 0 outside message context
+	$InMessageContext = 0;
+	my $ret = action_delete_all_headers('X-Spam');
+	is($ret, 0, 'action_delete_all_headers() returns 0 outside message context');
+}
+
 __PACKAGE__->runtests();

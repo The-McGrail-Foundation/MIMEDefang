@@ -52,4 +52,14 @@ sub t_hour_str: Test(1)
 	like(Mail::MIMEDefang::Utils::hour_str(), qr/[0-9]{4}\-[0-9]{2}\-[0-9]{2}\-[0-9]{2}/);
 }
 
+sub t_gen_date_msgid_headers : Test(2)
+{
+	no warnings 'once';
+	local $::main::QueueID = 'TESTQID';
+
+	my $result = ::main::gen_date_msgid_headers("Message-ID: <custom\@host.example>\n");
+	like($result, qr/^Date: /, 'gen_date_msgid_headers output starts with Date header');
+	like($result, qr/Message-ID: <custom\@host\.example>/, 'gen_date_msgid_headers uses the supplied Message-ID');
+}
+
 __PACKAGE__->runtests();
