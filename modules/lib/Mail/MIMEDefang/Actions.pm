@@ -402,9 +402,11 @@ Method that returns True if message has been rejected
 #***********************************************************************
 sub message_rejected {
     return 0 if (!in_message_context("message_rejected"));
-    return (defined($Actions{'tempfail'}) ||
-	    defined($Actions{'bounce'})   ||
-	    defined($Actions{'discard'}));
+    return (
+        (defined $Actions{'tempfail'} ? 1 : 0) ||
+        (defined $Actions{'bounce'}   ? 1 : 0) ||
+        (defined $Actions{'discard'}  ? 1 : 0)
+    ) ? 1 : 0;
 }
 
 =item action_drop
