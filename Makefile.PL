@@ -407,10 +407,21 @@ WriteMakefile(
     MIN_PERL_VERSION => '5.008009',
     AUTHOR           => 'The McGrail Foundation <https://mimedefang.org>',
     ABSTRACT         => 'E-mail filtering with Sendmail Milter',
-    
+
     META_MERGE => {
         'meta-spec' => { version => 2 },
         license     => [ 'GPL-2.0-only' ],
+        resources => {
+            repository => {
+                type => 'git',
+                url  => 'https://github.com/The-McGrail-Foundation/MIMEDefang.git',
+                web  => 'https://mimedefang.org',
+            },
+            bugtracker => {
+                web => 'https://github.com/The-McGrail-Foundation/MIMEDefang/issues'
+            },
+         },
+
     },
 
     # Perl module sources
@@ -773,7 +784,7 @@ C
     return $ok;
 }
 
-sub probe_socklen {    
+sub probe_socklen {
     my $tmpdir = File::Spec->tmpdir();
     my $src    = File::Spec->catfile($tmpdir, "conftest_inet_$$.c");
     my $exe    = File::Spec->catfile($tmpdir, "conftest_inet_$$");
