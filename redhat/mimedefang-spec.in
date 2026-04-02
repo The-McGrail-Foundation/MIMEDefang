@@ -149,7 +149,6 @@ Vendor:        MIMEDefang
 Buildroot:     %{_tmppath}/%{name}-root
 Requires:      perl-Digest-SHA perl-Digest-MD5 perl-MIME-tools perl-MailTools perl-Unix-Syslog
 BuildRequires: sendmail-milter-devel >= 8.12.0
-BuildRequires: autoconf > 2.55
 
 %description
 MIMEDefang is an e-mail filter program which works with Sendmail 8.11
@@ -172,21 +171,7 @@ complain loudly about MIMEDefang.
 
 %prep
 %setup -q -n %{name}-%{version}%{?prerelease}
-autoconf
-%configure --prefix=%{_prefix} \
-            --mandir=%{_mandir} \
-	    --with-milterlib=%{_libdir} \
-	    --sysconfdir=/etc   \
-	    --disable-check-perl-modules \
-            --with-spooldir=%{dir_spool} \
-            --with-quarantinedir=%{dir_quarantine} \
-%if %{with_antivirus}
-	    --with-user=%{user}
-%else
-	    --with-user=%{user} \
-	    --disable-anti-virus
-%endif
-
+perl Makefile.PL INSTALLDIRS=vendor
 %build
 make DONT_STRIP=1
 
@@ -196,6 +181,8 @@ mkdir -p $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT/%{dir_log}
 make DESTDIR=$RPM_BUILD_ROOT \
      INSTALL='install -p' INSTALL_STRIP_FLAG='' install-redhat
+rm -f %{buildroot}%{_libdir}/perl5/perllocal.pod
+rm -f %{buildroot}%{_libdir}/perl5/vendor_perl/auto/Mail/MIMEDefang/.packlist
 # Turn off execute bit on scripts in contrib
 find contrib -type f -print0 | xargs -0 chmod a-x
 
