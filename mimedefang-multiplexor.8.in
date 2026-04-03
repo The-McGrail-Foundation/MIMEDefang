@@ -178,6 +178,14 @@ Write debugging information about event-handling code in
 debugging \fBmimedefang-multiplexor\fR.
 
 .TP
+.B \-A
+Log details about worker scheduling decisions using syslog.  Each time a
+worker is selected to handle a request, a line is logged at \fBLOG_INFO\fR
+level showing the worker state, worker number, command number, and the
+worker's activation and last-command timestamps.  This option is only
+useful when debugging worker-scheduling behaviour.
+
+.TP
 .B \-R \fIkbytes\fR
 Limits the resident-set size of the worker filter processes to
 \fIkbytes\fR kilobytes.  This limit is not supported on all operating
