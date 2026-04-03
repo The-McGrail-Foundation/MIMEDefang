@@ -64,6 +64,7 @@ install-sh
 LICENSE
 MANIFEST
 MANIFEST.SKIP
+Makefile.in
 Makefile.PL
 md-mx-ctrl.8.in
 md-mx-ctrl.c
