@@ -113,6 +113,7 @@ t/actions.t
 t/antispam.t
 t/arc.t
 t/authres.t
+t/autoscale.t
 t/core.t
 t/critic.t
 t/data/arc1.eml

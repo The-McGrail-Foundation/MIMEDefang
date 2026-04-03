@@ -189,6 +189,13 @@ struct Settings_t {
     char const *syslog_label;   /* Syslog label                             */
     int wantStatusReports;      /* Do we want status reports from workers?   */
     int debugWorkerScheduling;   /* Log details about worker scheduling       */
+    int    autoscaling;          /* 1 = adaptive autoscaling enabled (-k)     */
+    int    autoscaleInterval;    /* Seconds between autoscale checks          */
+    double scaleOutBusyRatio;    /* Busy ratio threshold to trigger scale-out */
+    double scaleInBusyRatio;     /* Busy ratio threshold to trigger scale-in  */
+    int    scaleOutCooldown;     /* Min seconds between consecutive scale-outs*/
+    int    scaleInCooldown;      /* Min seconds between consecutive scale-ins */
+    double emaAlpha;             /* EMA smoothing factor (0,1)                */
 } Settings;
 
 /* Structure for keeping statistics on number of messages processed in
@@ -299,6 +306,7 @@ static void doScan(EventSelector *es, int fd, char *cmd);
 static void doWorkerInfo(EventSelector *es, int fd, char *cmd);
 static void doScanAux(EventSelector *es, int fd, char *cmd, int queueable);
 static void doStatus(EventSelector *es, int fd);
+static void doAutoscaleStatus(EventSelector *es, int fd);
 static void doHelp(EventSelector *es, int fd, int unpriv);
 static void doWorkerReport(EventSelector *es, int fd, int only_busy);
 static void doLoad(EventSelector *es, int fd, int cmd);
@@ -324,6 +332,8 @@ static void hupHandler(int sig);
 static void intHandler(int sig);
 static void sigterm(int sig);
 static void newGeneration(void);
+static void handleAutoscale(EventSelector *es,
+				int fd, unsigned int flags, void *data);
 
 static void handleIdleTimeout(EventSelector *es, int fd, unsigned int flags,
 			      void *data);
@@ -542,6 +552,7 @@ usage(void)
     fprintf(stderr, "  -P n              -- Run 'n' parallel tick requests\n");
     fprintf(stderr, "  -Y label          -- Set syslog label to 'label'\n");
     fprintf(stderr, "  -G                -- Make sockets group-writable\n");
+    fprintf(stderr, "  -k                -- Enable adaptive autoscaling of the worker pool\n");
 #ifdef EMBED_PERL
     fprintf(stderr, "  -E                -- Use embedded Perl interpreter\n");
 #endif
@@ -649,11 +660,18 @@ main(int argc, char *argv[], char **env)
     Settings.mapSock       = NULL;
     Settings.wantStatusReports = 0;
     Settings.debugWorkerScheduling = 0;
+    Settings.autoscaling       = 0;
+    Settings.autoscaleInterval = 15;
+    Settings.scaleOutBusyRatio = 0.80;
+    Settings.scaleInBusyRatio  = 0.30;
+    Settings.scaleOutCooldown  = 5;
+    Settings.scaleInCooldown   = 30;
+    Settings.emaAlpha          = 0.25;
 
 #ifndef HAVE_SETRLIMIT
-    options = "GAa:Tt:um:x:y:r:i:b:c:s:hdlf:p:o:w:F:W:U:S:q:Q:I:DEO:X:Y:N:vZP:z:V:";
+    options = "GAa:Tt:um:x:y:r:i:b:c:s:hdlf:p:o:w:F:W:U:S:q:Q:I:DEO:X:Y:N:vZP:z:V:k";
 #else
-    options = "GAa:Tt:um:x:y:r:i:b:c:s:hdlf:p:o:w:F:W:U:S:q:Q:L:R:M:I:DEO:X:Y:N:vZP:z:V:";
+    options = "GAa:Tt:um:x:y:r:i:b:c:s:hdlf:p:o:w:F:W:U:S:q:Q:L:R:M:I:DEO:X:Y:N:vZP:z:V:k";
 #endif
     while((c = getopt(argc, argv, options)) != -1) {
 	switch(c) {
@@ -664,6 +682,9 @@ main(int argc, char *argv[], char **env)
 
 	case 'A':
 	    Settings.debugWorkerScheduling = 1;
+	    break;
+	case 'k':
+	    Settings.autoscaling = 1;
 	    break;
 	case 'z':
 	    Settings.spoolDir = strdup(optarg);
@@ -1331,6 +1352,18 @@ main(int argc, char *argv[], char **env)
     t.tv_sec = Settings.maxIdleTime;
     Event_AddTimerHandler(es, t, handleIdleTimeout, NULL);
 
+    /* Set up adaptive autoscaling timer if enabled (-k flag) */
+    if (Settings.autoscaling) {
+	t.tv_usec = 0;
+	t.tv_sec  = Settings.autoscaleInterval;
+	Event_AddTimerHandler(es, t, handleAutoscale, NULL);
+	syslog(LOG_INFO,
+	       "Autoscaling enabled: interval=%ds scale_out=%.0f%% scale_in=%.0f%%",
+	       Settings.autoscaleInterval,
+	       Settings.scaleOutBusyRatio * 100.0,
+	       Settings.scaleInBusyRatio  * 100.0);
+    }
+
     /* Set up a timer handler to log status, if desired */
     if (Settings.logStatusInterval) {
 	t.tv_usec = 0;
@@ -1913,6 +1946,11 @@ handleCommand(EventSelector *es,
 	}
 #endif
 	reply_to_mimedefang(es, fd, "Forced reread of filter rules\n");
+	return;
+    }
+
+    if (len == 9 && !strcmp(buf, "autoscale")) {
+	doAutoscaleStatus(es, fd);
 	return;
     }
 
@@ -3595,6 +3633,81 @@ newGeneration(void)
     }
 }
 
+/* Autoscaling state */
+static time_t LastScaleOut = 0;
+static time_t LastScaleIn  = 0;
+static double EMABusyRatio = 0.0;
+
+/**********************************************************************
+* %FUNCTION: handleAutoscale
+* %ARGUMENTS:
+*  es -- event selector
+*  fd, flags, data -- ignored
+* %RETURNS:
+*  Nothing
+* %DESCRIPTION:
+*  Called periodically when autoscaling is enabled (-k flag).
+*  Uses an exponential moving average (EMA) of the busy-worker ratio
+*  to make scale-out and scale-in decisions with AIMD-style cooldowns.
+*  Scale out when the EMA exceeds scaleOutBusyRatio; scale in when it
+*  falls below scaleInBusyRatio and both cooldown timers have elapsed.
+***********************************************************************/
+static void
+handleAutoscale(EventSelector *es,
+		int fd,
+		unsigned int flags,
+		void *data)
+{
+    time_t now    = time(NULL);
+    struct timeval t;
+    int nRunning  = NUM_RUNNING_WORKERS;
+    int nBusy     = WorkerCount[STATE_BUSY];
+    double rawBusy = (nRunning > 0) ? (double)nBusy / nRunning : 0.0;
+    char reason[128];
+    Worker *s;
+
+    /* Update exponential moving average of busy ratio */
+    EMABusyRatio = EMABusyRatio * (1.0 - Settings.emaAlpha)
+                 + rawBusy      *        Settings.emaAlpha;
+
+    /* Scale OUT: pool is saturated */
+    if (EMABusyRatio > Settings.scaleOutBusyRatio
+	    && nRunning < Settings.maxWorkers
+	    && (now - LastScaleOut) > (time_t)Settings.scaleOutCooldown) {
+	s = Workers[STATE_STOPPED];
+	if (s) {
+	    snprintf(reason, sizeof(reason),
+		     "Autoscale: scale-out (ema_busy=%.2f)", EMABusyRatio);
+	    activateWorker(s, reason);
+	    LastScaleOut = now;
+	    syslog(LOG_INFO,
+		   "Autoscale: scaled out to %d workers (ema_busy=%.2f queued=%d)",
+		   NUM_RUNNING_WORKERS, EMABusyRatio, NumQueuedRequests);
+	}
+    }
+    /* Scale IN: pool is under-utilised */
+    else if (EMABusyRatio < Settings.scaleInBusyRatio
+	     && nRunning  > Settings.minWorkers
+	     && (now - LastScaleIn)  > (time_t)Settings.scaleInCooldown
+	     && (now - LastScaleOut) > (time_t)Settings.scaleInCooldown) {
+	s = Workers[STATE_IDLE];
+	if (s) {
+	    snprintf(reason, sizeof(reason),
+		     "Autoscale: scale-in (ema_busy=%.2f)", EMABusyRatio);
+	    killWorker(s, reason);
+	    LastScaleIn = now;
+	    syslog(LOG_INFO,
+		   "Autoscale: scaled in to %d workers (ema_busy=%.2f)",
+		   NUM_RUNNING_WORKERS, EMABusyRatio);
+	}
+    }
+
+    /* Reschedule */
+    t.tv_usec = 0;
+    t.tv_sec  = Settings.autoscaleInterval;
+    Event_AddTimerHandler(es, t, handleAutoscale, NULL);
+}
+
 /**********************************************************************
 * %FUNCTION: bringWorkersUpToMin
 * %ARGUMENTS:
@@ -3839,6 +3952,33 @@ doStatus(EventSelector *es, int fd)
 }
 
 /**********************************************************************
+* %FUNCTION: doAutoscaleStatus
+* %ARGUMENTS:
+*  es -- event selector
+*  fd -- socket
+* %RETURNS:
+*  Nothing
+* %DESCRIPTION:
+*  Prints current autoscaling configuration and runtime state.
+***********************************************************************/
+static void
+doAutoscaleStatus(EventSelector *es, int fd)
+{
+    char ans[256];
+    snprintf(ans, sizeof(ans),
+             "enabled=%d interval=%d ema_busy=%.4f scale_out=%.2f scale_in=%.2f out_cool=%d in_cool=%d ema_alpha=%.4f\n",
+             Settings.autoscaling,
+             Settings.autoscaleInterval,
+             EMABusyRatio,
+             Settings.scaleOutBusyRatio,
+             Settings.scaleInBusyRatio,
+             Settings.scaleOutCooldown,
+             Settings.scaleInCooldown,
+             Settings.emaAlpha);
+    reply_to_mimedefang(es, fd, ans);
+}
+
+/**********************************************************************
 * %FUNCTION: doHelp
 * %ARGUMENTS:
 *  es -- event selector
@@ -3876,6 +4016,7 @@ doHelp(EventSelector *es, int fd, int unpriv)
 	"workers          -- Display workers with process-IDs\n"
 	"busyworkers      -- Display busy workers with process-IDs\n"
         "workerinfo n     -- Display information about a particular worker\n"
+	"autoscale        -- Display autoscaling configuration and runtime state\n"
 	"(Analogous hload commands provide hourly information)\n");
     } else {
 	reply_to_mimedefang(es, fd,
@@ -3902,6 +4043,7 @@ doHelp(EventSelector *es, int fd, int unpriv)
 	"workers          -- Display workers with process-IDs\n"
 	"busyworkers      -- Display busy workers with process-IDs\n"
 	"workerinfo n     -- Display information about a particular worker\n"
+	"autoscale        -- Display autoscaling configuration and runtime state\n"
 	"scan /path       -- Run a scan (do not invoke using md-mx-ctrl)\n"
 	"(Analogous hload commands provide hourly information)\n");
     }

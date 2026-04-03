@@ -335,6 +335,34 @@ Sets the tag used in the multiplexor's syslog messages to
 \fIlabel\fR instead of \fBmimedefang-multiplexor\fR.
 
 .TP
+\fB\-k\fR
+Enable adaptive autoscaling of the worker pool.  When this option is
+supplied, \fBmimedefang-multiplexor\fR periodically computes an
+exponential moving average (EMA) of the busy-worker ratio and
+automatically starts or stops workers to match demand:
+
+.RS
+.PP
+If the EMA busy ratio exceeds 80%, an additional worker is activated
+(up to \fImaxWorkers\fR, as set by \fB\-x\fR).
+
+.PP
+If the EMA busy ratio falls below 30%, an excess worker is killed
+(down to \fIminWorkers\fR, as set by \fB\-m\fR).
+.RE
+
+.PP
+The check is performed every 15 seconds.  To avoid thrashing, a
+scale-out event cannot occur within 5 seconds of the previous
+scale-out, and a scale-in event cannot occur within 30 seconds of the
+previous scale-out or scale-in.
+
+.PP
+The current autoscaling state (enabled flag, EMA value, and all
+thresholds) can be inspected at any time with the \fBautoscale\fR
+command via \fBmd-mx-ctrl\fR(8).
+
+.TP
 \fB\-G\fR
 Normally, \fBmimedefang-multiplexor\fR uses a umask of 027 when
 creating listening sockets.  If you would like the sockets to be
