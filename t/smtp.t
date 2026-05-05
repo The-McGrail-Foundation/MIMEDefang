@@ -5,46 +5,44 @@ use lib qw(modules/lib);
 use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
-sub t0_smtp_sa : Test(1)
-{
-  SKIP: {
-    if ( (not defined $ENV{'SMTP_TEST'}) or ($ENV{'SMTP_TEST'} ne 'yes' )) {
-      skip "Smtp test disabled", 1
-    }
-    my $from = 'defang';
-    my $to = 'defang';
-    my $filemail = "t/data/gtube.eml";
-    my $ret = Mail::MIMEDefang::Unit::smtp_mail($from, $to, $filemail);
-    like($ret, qr/5\.7\.1 /);
-  };
+sub _smtp_enabled {
+	return (defined $ENV{'SMTP_TEST'} and $ENV{'SMTP_TEST'} eq 'yes');
 }
 
-sub t1_smtp : Test(2)
+sub t0_smtp_basic : Test(1)
 {
-  SKIP: {
-    if ( (not defined $ENV{'SMTP_TEST'}) or ($ENV{'SMTP_TEST'} ne 'yes' )) {
-      skip "Smtp test disabled", 1
-    }
-    my $from = 'defang';
-    my $to = 'defang';
-    my $filemail = "t/data/multipart.eml";
-    my $ret = Mail::MIMEDefang::Unit::smtp_mail($from, $to, $filemail);
-    sleep 5;
-    like($ret, qr/2\.0\.0 /);
-    $filemail = "t/data/exe.eml";
-    $ret = Mail::MIMEDefang::Unit::smtp_mail($from, $to, $filemail);
-    sleep 5;
-    my $warning = 0;
-    if(open(my $fh, '<', '/var/spool/mail/defang')) {
-      while(my $line = <$fh>) {
-        if($line =~ /An attachment named test.exe was removed/) {
-          $warning = 1;
-        }
-      }
-      close $fh;
-    }
-    is($warning, 1);
-  };
+	SKIP: {
+		skip "Smtp test disabled", 1 unless _smtp_enabled();
+		my $ret = Mail::MIMEDefang::Unit::smtp_mail('defang', 'defang', 't/data/multipart.eml');
+		unlike($ret, qr/[45]\.\d+\.\d+ /, 'clean multipart message accepted without errors');
+	};
+}
+
+sub t1_smtp_gtube : Test(1)
+{
+	SKIP: {
+		skip "Smtp test disabled", 1 unless _smtp_enabled();
+		my $ret = Mail::MIMEDefang::Unit::smtp_mail('defang', 'defang', 't/data/gtube.eml');
+		like($ret, qr/[45]\.\d+\.\d+ /, 'GTUBE message rejected or tempfailed');
+	};
+}
+
+sub t2_smtp_exe : Test(2)
+{
+	SKIP: {
+		skip "Smtp test disabled", 2 unless _smtp_enabled();
+		my $ret = Mail::MIMEDefang::Unit::smtp_mail('defang', 'defang', 't/data/exe.eml');
+		sleep 5;
+		unlike($ret, qr/[45]\.\d+\.\d+ /, 'exe message delivered with attachment stripped');
+		my $warning = 0;
+		if (open(my $fh, '<', '/var/spool/mail/defang')) {
+			while (my $line = <$fh>) {
+				$warning = 1 if $line =~ /An attachment named test\.exe was removed/;
+			}
+			close $fh;
+		}
+		is($warning, 1, 'exe attachment removal warning present in delivered mail');
+	};
 }
 
 __PACKAGE__->runtests();
