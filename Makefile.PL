@@ -455,12 +455,13 @@ WriteMakefile(
         (map { ("MD_$_" => $AV_PATHS{$_}) } keys %AV_PATHS),
     },
 
-    clean  => { FILES => join(' ',
+    clean    => { FILES => join(' ',
         'config.h',
         @GENERATED_FILES,
         'mimedefang mimedefang-multiplexor md-mx-ctrl',
         '*.o',
     )},
+    realclean => { FILES => 'mimedefang-*.tar.gz mimedefang-*.tar.gz.sig' },
 
     postamble => {
       'custom' =>  <<"MAKE",
