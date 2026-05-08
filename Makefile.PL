@@ -37,22 +37,32 @@ use POSIX          qw(uname);
 my $VERSION = '3.6';
 
 # ---------------------------------------------------------------------------
-# AV scanner table  (name => Makefile variable)
+# AV scanner table  (binary => template token)
+# Keys must match the @TOKEN@ names used in mimedefang.pl.in
 # ---------------------------------------------------------------------------
 my @AV_SCANNERS = (
     [ clamscan   => 'CLAMSCAN'   ],
     [ clamdscan  => 'CLAMDSCAN'  ],
-    [ uvscan     => 'UVSCAN'     ],
-    [ sweep      => 'SWEEP'      ],
+    [ clamd      => 'CLAMD'      ],
+    [ uvscan     => 'NAI'        ],  # NAI/McAfee uvscan
+    [ sweep      => 'SOPHOS'     ],  # Sophos sweep
     [ trend      => 'TREND'      ],
-    [ AvpLinux   => 'AVPLINUX'   ],
-    [ antivir    => 'ANTIVIR'    ],
+    [ AvpLinux   => 'AVP'        ],  # Kaspersky AvpLinux
+    [ aveclient  => 'AVP5'       ],  # Kaspersky AVP5
+    [ kavscanner => 'KAVSCANNER' ],
+    [ antivir    => 'HBEDV'      ],  # H+BEDV / Avira antivir
+    [ vascan     => 'VEXIRA'     ],  # Vexira vascan
+    [ bdc        => 'BDC'        ],  # BitDefender
     [ fsav       => 'FSAV'       ],
     [ 'f-prot'   => 'FPROT'      ],
     [ fpscan     => 'FPSCAN'     ],
     [ sophie     => 'SOPHIE'     ],
     [ nvcc       => 'NVCC'       ],
     [ savscan    => 'SAVSCAN'    ],
+    [ trophie    => 'TROPHIE'    ],
+    [ csav       => 'CSAV'       ],
+    [ nod32cli   => 'NOD32'      ],
+    [ rspamc     => 'RSPAMC'     ],
 );
 
 # ---------------------------------------------------------------------------
@@ -131,7 +141,8 @@ my $MANDIR = do {
     $base || '/usr/share/man';
 };
 
-my $MIMEDEFANG_PL = opt('MIMEDEFANG_PL',  $Config{prefix} . "/bin/mimedefang.pl");
+my $BINDIR_DEFAULT = ($Config{siteprefix} || '/usr/local') . '/bin';
+my $MIMEDEFANG_PL = opt('MIMEDEFANG_PL', "$BINDIR_DEFAULT/mimedefang.pl");
 # --- User-supplied paths ---------------------------------------------------
 my $DEFANGUSER    = opt('DEFANGUSER',    'defang');
 my $SPOOLDIR      = opt('SPOOLDIR',      '/var/spool/MIMEDefang');
@@ -328,7 +339,7 @@ my $CFLAGS = join(' ',
     ($ENABLE_POLL              ? '-DUSE_POLL'             : ()),
     ($ENABLE_PTHREAD_FLAG      ? '-pthread'               : ()),
     ($HAVE_CLOCK_MONOTONIC     ? '-DHAVE_CLOCK_MONOTONIC' : ()),
-    ($ENABLE_EMBEDDED_PERL     ? ('-DWITH_EMBEDDED_PERL', $EMBPERL_CFLAGS) : ()),
+    ($ENABLE_EMBEDDED_PERL     ? ('-DEMBED_PERL', $EMBPERL_CFLAGS) : ()),
 );
 
 my $LDFLAGS_MILTER  = "-L$MILTERLIB -lmilter";
@@ -462,7 +473,7 @@ WriteMakefile(
         MD_SENDMAILPROG    => $SENDMAILPROG,
         MD_VERSION         => $VERSION,
         MD_MANDIR          => $MANDIR,
-        BINDIR             => ($Config{siteprefix} || '/usr/local') . '/bin',
+        BINDIR             => $BINDIR_DEFAULT,
         SBINDIR            => ($Config{siteprefix} || '/usr/local') . '/sbin',
         MANDIR             => ($Config{siteprefix} || '/usr/local') . '/man',
         LIBDIR             => ($Config{siteprefix} || '/usr/local') . '/lib',
@@ -587,7 +598,7 @@ MAKE
             local $/;
             my $content = <$in>;
             close $in;
-            $content =~ s{\@([A-Z0-9_]+)\@}{ exists $subst{$1} ? $subst{$1} : "\@$1\@" }ge;
+            $content =~ s{\@([A-Z0-9_]+)\@}{ exists $subst{$1} ? $subst{$1} : '/bin/false' }ge;
             (my $outf = $mdfile) =~ s/\.in$//;
             open my $out, '>', $outf or do { warn "Cannot write $outf: $!\n"; next };
             print $out $content;
@@ -970,7 +981,7 @@ sub write_config_h {
     print $fh "#define HAVE_MILTER\n"           if $v{HAVE_MILTER};
     print $fh "#ifndef ENABLE_DEBUGGING\n#define ENABLE_DEBUGGING\n#endif\n" if $v{ENABLE_DEBUGGING};
     print $fh "#ifndef USE_POLL\n#define USE_POLL\n#endif\n"                 if $v{ENABLE_POLL};
-    print $fh "#ifndef WITH_EMBEDDED_PERL\n#define WITH_EMBEDDED_PERL\n#endif\n" if $v{WITH_EMBEDDED_PERL};
+    print $fh "#ifndef EMBED_PERL\n#define EMBED_PERL\n#endif\n" if $v{WITH_EMBEDDED_PERL};
     print $fh "#define STDC_HEADERS 1\n";
     close $fh;
     print "config.h written.\n";

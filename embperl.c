@@ -129,7 +129,14 @@ make_embedded_interpreter(char const *progPath,
     PERL_SET_INTERP(my_perl);
     PL_perl_destruct_level = 1;
     perl_construct(my_perl);
-    perl_parse(my_perl, xs_init, argc, argv, NULL);
+    PL_perl_destruct_level = 1;
+    if (perl_parse(my_perl, xs_init, argc, argv, NULL) != 0) {
+	syslog(LOG_ERR, "perl_parse failed for %s -- embedded Perl disabled", progPath);
+	perl_destruct(my_perl);
+	perl_free(my_perl);
+	my_perl = NULL;
+	return -1;
+    }
     perl_run(my_perl);
     return 0;
 }
