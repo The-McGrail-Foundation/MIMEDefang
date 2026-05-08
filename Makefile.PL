@@ -37,22 +37,32 @@ use POSIX          qw(uname);
 my $VERSION = '3.6';
 
 # ---------------------------------------------------------------------------
-# AV scanner table  (name => Makefile variable)
+# AV scanner table  (binary => template token)
+# Keys must match the @TOKEN@ names used in mimedefang.pl.in
 # ---------------------------------------------------------------------------
 my @AV_SCANNERS = (
     [ clamscan   => 'CLAMSCAN'   ],
     [ clamdscan  => 'CLAMDSCAN'  ],
-    [ uvscan     => 'UVSCAN'     ],
-    [ sweep      => 'SWEEP'      ],
+    [ clamd      => 'CLAMD'      ],
+    [ uvscan     => 'NAI'        ],  # NAI/McAfee uvscan
+    [ sweep      => 'SOPHOS'     ],  # Sophos sweep
     [ trend      => 'TREND'      ],
-    [ AvpLinux   => 'AVPLINUX'   ],
-    [ antivir    => 'ANTIVIR'    ],
+    [ AvpLinux   => 'AVP'        ],  # Kaspersky AvpLinux
+    [ aveclient  => 'AVP5'       ],  # Kaspersky AVP5
+    [ kavscanner => 'KAVSCANNER' ],
+    [ antivir    => 'HBEDV'      ],  # H+BEDV / Avira antivir
+    [ vascan     => 'VEXIRA'     ],  # Vexira vascan
+    [ bdc        => 'BDC'        ],  # BitDefender
     [ fsav       => 'FSAV'       ],
     [ 'f-prot'   => 'FPROT'      ],
     [ fpscan     => 'FPSCAN'     ],
     [ sophie     => 'SOPHIE'     ],
     [ nvcc       => 'NVCC'       ],
     [ savscan    => 'SAVSCAN'    ],
+    [ trophie    => 'TROPHIE'    ],
+    [ csav       => 'CSAV'       ],
+    [ nod32cli   => 'NOD32'      ],
+    [ rspamc     => 'RSPAMC'     ],
 );
 
 # ---------------------------------------------------------------------------
@@ -131,7 +141,8 @@ my $MANDIR = do {
     $base || '/usr/share/man';
 };
 
-my $MIMEDEFANG_PL = opt('MIMEDEFANG_PL',  $Config{prefix} . "/bin/mimedefang.pl");
+my $BINDIR_DEFAULT = ($Config{siteprefix} || '/usr/local') . '/bin';
+my $MIMEDEFANG_PL = opt('MIMEDEFANG_PL', "$BINDIR_DEFAULT/mimedefang.pl");
 # --- User-supplied paths ---------------------------------------------------
 my $DEFANGUSER    = opt('DEFANGUSER',    'defang');
 my $SPOOLDIR      = opt('SPOOLDIR',      '/var/spool/MIMEDefang');
@@ -305,6 +316,10 @@ print "inet_ntop             : " . ($HAVE_INET_NTOP ? 'yes' : 'no') . "\n";
 my $HAVE_SOCKLEN_T = probe_socklen();
 print "socklen_t             : " . ($HAVE_SOCKLEN_T ? 'yes' : 'no') . "\n";
 
+# --- libresolv probe -------------------------------------------------------
+my $HAVE_LIBRESOLV = probe_libresolv();
+print "libresolv             : " . ($HAVE_LIBRESOLV ? 'yes' : 'no (using libc)') . "\n";
+
 # --- Embedded Perl C/LD flags ----------------------------------------------
 my ($EMBPERL_CFLAGS, $EMBPERL_LDFLAGS) = ('', '');
 if ($ENABLE_EMBEDDED_PERL) {
@@ -324,13 +339,13 @@ my $CFLAGS = join(' ',
     ($ENABLE_POLL              ? '-DUSE_POLL'             : ()),
     ($ENABLE_PTHREAD_FLAG      ? '-pthread'               : ()),
     ($HAVE_CLOCK_MONOTONIC     ? '-DHAVE_CLOCK_MONOTONIC' : ()),
-    ($ENABLE_EMBEDDED_PERL     ? ('-DWITH_EMBEDDED_PERL', $EMBPERL_CFLAGS) : ()),
+    ($ENABLE_EMBEDDED_PERL     ? ('-DEMBED_PERL', $EMBPERL_CFLAGS) : ()),
 );
 
 my $LDFLAGS_MILTER  = "-L$MILTERLIB -lmilter";
 my $LDFLAGS_PTHREAD = $ENABLE_PTHREAD_FLAG ? '-lpthread' : '';
 my $LDFLAGS_EMBPERL = $ENABLE_EMBEDDED_PERL ? $EMBPERL_LDFLAGS : '';
-my $LDFLAGS_COMMON  = join(' ', '-lresolv',
+my $LDFLAGS_COMMON  = join(' ', ($HAVE_LIBRESOLV ? '-lresolv' : ()),
                             $LDFLAGS_PTHREAD, $LDFLAGS_EMBPERL);
 
 my $HAVE_MILTER = probe_milter($CC, $CFLAGS);
@@ -386,8 +401,10 @@ my %SUBST = (
 # WriteMakefile
 # ---------------------------------------------------------------------------
 
-# Collect every .in source file so make knows about them
-my @IN_FILES        = map { chomp; $_ } `find . -name '*.in' -not -path './.git/*' 2>/dev/null`;
+# Collect .in source files, excluding autoconf templates that are not processed here
+my @IN_FILES = grep { $_ !~ m{\b(Makefile|config\.h)\.in$} }
+               map  { chomp; $_ }
+               `find . -name '*.in' -not -path './.git/*' 2>/dev/null`;
 my @GENERATED_FILES = map { (my $f = $_) =~ s/\.in$//; $f } @IN_FILES;
 
 # Perl modules live under modules/lib/
@@ -401,7 +418,7 @@ my %PM = map {
 
 WriteMakefile(
     NAME             => 'Mail::MIMEDefang',
-    INSTALLDIRS      => 'vendor',
+    INSTALLDIRS      => 'site',
     DISTNAME         => "mimedefang",
     VERSION          => $VERSION,
     MIN_PERL_VERSION => '5.008009',
@@ -429,7 +446,10 @@ WriteMakefile(
     PM_FILTER        => '',
 
     # man-page sections
-    MAN3PODS         => {},
+    MAN1PODS              => {},
+    MAN3PODS              => {},
+    INSTALLVENDORMAN1DIR  => $MANDIR . '/man1',
+    INSTALLVENDORMAN3DIR  => $MANDIR . '/man3',
 
     PREREQ_PM        => \%REQUIRED_MODULES,
 
@@ -444,7 +464,8 @@ WriteMakefile(
         MD_LDFLAGS_COMMON  => $LDFLAGS_COMMON,
         MD_SPOOLDIR        => $SPOOLDIR,
         MD_QUARANTINEDIR   => $QUARANTINEDIR,
-        MD_CONFDIR         => $CONFDIR,
+        sysconfdir         => $CONFDIR,
+        MD_CONFDIR         => '$(sysconfdir)',
         MD_DEFANGUSER      => $DEFANGUSER,
         MD_SYSCONFDIR      => $SYSCONFDIR,
         MD_CONFSUBDIR      => $CONFSUBDIR,
@@ -452,6 +473,11 @@ WriteMakefile(
         MD_SENDMAILPROG    => $SENDMAILPROG,
         MD_VERSION         => $VERSION,
         MD_MANDIR          => $MANDIR,
+        BINDIR             => $BINDIR_DEFAULT,
+        SBINDIR            => ($Config{siteprefix} || '/usr/local') . '/sbin',
+        MANDIR             => ($Config{siteprefix} || '/usr/local') . '/man',
+        LIBDIR             => ($Config{siteprefix} || '/usr/local') . '/lib',
+        PERL_SITELIB       => $Config{installsitelib} || ($Config{siteprefix} || '/usr/local') . '/lib/perl5',
         (map { ("MD_$_" => $AV_PATHS{$_}) } keys %AV_PATHS),
     },
 
@@ -460,6 +486,10 @@ WriteMakefile(
         @GENERATED_FILES,
         'mimedefang mimedefang-multiplexor md-mx-ctrl',
         '*.o',
+        'xs_init.c',
+        'mimedefang-release.8',
+        'script/mimedefang-util.1',
+        'modules/man',
     )},
     realclean => { FILES => 'mimedefang-*.tar.gz mimedefang-*.tar.gz.sig' },
 
@@ -517,11 +547,10 @@ MAKE
         my $md_ldflags = '$(MD_LDFLAGS_MILTER) $(MD_LDFLAGS_COMMON)';
 
         # mimedefang-multiplexor
-        my $mux_objs = join(' ', qw(
+        my @mux_obj_list = qw(
             mimedefang-multiplexor.o
             drop_privs.o
             dynbuf.o
-            embperl.o
             event.o
             event_tcp.o
             gen_id.o
@@ -529,7 +558,9 @@ MAKE
             rm_r.o
             syslog-fac.o
             utils.o
-        ));
+        );
+        push @mux_obj_list, 'embperl.o', 'xs_init.o' if $ENABLE_EMBEDDED_PERL;
+        my $mux_objs = join(' ', @mux_obj_list);
         my $mux_ldflags = '$(MD_LDFLAGS_COMMON)';
 
         # md-mx-ctrl
@@ -539,34 +570,48 @@ MAKE
         ));
         my $ctrl_ldflags = '$(MD_LDFLAGS_COMMON)';
 
-        # Substitute @TOKEN@ placeholders in .in templates.
+        # Substitute @TOKEN@ placeholders in all .in templates at perl Makefile.PL time.
+        # This avoids relying on make pattern rules, which differ between GNU make and BSD make.
         my %subst = (
-            PERL              => $PERL,
-            PERLINSTALLSITELIB=> $perl_vars{installsitelib},
-            VERSION           => $VERSION,
-            PACKAGE           => 'mimedefang',
-            DEFANGUSER        => $DEFANGUSER,
-            SPOOLDIR          => $SPOOLDIR,
-            QUARANTINEDIR     => $QUARANTINEDIR,
-            QDIR              => $QUARANTINEDIR,
-            CONFDIR           => $CONFDIR,
-            CONFDIR_EVAL      => $CONFDIR,
-            SYSCONFDIR        => $SYSCONFDIR,
-            CONFSUBDIR        => $CONFSUBDIR,
-            SENDMAILPROG      => $SENDMAILPROG,
+            PERL               => $PERL,
+            PERLINSTALLSITELIB => $perl_vars{installsitelib},
+            VERSION            => $VERSION,
+            PACKAGE            => 'mimedefang',
+            DEFANGUSER         => $DEFANGUSER,
+            SPOOLDIR           => $SPOOLDIR,
+            QUARANTINEDIR      => $QUARANTINEDIR,
+            QDIR               => $QUARANTINEDIR,
+            CONFDIR            => $CONFDIR,
+            CONFDIR_EVAL       => $CONFDIR,
+            SYSCONFDIR         => $SYSCONFDIR,
+            CONFSUBDIR         => $CONFSUBDIR,
+            IPHEADER           => $IPHEADER,
+            SENDMAILPROG       => $SENDMAILPROG,
+            MILTERINC          => $MILTERINC,
+            MILTERLIB          => $MILTERLIB,
+            CC                 => $CC,
+            MIMEDEFANG_PL      => $MIMEDEFANG_PL,
+            %AV_PATHS,
         );
-        for my $mdfile ( 'mimedefang.pl.in', 'mimedefang-release.pl.in', 'script/mimedefang-util.in' ) {
-            open my $in, '<', $mdfile;
+        for my $mdfile (@IN_FILES) {
+            open my $in, '<', $mdfile or do { warn "Cannot open $mdfile: $!\n"; next };
             local $/;
             my $content = <$in>;
             close $in;
-            $content =~ s{\@([A-Z0-9_]+)\@}{ exists $subst{$1} ? $subst{$1} : "\@$1\@" }ge;
-
-            my $outf = $mdfile;
-            $outf =~ s/\.in$//;
-            open my $out, '>', $outf;
+            $content =~ s{\@([A-Z0-9_]+)\@}{ exists $subst{$1} ? $subst{$1} : '/bin/false' }ge;
+            (my $outf = $mdfile) =~ s/\.in$//;
+            open my $out, '>', $outf or do { warn "Cannot write $outf: $!\n"; next };
             print $out $content;
             close $out;
+            my $mode = (stat $mdfile)[2] & 0777;
+            chmod $mode, $outf;
+        }
+
+        # Generate xs_init.c for embedded Perl support
+        if ($ENABLE_EMBEDDED_PERL) {
+            print "Generating xs_init.c for embedded Perl...\n";
+            system($PERL, '-MExtUtils::Embed', '-e', 'xsinit', '--', '-o', 'xs_init.c') == 0
+                or warn "WARNING: Failed to generate xs_init.c\n";
         }
 
         # ----------------------------------------------------------------
@@ -575,44 +620,9 @@ MAKE
         return <<MAKE;
 
 # ============================================================
-# Generated files from .in templates
+# Generated files from .in templates (created by perl Makefile.PL)
 # ============================================================
-all :: $generated c_binaries
-
-# Pattern rule: substitute \@TOKEN\@ in each .in file
-%: %.in
-\t\$(PERL) -e 'BEGIN { %m = \$(SUBST_ARGS) }' \\
-\t    -pe 's{\@([A-Z0-9_]+)\@}{ \$\$m{"\$\$1"} // \$\$& }ge' \$< > \$\@
-\tchmod --reference=\$< \$\@ 2>/dev/null || true
-
-# ============================================================
-# Substitution helper: build the %m hash for the pattern rule
-# ============================================================
-SUBST_ARGS = \\
-    PERL            => q(\$(FULLPERL)),             \\
-    VERSION         => q(\$(MD_VERSION)),            \\
-    PACKAGE         => q(mimedefang),               \\
-    DEFANGUSER      => q(\$(MD_DEFANGUSER)),         \\
-    SPOOLDIR        => q(\$(MD_SPOOLDIR)),           \\
-    QUARANTINEDIR   => q(\$(MD_QUARANTINEDIR)),      \\
-    CONFDIR         => q(\$(MD_CONFDIR)),            \\
-    CONFDIR_EVAL    => q(\$(MD_CONFDIR)),            \\
-    SYSCONFDIR      => q(\$(MD_SYSCONFDIR)),         \\
-    CONFSUBDIR      => q(\$(MD_CONFSUBDIR)),         \\
-    SENDMAILPROG    => q(\$(MD_SENDMAILPROG)),       \\
-    CLAMSCAN        => q(\$(MD_CLAMSCAN)),           \\
-    CLAMDSCAN       => q(\$(MD_CLAMDSCAN)),          \\
-    UVSCAN          => q(\$(MD_UVSCAN)),             \\
-    SWEEP           => q(\$(MD_SWEEP)),              \\
-    TREND           => q(\$(MD_TREND)),              \\
-    AVPLINUX        => q(\$(MD_AVPLINUX)),           \\
-    ANTIVIR         => q(\$(MD_ANTIVIR)),            \\
-    FSAV            => q(\$(MD_FSAV)),               \\
-    FPROT           => q(\$(MD_FPROT)),              \\
-    FPSCAN          => q(\$(MD_FPSCAN)),             \\
-    SOPHIE          => q(\$(MD_SOPHIE)),             \\
-    NVCC            => q(\$(MD_NVCC)),               \\
-    SAVSCAN         => q(\$(MD_SAVSCAN))
+all :: $generated c_binaries pod2man
 
 # ============================================================
 # C binaries
@@ -629,6 +639,97 @@ md-mx-ctrl: $ctrl_objs
 \t\$(MD_CC) -o \$\@ $ctrl_objs $ctrl_ldflags
 
 # ============================================================
+# pod2man: generate man pages from POD in scripts and modules
+# ============================================================
+pod2man: mimedefang-release.8 script/mimedefang-util.1 md_module_manpages
+
+mimedefang-release.8: mimedefang-release.pl
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=8 --perm_rw=644 \\
+\t\t--center="mimedefang-release Documentation" \\
+\t\t--name="mimedefang-release" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmimedefang-release.pl mimedefang-release.8
+
+script/mimedefang-util.1: script/mimedefang-util
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=1 --perm_rw=644 \\
+\t\t--center="MIMEDefang Documentation" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tscript/mimedefang-util script/mimedefang-util.1
+
+md_module_manpages:
+\t\$(MKPATH) modules/man
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang Documentation" \\
+\t\t--name="Mail::MIMEDefang" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang.pm "modules/man/Mail::MIMEDefang.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::Actions Documentation" \\
+\t\t--name="Mail::MIMEDefang::Actions" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/Actions.pm "modules/man/Mail::MIMEDefang::Actions.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::Antispam Documentation" \\
+\t\t--name="Mail::MIMEDefang::Antispam" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/Antispam.pm "modules/man/Mail::MIMEDefang::Antispam.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::Antivirus Documentation" \\
+\t\t--name="Mail::MIMEDefang::Antivirus" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/Antivirus.pm "modules/man/Mail::MIMEDefang::Antivirus.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::Authres Documentation" \\
+\t\t--name="Mail::MIMEDefang::Authres" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/Authres.pm "modules/man/Mail::MIMEDefang::Authres.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::DKIM Documentation" \\
+\t\t--name="Mail::MIMEDefang::DKIM" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/DKIM.pm "modules/man/Mail::MIMEDefang::DKIM.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::DKIM::ARC Documentation" \\
+\t\t--name="Mail::MIMEDefang::DKIM::ARC" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/DKIM/ARC.pm "modules/man/Mail::MIMEDefang::DKIM::ARC.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::Mail Documentation" \\
+\t\t--name="Mail::MIMEDefang::Mail" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/Mail.pm "modules/man/Mail::MIMEDefang::Mail.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::MIME Documentation" \\
+\t\t--name="Mail::MIMEDefang::MIME" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/MIME.pm "modules/man/Mail::MIMEDefang::MIME.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::Net Documentation" \\
+\t\t--name="Mail::MIMEDefang::Net" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/Net.pm "modules/man/Mail::MIMEDefang::Net.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::RFC2822 Documentation" \\
+\t\t--name="Mail::MIMEDefang::RFC2822" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/RFC2822.pm "modules/man/Mail::MIMEDefang::RFC2822.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::SPF Documentation" \\
+\t\t--name="Mail::MIMEDefang::SPF" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/SPF.pm "modules/man/Mail::MIMEDefang::SPF.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::Unit Documentation" \\
+\t\t--name="Mail::MIMEDefang::Unit" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/Unit.pm "modules/man/Mail::MIMEDefang::Unit.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::Utils Documentation" \\
+\t\t--name="Mail::MIMEDefang::Utils" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/Utils.pm "modules/man/Mail::MIMEDefang::Utils.3"
+
+# ============================================================
 # Extra install targets (run after the standard EUMM install)
 # ============================================================
 install :: install_bins install_scripts install_man install_conf install_spool
@@ -642,29 +743,53 @@ install :: install_bins install_scripts install_man install_conf install_spool
 \t\@echo ""
 
 install_bins:
-\t\$(MKPATH) \$(DESTDIR)\$(INSTALLBIN)
+\t\$(MKPATH) \$(DESTDIR)\$(SBINDIR)
 \tfor b in mimedefang mimedefang-multiplexor md-mx-ctrl; do \\
-\t    \$(MD_INSTALL_PROGRAM) \$\$b \$(DESTDIR)\$(INSTALLBIN)/\$\$b; \\
+\t    \$(MD_INSTALL_PROGRAM) \$\$b \$(DESTDIR)\$(BINDIR)/\$\$b; \\
 \tdone
 
 install_scripts:
-\t\$(MKPATH) \$(DESTDIR)\$(INSTALLSCRIPT)
-\tfor s in mimedefang.pl mimedefang-release.pl watch-mimedefang; do \\
-\t    test -f \$\$s && \$(MD_INSTALL_PROGRAM) \$\$s \$(DESTDIR)\$(INSTALLSCRIPT)/\$\$s || true; \\
+\t\$(MKPATH) \$(DESTDIR)\$(BINDIR)
+\tfor s in mimedefang.pl watch-mimedefang; do \\
+\t    test -f \$\$s && \$(MD_INSTALL_PROGRAM) \$\$s \$(DESTDIR)\$(BINDIR)/\$\$s || true; \\
 \tdone
+\ttest -f mimedefang-release.pl && \\
+\t    \$(MD_INSTALL_PROGRAM) mimedefang-release.pl \$(DESTDIR)\$(BINDIR)/mimedefang-release || true
+\ttest -f watch-multiple-mimedefangs.tcl && \\
+\t    \$(MD_INSTALL_PROGRAM) watch-multiple-mimedefangs.tcl \$(DESTDIR)\$(BINDIR)/watch-multiple-mimedefangs.tcl || true
 \ttest -f script/mimedefang-util && \\
-\t    \$(MD_INSTALL_PROGRAM) script/mimedefang-util \$(DESTDIR)\$(INSTALLSCRIPT)/mimedefang-util || true
+\t    \$(MD_INSTALL_PROGRAM) script/mimedefang-util \$(DESTDIR)\$(BINDIR)/mimedefang-util || true
 
 install_man:
-\t\$(MKPATH) \$(DESTDIR)\$(MD_MANDIR)/man5 \$(DESTDIR)\$(MD_MANDIR)/man7 \$(DESTDIR)\$(MD_MANDIR)/man8
+\t\$(MKPATH) \$(DESTDIR)\$(MANDIR)/man1 \$(DESTDIR)\$(MANDIR)/man3 \$(DESTDIR)\$(MANDIR)/man5 \$(DESTDIR)\$(MANDIR)/man7 \$(DESTDIR)\$(MANDIR)/man8
+\ttest -f script/mimedefang-util.1 && \\
+\t    \$(MD_INSTALL_DATA) script/mimedefang-util.1 \$(DESTDIR)\$(MANDIR)/man1/mimedefang-util.1 || true
+\tfor m in \\
+\t    Mail::MIMEDefang.3 \\
+\t    Mail::MIMEDefang::Actions.3 \\
+\t    Mail::MIMEDefang::Antispam.3 \\
+\t    Mail::MIMEDefang::Antivirus.3 \\
+\t    Mail::MIMEDefang::Authres.3 \\
+\t    Mail::MIMEDefang::DKIM.3 \\
+\t    Mail::MIMEDefang::DKIM::ARC.3 \\
+\t    Mail::MIMEDefang::Mail.3 \\
+\t    Mail::MIMEDefang::MIME.3 \\
+\t    Mail::MIMEDefang::Net.3 \\
+\t    Mail::MIMEDefang::RFC2822.3 \\
+\t    Mail::MIMEDefang::SPF.3 \\
+\t    Mail::MIMEDefang::Unit.3 \\
+\t    Mail::MIMEDefang::Utils.3; do \\
+\t    test -f "modules/man/\$\$m" && \$(MD_INSTALL_DATA) "modules/man/\$\$m" \$(DESTDIR)\$(MANDIR)/man3/\$\$m || true; \\
+\tdone
 \tfor m in mimedefang-filter.5; do \\
-\t    test -f \$\$m && \$(MD_INSTALL_DATA) \$\$m \$(DESTDIR)\$(MD_MANDIR)/man5/\$\$m || true; \\
+\t    test -f \$\$m && \$(MD_INSTALL_DATA) \$\$m \$(DESTDIR)\$(MANDIR)/man5/\$\$m || true; \\
 \tdone
 \tfor m in mimedefang-protocol.7 mimedefang-notify.7; do \\
-\t    test -f \$\$m && \$(MD_INSTALL_DATA) \$\$m \$(DESTDIR)\$(MD_MANDIR)/man7/\$\$m || true; \\
+\t    test -f \$\$m && \$(MD_INSTALL_DATA) \$\$m \$(DESTDIR)\$(MANDIR)/man7/\$\$m || true; \\
 \tdone
-\tfor m in mimedefang.8 mimedefang.pl.8 mimedefang-multiplexor.8 md-mx-ctrl.8; do \\
-\t    test -f \$\$m && \$(MD_INSTALL_DATA) \$\$m \$(DESTDIR)\$(MD_MANDIR)/man8/\$\$m || true; \\
+\tfor m in mimedefang.8 mimedefang.pl.8 mimedefang-multiplexor.8 md-mx-ctrl.8 \\
+\t         mimedefang-release.8 watch-mimedefang.8 watch-multiple-mimedefangs.8; do \\
+\t    test -f \$\$m && \$(MD_INSTALL_DATA) \$\$m \$(DESTDIR)\$(MANDIR)/man8/\$\$m || true; \\
 \tdone
 
 install_conf:
@@ -683,10 +808,9 @@ install_conf:
 \t    \$(MD_INSTALL_DATA) SpamAssassin/spamassassin.cf \\
 \t        \$(DESTDIR)\$(MD_CONFDIR)/sa-mimedefang.cf; \\
 \tfi
-\tif test "\$(MD_IPHEADER)" = "yes"; then \\
-\t    test -f mimedefang-ip-key.sample && \\
-\t        \$(MD_INSTALL_DATA) mimedefang-ip-key.sample \\
-\t            \$(DESTDIR)\$(MD_CONFDIR)/mimedefang-ip-key || true; \\
+\tif test "\$(MD_IPHEADER)" = "yes" && test ! -f "\$(DESTDIR)\$(MD_CONFDIR)/mimedefang-ip-key"; then \\
+\t    \$(FULLPERL) ./gen-ip-validator.pl > "\$(DESTDIR)\$(MD_CONFDIR)/mimedefang-ip-key"; \\
+\t    chmod 600 "\$(DESTDIR)\$(MD_CONFDIR)/mimedefang-ip-key" 2>/dev/null || true; \\
 \tfi
 
 install_spool:
@@ -821,6 +945,23 @@ C
     return $rc ? 1 : 0;
 }
 
+sub probe_libresolv {
+    my $tmpdir = File::Spec->tmpdir();
+    my $src    = File::Spec->catfile($tmpdir, "conftest_resolv_$$.c");
+    my $exe    = File::Spec->catfile($tmpdir, "conftest_resolv_$$");
+    open my $fh, '>', $src or return 0;
+    print $fh <<'C';
+#include <netinet/in.h>
+#include <arpa/nameser.h>
+#include <resolv.h>
+int main(void) { res_init(); return 0; }
+C
+    close $fh;
+    my $rc = system("$CC -o $exe $src -lresolv 2>/dev/null") == 0;
+    unlink $src, $exe;
+    return $rc ? 1 : 0;
+}
+
 # Write config.h from the collected values.
 sub write_config_h {
     my %v = @_;
@@ -834,12 +975,13 @@ sub write_config_h {
     print $fh '#define SENDMAIL_PROG     "' . $v{SENDMAILPROG} . "\"\n";
     print $fh "#ifndef HAVE_CLOCK_MONOTONIC\n#define HAVE_CLOCK_MONOTONIC\n#endif\n" if $v{HAVE_CLOCK_MONOTONIC};
     print $fh '#define MIMEDEFANG_PL     "' . $v{MIMEDEFANG_PL} . "\"\n";
-    print $fh "#define HAVE_INET_NTOP\n"       if $v{HAVE_INET_NTOP};
+    print $fh "#define HAVE_UNISTD_H 1\n";
+    print $fh "#ifndef HAVE_INET_NTOP\n#define HAVE_INET_NTOP\n#endif\n"   if $v{HAVE_INET_NTOP};
     print $fh "#define HAVE_SOCKLEN_T\n"       if not $v{HAVE_SOCKLEN_T};
     print $fh "#define HAVE_MILTER\n"           if $v{HAVE_MILTER};
-    print $fh "#define ENABLE_DEBUGGING\n"     if $v{ENABLE_DEBUGGING};
-    print $fh "#define USE_POLL\n"              if $v{ENABLE_POLL};
-    print $fh "#ifndef WITH_EMBEDDED_PERL\n#define WITH_EMBEDDED_PERL\n#endif\n" if $v{WITH_EMBEDDED_PERL};
+    print $fh "#ifndef ENABLE_DEBUGGING\n#define ENABLE_DEBUGGING\n#endif\n" if $v{ENABLE_DEBUGGING};
+    print $fh "#ifndef USE_POLL\n#define USE_POLL\n#endif\n"                 if $v{ENABLE_POLL};
+    print $fh "#ifndef EMBED_PERL\n#define EMBED_PERL\n#endif\n" if $v{WITH_EMBEDDED_PERL};
     print $fh "#define STDC_HEADERS 1\n";
     close $fh;
     print "config.h written.\n";
