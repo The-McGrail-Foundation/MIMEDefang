@@ -27,6 +27,9 @@
 # Revision History:
 #
 # $Log$
+# Revision 1.11  2026/05/08 05:53:04  gbechis
+# Updated init scripts to understand -k option to mimedefang-multiplexor.
+#
 # Revision 1.10  2006/01/20 03:18:46  dfs
 # Updated init scripts to understand -R option to mimedefang.
 #
@@ -268,6 +271,9 @@ MX_BUSY=600
 
 # SUBFILTER specifies which filter rules file to use
 # SUBFILTER=@CONFDIR_EVAL@/mimedefang-filter
+
+# MX_AUTOSCALE enables auto scaling of MIMEDefang processes
+# MX_AUTOSCALE=yes
 
 # I question why I'm including this as I see no real need for it
 # but in the interests of a flexible implementation, here goes!

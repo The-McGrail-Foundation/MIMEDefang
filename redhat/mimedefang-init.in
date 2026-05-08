@@ -156,6 +156,7 @@ start() {
 	   $([ "$MX_STATS_SYSLOG" = "yes" ] && echo "-T") \
 	   $([ "$MD_ALLOW_GROUP_ACCESS" = "yes" ] && echo "-G") \
 	   $([ -n "$MX_NOTIFIER" ] && echo "-O $MX_NOTIFIER") \
+	   $([ -n "$MX_AUTOSCALE" ] && echo "-k") \
 	   -s $MX_SOCKET
     echo
 
