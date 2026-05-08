@@ -143,10 +143,12 @@ t/dkim.t
 t/dockerPostfix.sh
 t/dockerSendmail.sh
 t/headers.t
+t/helo.t
 t/Makefile
 t/mime.t
 t/net.t
 t/relay.t
+t/recipient.t
 t/sender.t
 t/smtp.t
 t/spf.t
