@@ -20,6 +20,7 @@
 # MIMEDefang policy.    A good example would be 'defang-admin@mydomain.com'
 #***********************************************************************
 $AdminAddress = 'postmaster@localhost';
+
 $AdminName = "MIMEDefang Administrator's Full Name";
 
 #***********************************************************************
@@ -141,7 +142,6 @@ sub filter_begin {
     }
 
     if ($action eq "tempfail") {
-        action_tempfail("Problem running virus-scanner");
         md_syslog('warning', "Problem running virus scanner: code=$code, category=$category, action=$action");
     }
 }
@@ -294,21 +294,22 @@ sub filter_end {
         }
     }
 
-    # Check email message with Rspamd
-    my ($hits, $req, $names, $report, $action, $is_spam);
-    if (-s "./INPUTMSG" < 100*1024) {
-      ($hits, $req, $names, $report, $action, $is_spam) = rspamd_check();
-      if(defined $action or defined $is_spam or defined $names) {
-        md_syslog("Warning", "Action: $action, Spam: $is_spam, Names: $names");
+    # Check email message with Rspamd (only if available)
+    if ($Features{"Path:RSPAMC"} || eval { require LWP::UserAgent; require JSON; 1 }) {
+      my ($hits, $req, $names, $report, $action, $is_spam);
+      if (-s "./INPUTMSG" < 100*1024) {
+        ($hits, $req, $names, $report, $action, $is_spam) = rspamd_check();
+        if(defined $action or defined $is_spam or defined $names) {
+          md_syslog("Warning", "Action: $action, Spam: $is_spam, Names: $names");
+        }
+        if (defined $is_spam and $is_spam eq "true") {
+          action_change_header("X-Spam-Score", "$hits/$req $names");
+          md_syslog("Warning", "Action: $action");
+          md_graphdefang_log('spam', $hits, $RelayAddr);
+        } else {
+          action_delete_header("X-Spam-Score");
+        }
       }
-      if ($is_spam eq "true") {
-        action_change_header("X-Spam-Score", "$hits/$req $names");
-        md_syslog("Warning", "Action: $action");
-        md_graphdefang_log('spam', $hits, $RelayAddr);
-      } else {
-        # Delete any existing X-Spam-Score header?
-        action_delete_header("X-Spam-Score");
-     }
     }
 
     # I HATE HTML MAIL!  If there's a multipart/alternative with both

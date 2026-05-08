@@ -68,6 +68,7 @@ sub smtp_mail
                           );
   return "Connection error" if not defined $smtp;
   $smtp->mail('<defang@localhost>');
+  $messages .= $smtp->message();
   $smtp->to("$to\n");
   $messages .= $smtp->message();
   $smtp->data();

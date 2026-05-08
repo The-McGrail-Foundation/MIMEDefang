@@ -455,12 +455,13 @@ WriteMakefile(
         (map { ("MD_$_" => $AV_PATHS{$_}) } keys %AV_PATHS),
     },
 
-    clean  => { FILES => join(' ',
+    clean    => { FILES => join(' ',
         'config.h',
         @GENERATED_FILES,
         'mimedefang mimedefang-multiplexor md-mx-ctrl',
         '*.o',
     )},
+    realclean => { FILES => 'mimedefang-*.tar.gz mimedefang-*.tar.gz.sig' },
 
     postamble => {
       'custom' =>  <<"MAKE",
@@ -538,15 +539,28 @@ MAKE
         ));
         my $ctrl_ldflags = '$(MD_LDFLAGS_COMMON)';
 
+        # Substitute @TOKEN@ placeholders in .in templates.
+        my %subst = (
+            PERL              => $PERL,
+            PERLINSTALLSITELIB=> $perl_vars{installsitelib},
+            VERSION           => $VERSION,
+            PACKAGE           => 'mimedefang',
+            DEFANGUSER        => $DEFANGUSER,
+            SPOOLDIR          => $SPOOLDIR,
+            QUARANTINEDIR     => $QUARANTINEDIR,
+            QDIR              => $QUARANTINEDIR,
+            CONFDIR           => $CONFDIR,
+            CONFDIR_EVAL      => $CONFDIR,
+            SYSCONFDIR        => $SYSCONFDIR,
+            CONFSUBDIR        => $CONFSUBDIR,
+            SENDMAILPROG      => $SENDMAILPROG,
+        );
         for my $mdfile ( 'mimedefang.pl.in', 'mimedefang-release.pl.in', 'script/mimedefang-util.in' ) {
             open my $in, '<', $mdfile;
             local $/;
             my $content = <$in>;
             close $in;
-            $content =~ s/\@PERL\@/$PERL/g;
-            $content =~ s/\@PERLINSTALLSITELIB\@/$perl_vars{installsitelib}/g;
-            $content =~ s/\@SENDMAILPROG\@/$SENDMAILPROG/g;
-            $content =~ s/\@QDIR\@/$QUARANTINEDIR/g;
+            $content =~ s{\@([A-Z0-9_]+)\@}{ exists $subst{$1} ? $subst{$1} : "\@$1\@" }ge;
 
             my $outf = $mdfile;
             $outf =~ s/\.in$//;

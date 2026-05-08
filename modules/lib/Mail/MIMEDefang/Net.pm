@@ -454,11 +454,22 @@ sub md_get_dmarc_record {
 	          return;
 	      }
         my $answer = ($packet->answer)[0];
-        if(defined $answer) {
-          my $res = $answer->rdstring;
-	        chomp $res;
-          $res =~ s/^"|"$//g;
-          return $res;
+        if (defined $answer && $answer->type eq 'CNAME') {
+                my $cname_target = $answer->cname;
+                my $cname_packet = $res->query($cname_target, 'TXT');
+                if (!defined($cname_packet) ||
+                    $cname_packet->header->rcode eq 'NXDOMAIN' ||
+                    $cname_packet->header->rcode eq 'SERVFAIL' ||
+                    !defined($cname_packet->answer)) {
+                        return;
+                }
+                $answer = ($cname_packet->answer)[0];
+        }
+        if (defined $answer) {
+                my $res = $answer->rdstring;
+                chomp $res;
+                $res =~ s/^"|"$//g;
+                return $res;
         }
         return;
 }

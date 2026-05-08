@@ -446,7 +446,7 @@ sub rspamd_check {
       LWP::UserAgent->import();
     }
 
-    unless ($Features{"Path:RSPAMC"} or $rspamc = 1) {
+    unless ($Features{"Path:RSPAMC"} or $rspamc == 1) {
         md_syslog('err', "Attempt to call Rspamd function, but Rspamd is not installed or JSON and LWP modules not available.");
         return;
     }

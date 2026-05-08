@@ -18,6 +18,7 @@
 #include <syslog.h>
 #include <string.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #define MAX_LISTENERS 5
 #define MAX_MSGLEN 256
