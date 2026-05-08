@@ -63,6 +63,24 @@ fifth word is the actual number of requests in the queue.  The sixth
 word is the number of seconds elapsed since the multiplexor was started.
 
 .TP
+.B autoscale
+Displays the current autoscaling configuration and runtime state.  The
+output is a single line of key=value pairs:
+
+\fBenabled\fR is 1 if autoscaling is active, 0 otherwise.
+\fBinterval\fR is the number of seconds between autoscale checks.
+\fBema_busy\fR is the current exponential moving average of the
+busy-worker ratio.
+\fBscale_out\fR and \fBscale_in\fR are the EMA thresholds above/below
+which a worker is added or removed, respectively.
+\fBout_cool\fR and \fBin_cool\fR are the cooldown periods (in seconds)
+that must elapse before another scale-out or scale-in event may occur.
+\fBema_alpha\fR is the smoothing factor used to compute the EMA.
+
+Autoscaling is enabled with the \fB\-k\fR option of
+\fBmimedefang-multiplexor\fR(8).
+
+.TP
 .B barstatus
 Prints the status of busy workers and queued requests in a nice
 "bar chart" format.  This lets you keep an eye on things with a script
