@@ -429,7 +429,10 @@ WriteMakefile(
     PM_FILTER        => '',
 
     # man-page sections
-    MAN3PODS         => {},
+    MAN1PODS              => {},
+    MAN3PODS              => {},
+    INSTALLVENDORMAN1DIR  => $MANDIR . '/man1',
+    INSTALLVENDORMAN3DIR  => $MANDIR . '/man3',
 
     PREREQ_PM        => \%REQUIRED_MODULES,
 
