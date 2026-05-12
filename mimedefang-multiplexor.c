@@ -4799,6 +4799,26 @@ queue_request(EventSelector *es, int fd, char *cmd)
 	syslog(LOG_INFO, "All workers are busy: Queueing request (%d queued)",
 	       NumQueuedRequests);
     }
+
+    /* Immediately try to scale out when a request has to queue */
+    if (Settings.autoscaling) {
+	Worker *sw = Workers[STATE_STOPPED];
+	time_t now_qs = time(NULL);
+	if (sw
+		&& NUM_RUNNING_WORKERS < Settings.maxWorkers
+		&& (now_qs - LastScaleOut) > (time_t)Settings.scaleOutCooldown) {
+	    char qreason[64];
+	    snprintf(qreason, sizeof(qreason),
+		     "Autoscale: scale-out (queued=%d)", NumQueuedRequests);
+	    if (activateWorker(sw, qreason) > 0) {
+		LastScaleOut = now_qs;
+		syslog(LOG_INFO,
+		       "Autoscale: scaled out to %d workers (queued=%d ema_busy=%.2f)",
+		       NUM_RUNNING_WORKERS, NumQueuedRequests, EMABusyRatio);
+	    }
+	}
+    }
+
     return 1;
 }
 
