@@ -150,6 +150,11 @@ unsigned int Activations = 0;	/* Incremented when a worker is activated    */
 static int Old_NumFreeWorkers = -1;
 int NumUnprivConnections = 0;
 
+/* Autoscaling state */
+static time_t LastScaleOut = 0;
+static time_t LastScaleIn  = 0;
+static double EMABusyRatio = 0.0;
+
 static pid_t ParentPid = (pid_t) -1;
 
 static char **Env;
@@ -2741,6 +2746,17 @@ activateWorker(Worker *s, char const *reason)
 	if (Settings.waitTime) {
 	    LastWorkerActivation = now;
 	}
+	/* Every STOPPED->running transition is effectively a scale-out
+	 * event.  Log it consistently and update LastScaleOut so the
+	 * scale-in cooldown is honoured against lazy-spawn activations
+	 * (findFreeWorker -> activateWorker) just as it is for the
+	 * explicit EMA / queued-request paths. */
+	if (Settings.autoscaling) {
+	    LastScaleOut = (now != (time_t) 0) ? now : time(NULL);
+	    syslog(LOG_INFO,
+		   "Autoscale: scaled out to %d workers (ema_busy=%.2f queued=%d)",
+		   NUM_RUNNING_WORKERS, EMABusyRatio, NumQueuedRequests);
+	}
 	return s->pid;
     }
 
@@ -3633,11 +3649,6 @@ newGeneration(void)
     }
 }
 
-/* Autoscaling state */
-static time_t LastScaleOut = 0;
-static time_t LastScaleIn  = 0;
-static double EMABusyRatio = 0.0;
-
 /**********************************************************************
 * %FUNCTION: handleAutoscale
 * %ARGUMENTS:
@@ -3679,10 +3690,9 @@ handleAutoscale(EventSelector *es,
 	    snprintf(reason, sizeof(reason),
 		     "Autoscale: scale-out (ema_busy=%.2f)", EMABusyRatio);
 	    activateWorker(s, reason);
-	    LastScaleOut = now;
-	    syslog(LOG_INFO,
-		   "Autoscale: scaled out to %d workers (ema_busy=%.2f queued=%d)",
-		   NUM_RUNNING_WORKERS, EMABusyRatio, NumQueuedRequests);
+	    /* LastScaleOut is updated and the scale-out is logged by
+	     * activateWorker() itself for every STOPPED->running
+	     * transition.  No duplicate bookkeeping needed here. */
 	}
     }
     /* Scale IN: pool is under-utilised */
@@ -4799,26 +4809,6 @@ queue_request(EventSelector *es, int fd, char *cmd)
 	syslog(LOG_INFO, "All workers are busy: Queueing request (%d queued)",
 	       NumQueuedRequests);
     }
-
-    /* Immediately try to scale out when a request has to queue */
-    if (Settings.autoscaling) {
-	Worker *sw = Workers[STATE_STOPPED];
-	time_t now_qs = time(NULL);
-	if (sw
-		&& NUM_RUNNING_WORKERS < Settings.maxWorkers
-		&& (now_qs - LastScaleOut) > (time_t)Settings.scaleOutCooldown) {
-	    char qreason[64];
-	    snprintf(qreason, sizeof(qreason),
-		     "Autoscale: scale-out (queued=%d)", NumQueuedRequests);
-	    if (activateWorker(sw, qreason) > 0) {
-		LastScaleOut = now_qs;
-		syslog(LOG_INFO,
-		       "Autoscale: scaled out to %d workers (queued=%d ema_busy=%.2f)",
-		       NUM_RUNNING_WORKERS, NumQueuedRequests, EMABusyRatio);
-	    }
-	}
-    }
-
     return 1;
 }
 
