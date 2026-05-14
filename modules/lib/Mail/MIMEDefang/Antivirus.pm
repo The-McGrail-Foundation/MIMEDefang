@@ -2666,6 +2666,8 @@ sub message_contains_virus_sophie {
 sub entity_contains_virus_clamd {
     my ($entity) = shift;
     my ($clamd_sock) = $ClamdSock;
+    my $inet = 0;
+
     $clamd_sock = shift if (@_ > 0);
     if (!defined($entity->bodyhandle)) {
 	return (wantarray ? (0, 'ok', 'ok') : 0);
@@ -2673,7 +2675,13 @@ sub entity_contains_virus_clamd {
     if (!defined($entity->bodyhandle->path)) {
 	return (wantarray ? (999, 'swerr', 'tempfail') : 1);
     }
-    my $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    my $sock;
+    if($clamd_sock =~ /\:/) {
+      $sock = IO::Socket::INET->new($clamd_sock);
+      $inet = 1;
+    } else {
+      $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    }
     if (defined $sock) {
 	my $path = $entity->bodyhandle->path;
 	# If path is not absolute, add cwd
@@ -2737,10 +2745,15 @@ sub message_contains_virus_clamd {
     $clamd_sock = shift if (@_ > 0);
     return (wantarray ? (999, 'swerr', 'tempfail') : 1) if (!defined($clamd_sock));
     my ($output,$sock);
+    my $inet = 0;
 
     # PING/PONG test to make sure clamd is alive
-    $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
-
+    if($clamd_sock =~ /\:/) {
+      $sock = IO::Socket::INET->new($clamd_sock);
+      $inet = 1;
+    } else {
+      $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    }
     if (!defined($sock)) {
 	md_syslog('err', "Could not connect to clamd daemon at $clamd_sock");
 	return (wantarray ? (999, 'cannot-execute', 'tempfail') : 999);
@@ -2775,7 +2788,11 @@ sub message_contains_virus_clamd {
     }
 
     # open up a socket and scan each file in ./Work
-    $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    if($inet) {
+      $sock = IO::Socket::INET->new($clamd_sock);
+    } else {
+      $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    }
     if (defined $sock) {
 	if (!$sock->print("SCAN $CWD/Work\n")) {
 	    $sock->close;
