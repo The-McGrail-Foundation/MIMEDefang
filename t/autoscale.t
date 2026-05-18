@@ -85,6 +85,8 @@ sub t_autoscale_disabled : Test(3) {
     SKIP: {
         skip 'mimedefang-multiplexor not built', 3
             unless _binary() && _ctrl();
+        skip 'mimedefang-multiplexor cannot run as root', 3
+            if $> == 0;
 
         my ($pid, $sock) = _start_multiplexor();
 
@@ -101,6 +103,8 @@ sub t_autoscale_enabled : Test(4) {
     SKIP: {
         skip 'mimedefang-multiplexor not built', 4
             unless _binary() && _ctrl();
+        skip 'mimedefang-multiplexor cannot run as root', 4
+            if $> == 0;
 
         my ($pid, $sock) = _start_multiplexor(autoscaling => 1);
 
@@ -118,6 +122,8 @@ sub t_autoscale_initial_ema : Test(1) {
     SKIP: {
         skip 'mimedefang-multiplexor not built', 1
             unless _binary() && _ctrl();
+        skip 'mimedefang-multiplexor cannot run as root', 1
+            if $> == 0;
 
         my ($pid, $sock) = _start_multiplexor(autoscaling => 1);
 
