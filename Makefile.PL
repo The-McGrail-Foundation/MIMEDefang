@@ -416,9 +416,15 @@ my %PM = map {
     ($_ => $install_path)
 } @PM_FILES;
 
+my %install_overrides =
+    map  { $_ => $ARGS{$_} }
+    grep { /^INSTALL/ && exists $ARGS{$_} }
+    keys %ARGS;
+
 WriteMakefile(
     NAME             => 'Mail::MIMEDefang',
-    INSTALLDIRS      => 'site',
+    INSTALLDIRS      => ($ARGS{INSTALLDIRS} // 'site'),
+    %install_overrides,
     DISTNAME         => "mimedefang",
     VERSION          => $VERSION,
     MIN_PERL_VERSION => '5.008009',
@@ -743,7 +749,7 @@ install :: install_bins install_scripts install_man install_conf install_spool
 \t\@echo ""
 
 install_bins:
-\t\$(MKPATH) \$(DESTDIR)\$(SBINDIR)
+\t\$(MKPATH) \$(DESTDIR)\$(BINDIR)
 \tfor b in mimedefang mimedefang-multiplexor md-mx-ctrl; do \\
 \t    \$(MD_INSTALL_PROGRAM) \$\$b \$(DESTDIR)\$(BINDIR)/\$\$b; \\
 \tdone

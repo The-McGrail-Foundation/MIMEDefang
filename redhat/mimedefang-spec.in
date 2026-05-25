@@ -171,7 +171,9 @@ complain loudly about MIMEDefang.
 
 %prep
 %setup -q -n %{name}-%{version}%{?prerelease}
-perl Makefile.PL INSTALLDIRS=vendor
+perl Makefile.PL INSTALLDIRS=vendor \
+     MIMEDEFANG_PL=%{_bindir}/mimedefang.pl \
+     INSTALLVENDORLIB=%{perl_vendorlib}
 %build
 make DONT_STRIP=1
 
@@ -180,6 +182,7 @@ rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT/%{dir_log}
 make DESTDIR=$RPM_BUILD_ROOT \
+     BINDIR=%{_bindir} MANDIR=%{_mandir} \
      INSTALL='install -p' INSTALL_STRIP_FLAG='' install-redhat
 rm -f %{buildroot}%{_libdir}/perl5/perllocal.pod
 rm -f %{buildroot}%{_libdir}/perl5/vendor_perl/auto/Mail/MIMEDefang/.packlist
