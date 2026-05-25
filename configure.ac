@@ -258,6 +258,33 @@ else
     fi
     AC_MSG_RESULT($HAVE_DKIM)
 
+    AC_MSG_CHECKING([for Perl module AnyEvent])
+    (echo "use AnyEvent;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_ANYEVENT=no
+    else
+	HAVE_ANYEVENT=yes
+    fi
+    AC_MSG_RESULT($HAVE_ANYEVENT)
+
+    AC_MSG_CHECKING([for Perl module AnyEvent::DNS])
+    (echo "use AnyEvent::DNS;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_ANYEVENT_DNS=no
+    else
+	HAVE_ANYEVENT_DNS=yes
+    fi
+    AC_MSG_RESULT($HAVE_ANYEVENT_DNS)
+
+    AC_MSG_CHECKING([for Perl module AnyEvent::Socket])
+    (echo "use AnyEvent::Socket;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_ANYEVENT_SOCKET=no
+    else
+	HAVE_ANYEVENT_SOCKET=yes
+    fi
+    AC_MSG_RESULT($HAVE_ANYEVENT_SOCKET)
+
     AC_MSG_CHECKING([for Perl module Digest::MD5])
     (echo "use Digest::MD5;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
     if test $? != 0 ; then
@@ -1189,6 +1216,14 @@ if test "$HAVE_DKIM" = "no" ; then
    echo ""
    echo "Could not find Mail::DKIM Perl module... do not use"
    echo "md_dkim_sign, md_dkim_verify or md_authres functions in your filter."
+   echo ""
+fi
+
+if test "$HAVE_ANYEVENT" = "no" || test "$HAVE_ANYEVENT_DNS" = "no" || test "$HAVE_ANYEVENT_SOCKET" = "no" ; then
+   echo ""
+   echo "Could not find all AnyEvent Perl modules (AnyEvent, AnyEvent::DNS,"
+   echo "AnyEvent::Socket).  Do not use md_async_* functions"
+   echo "in your filter.  Install them with: cpanm AnyEvent"
    echo ""
 fi
 

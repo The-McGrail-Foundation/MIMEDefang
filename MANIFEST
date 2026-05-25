@@ -83,6 +83,9 @@ mimedefang-protocol.7.in
 mimedefang-release.pl.in
 modules/lib/Mail/MIMEDefang/Actions.pm
 modules/lib/Mail/MIMEDefang/Antispam.pm
+modules/lib/Mail/MIMEDefang/Async.pm
+modules/lib/Mail/MIMEDefang/Async/Checks.pm
+modules/lib/Mail/MIMEDefang/Async/Results.pm
 modules/lib/Mail/MIMEDefang/Antivirus.pm
 modules/lib/Mail/MIMEDefang/Authres.pm
 modules/lib/Mail/MIMEDefang/DKIM/ARC.pm
@@ -113,6 +116,7 @@ systemd-units/mimedefang.service
 t/actions.t
 t/antispam.t
 t/arc.t
+t/async.t
 t/authres.t
 t/autoscale.t
 t/core.t
@@ -131,6 +135,7 @@ t/data/dkim_sig.txt
 t/data/exe.eml
 t/data/gtube.eml
 t/data/md.conf
+t/data/mimedefang-async-filter
 t/data/mimedefang-test-filter
 t/data/multipart.eml
 t/data/rspamd.conf

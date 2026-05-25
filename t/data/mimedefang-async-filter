@@ -1,0 +1,123 @@
+# -*- Perl -*-
+#***********************************************************************
+#
+# mimedefang-async-filter
+#
+# Sample filter demonstrating Mail::MIMEDefang::Async.
+# Used by t/smtp.t when SMTP_TEST=yes.
+#
+# This program may be distributed under the terms of the GNU General
+# Public License, Version 2.
+#
+#***********************************************************************
+
+$AdminAddress = 'postmaster@localhost';
+$AdminName    = 'MIMEDefang Test';
+$DaemonAddress = 'mimedefang@localhost';
+
+md_graphdefang_log_enable('mail', 1);
+
+detect_and_load_perl_modules();
+
+# Initialise async engine once at filter-load time (outside any sub).
+# Gracefully degrade when AnyEvent is not installed.
+my $_ASYNC_OK = eval {
+    require Mail::MIMEDefang::Async;
+    Mail::MIMEDefang::Async->import();
+    require Mail::MIMEDefang::Async::Checks;
+    Mail::MIMEDefang::Async::Checks->import();
+    require Mail::MIMEDefang::Async::Results;
+    Mail::MIMEDefang::Async::Results->import();
+    md_async_init(max_concurrency => 4, global_timeout => 8);
+    1;
+};
+if ($@) {
+    md_syslog('warning', "Mail::MIMEDefang::Async not available: $@");
+}
+
+#***********************************************************************
+# filter_relay: async DNSBL check when async engine is available.
+#***********************************************************************
+sub filter_relay {
+    my ($ip, $name, $port, $esmtp, $addr) = @_;
+
+    if ($_ASYNC_OK && $ip &&
+        $ip !~ /^(?:127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/o) {
+        my $res = eval { md_async_relay_is_blacklisted($ip, 'zen.spamhaus.org') };
+        if ($@) {
+            md_syslog('warning', "DNSBL check failed: $@");
+        } elsif ($res) {
+            md_syslog('warning', "Relay $ip listed in zen.spamhaus.org: $res");
+            return ('REJECT', "550 5.7.1 $ip listed in zen.spamhaus.org");
+        }
+    }
+
+    return ('CONTINUE', '');
+}
+
+#***********************************************************************
+# filter_begin: copy message for virus scanning.
+#***********************************************************************
+sub filter_begin {
+    my ($entity) = @_;
+    if ($SuspiciousCharsInHeaders) {
+        md_graphdefang_log('suspicious_chars');
+        action_quarantine_entire_message("Quarantined: suspicious characters in headers");
+        return action_discard();
+    }
+    md_copy_orig_msg_to_work_dir_as_mbox_file();
+}
+
+#***********************************************************************
+# filter: block dangerous attachments.
+#***********************************************************************
+sub filter {
+    my ($entity, $fname, $ext, $type) = @_;
+    return if message_rejected();
+    if (lc($type) eq 'message/partial') {
+        return action_bounce('MIME type message/partial not accepted here');
+    }
+    return action_accept();
+}
+
+sub filter_multipart {
+    my ($entity, $fname, $ext, $type) = @_;
+    return if message_rejected();
+    if (lc($type) eq 'message/partial') {
+        return action_bounce('MIME type message/partial not accepted here');
+    }
+    return action_accept();
+}
+
+#***********************************************************************
+# filter_end: async spam check via spamc if engine is available
+#***********************************************************************
+sub filter_end {
+    my ($entity) = @_;
+    return if message_rejected();
+
+    if (-s './INPUTMSG' < 100 * 1024) {
+        if ($Features{"SpamAssassin"}) {
+            my ($score, $threshold);
+            if ($_ASYNC_OK) {
+                ($score, $threshold) =
+                    (eval { md_async_spam_assassin_check() })[0, 1];
+                if ($@) { md_syslog('warning', "async spam_assassin check failed: $@") }
+            }
+            if (defined $score && $score >= $threshold) {
+                if ($score >= 100) {
+                    return action_bounce("Spam score $score exceeds maximum");
+                }
+                my $stars = '*' x (int($score) > 40 ? 40 : int($score));
+                action_change_header('X-Spam-Score', "$score ($stars)");
+                md_graphdefang_log('spam', $score, $RelayAddr);
+            } else {
+                action_delete_header('X-Spam-Score');
+            }
+        }
+    }
+
+    md_graphdefang_log('mail_in');
+}
+
+1;

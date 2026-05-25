@@ -24,7 +24,7 @@ rm -rf ~/rpmbuild/RPMS/x86_64/mimedefang-*
 echo ">>> rpmbuild -bb..."
 rpmbuild -bb redhat/mimedefang.spec 1>/dev/null 2>&1 || { echo "rpmbuild FAILED"; exit 1; }
 echo ">>> dnf install..."
-dnf -y install ~/rpmbuild/RPMS/x86_64/mimedefang-* || { echo "dnf install FAILED"; exit 1; }
+dnf -y install perl-AnyEvent ~/rpmbuild/RPMS/x86_64/mimedefang-* || { echo "dnf install FAILED"; exit 1; }
 
 cp t/data/mimedefang-test-filter /etc/mail/mimedefang-filter
 

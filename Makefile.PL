@@ -261,6 +261,23 @@ if ($ENABLE_CHECK_PERL_MODULES) {
        unless $have_syslog;
 }
 
+# AnyEvent optional module check
+{
+    print "\nChecking optional Perl modules (async I/O - required for md_async_* functions):\n";
+    my $all_async_ok = 1;
+    for my $mod (qw(AnyEvent AnyEvent::DNS AnyEvent::Socket)) {
+        my $ok;
+        eval "use $mod; \$ok = 1";
+        printf "  %-35s %s\n", $mod, $ok ? 'found' : 'not found';
+        $all_async_ok = 0 unless $ok;
+    }
+    unless ($all_async_ok) {
+        warn "\nNOTE: One or more AnyEvent modules are missing.\n"
+           . "      md_async_* functions will not be available.\n"
+           . "      Install with: cpanm AnyEvent\n";
+    }
+}
+
 # MIME::Tools version advisory
 {
     my $mt_ver = eval { require MIME::Tools; $MIME::Tools::VERSION } // 'unknown';
