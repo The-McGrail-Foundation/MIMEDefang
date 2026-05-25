@@ -1321,6 +1321,7 @@ sub read_commands_file {
     # Save current recipient if called from filter_recipient
     my @tmp_recipients = @Recipients;
     @Recipients = ();
+    $SubjectCount = 0;
     $seenF = 0;
     my $recent_recip = "";
 

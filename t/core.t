@@ -69,4 +69,21 @@ sub t_read_commands_file : Test(5)
   unlink('./COMMANDS');
 }
 
+sub t_read_commands_file_twice : Test(3)
+{
+  copy('t/data/COMMANDS', './COMMANDS');
+  init_globals();
+  read_commands_file();
+  copy('t/data/COMMANDS', './COMMANDS');
+  my @warnings;
+  no warnings qw(redefine once);
+  local *::md_syslog = sub { push @warnings, $_[1] if $_[0] eq 'warning' };
+  use warnings qw(redefine once);
+  read_commands_file();
+  is($SubjectCount, 1,   'SubjectCount is 1 after second call');
+  is($Subject, 'Subject','Subject is correct after second call');
+  is(scalar @warnings, 0,'no spurious Subject warning on second call');
+  unlink('./COMMANDS');
+}
+
 __PACKAGE__->runtests();
