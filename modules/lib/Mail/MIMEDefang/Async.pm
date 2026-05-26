@@ -31,7 +31,7 @@ use Exporter;
 use Carp qw(croak carp);
 
 use Mail::MIMEDefang qw(%Features $CWD $ClamdSock $Sender @Recipients
-                        $AddApparentlyToForSpamAssassin);
+                        $AddApparentlyToForSpamAssassin md_syslog);
 use Mail::MIMEDefang::Antispam qw(spam_assassin_check);
 use Mail::MIMEDefang::Net qw(reverse_ip_address_for_rbl);
 use Mail::MIMEDefang::SPF qw(md_spf_verify);

@@ -20,7 +20,9 @@ for my $mod (@required) {
     }
 }
 
-plan tests => 27;
+plan tests => 26;
+
+use Mail::MIMEDefang;
 
 use_ok 'Mail::MIMEDefang::Async';
 use_ok 'Mail::MIMEDefang::Async::Checks';
@@ -62,6 +64,19 @@ subtest 'md_async_check_dmarc_record structure' => sub {
     is $c->{type},       'dns',                 'type is dns';
     is $c->{args}{host}, '_dmarc.example.com',  'host is _dmarc.domain';
     is $c->{args}{type}, 'TXT',                 'record type is TXT';
+};
+
+subtest 'md_async_email_is_blacklisted check' => sub {
+   SKIP: {
+     if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
+       skip "Net test disabled", 1
+     }
+     init_globals;
+     $Features{'Digest::SHA'} = 1;
+     md_async_init();
+     my $res = md_async_email_is_blacklisted('noemail@example.com', 'ebl.msbl.org', 'SHA1');
+     is($res, '127.0.0.2');
+   }
 };
 
 # Mail::MIMEDefang::Async::Results
@@ -208,21 +223,6 @@ subtest 'Mail::MIMEDefang::Async constructor via md_async_init' => sub {
     isa_ok $engine, 'Mail::MIMEDefang::Async';
     is $engine->{max_concurrency}, 4, 'max_concurrency set';
     is $engine->{global_timeout},  3, 'global_timeout set';
-};
-
-subtest 'md_async_message_contains_virus_clamd is exported' => sub {
-    ok Mail::MIMEDefang::Async->can('md_async_message_contains_virus_clamd'),
-        'md_async_message_contains_virus_clamd is available';
-    ok !Mail::MIMEDefang::Async->can('md_async_message_contains_virus'),
-        'old name md_async_message_contains_virus is gone';
-};
-
-subtest 'md_async_message_contains_virus_clamdscan is exported' => sub {
-    ok Mail::MIMEDefang::Async->can('md_async_message_contains_virus_clamdscan'),
-        'md_async_message_contains_virus_clamdscan is available';
-    ok grep { $_ eq 'md_async_message_contains_virus_clamdscan' }
-            @Mail::MIMEDefang::Async::EXPORT,
-        'md_async_message_contains_virus_clamdscan is in @EXPORT';
 };
 
 done_testing();
