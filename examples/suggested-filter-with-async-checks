@@ -1,0 +1,335 @@
+# -*- Perl -*-
+#***********************************************************************
+#
+# mimedefang-filter
+#
+# Example filter using Mail::MIMEDefang::Async to run DNS blacklist,
+# sender-domain, virus, and spam checks in parallel rather than
+# sequentially.
+#
+# Requires: AnyEvent, AnyEvent::DNS, AnyEvent::Socket, AnyEvent::Handle
+#
+# Copyright (C) 2026 The McGrail Foundation
+#
+# This program may be distributed under the terms of the GNU General
+# Public License, Version 2.
+#
+#***********************************************************************
+
+use Mail::MIMEDefang::Async;
+use Mail::MIMEDefang::Async::Checks;
+use Mail::MIMEDefang::Async::Results;
+
+#***********************************************************************
+# Set administrator's e-mail address here.
+#***********************************************************************
+$AdminAddress = 'postmaster@localhost';
+$AdminName = "MIMEDefang Administrator's Full Name";
+
+#***********************************************************************
+# Set the envelope address that quarantine warnings appear to come from.
+#***********************************************************************
+$DaemonAddress = 'mimedefang@localhost';
+
+$AddWarningsInline = 0;
+
+md_graphdefang_log_enable('mail', 1);
+
+#***********************************************************************
+# Initialise the async engine once per worker process.  All filter
+# callbacks share this singleton.
+#***********************************************************************
+md_async_init(
+    max_concurrency => 8,
+    global_timeout  => 10,
+    dns_timeout     => 5,
+    socket_timeout  => 5,
+);
+
+# Set various stupid things your mail client does below.
+$Stupidity{"NoMultipleInlines"} = 0;
+
+detect_and_load_perl_modules();
+
+#***********************************************************************
+# filter_relay -- called at SMTP connect time.
+#
+# Fires four DNS lookups in parallel:
+#   - Spamhaus ZEN DNSBL  (hard reject when also listed on SURBL)
+#   - SpamCop DNSBL       (scored)
+#   - SURBL abuse DNSBL   (hard reject when also listed on Spamhaus ZEN)
+#   - Reverse DNS (PTR)   (dynamic/missing PTR logged)
+#***********************************************************************
+sub filter_relay {
+    my($hostip, $hostname, $port, $myport, $ident) = @_;
+
+    my $out = md_async_run_checks([
+        md_async_check_dnsbl(ip => $hostip, zone => 'zen.spamhaus.org',  name => 'zen'),
+        md_async_check_dnsbl(ip => $hostip, zone => 'bl.spamcop.net',    name => 'spamcop'),
+        md_async_check_dnsbl(ip => $hostip, zone => 'abuse.surbl.org',   name => 'surbl'),
+        md_async_check_rdns( ip => $hostip,                              name => 'rdns'),
+    ]);
+
+    my $r      = $out->{results};
+    my $errors = $out->{errors};
+
+    my $zen = md_async_interpret_dnsbl(
+        records => $r->{zen},
+        zone    => 'zen.spamhaus.org',
+        error   => $errors->{zen},
+    );
+
+    my $spamcop = md_async_interpret_dnsbl(
+        records => $r->{spamcop},
+        zone    => 'bl.spamcop.net',
+        error   => $errors->{spamcop},
+    );
+    if ($spamcop->{listed}) {
+        md_graphdefang_log('dnsbl', 'bl.spamcop.net', $hostip);
+        md_syslog('info', "Relay $hostip listed on SpamCop");
+    }
+
+    my $surbl = md_async_interpret_dnsbl(
+        records => $r->{surbl},
+        zone    => 'abuse.surbl.org',
+        error   => $errors->{surbl},
+    );
+
+    if ($zen->{listed} && $surbl->{listed}) {
+        md_graphdefang_log('dnsbl', 'zen+surbl', $hostip);
+        return ('REJECT', "550 5.7.1 $hostip is listed on both Spamhaus ZEN and SURBL");
+    }
+    if ($zen->{listed}) {
+        md_syslog('info', "Relay $hostip listed on Spamhaus ZEN (not in SURBL, continuing)");
+    }
+    if ($surbl->{listed}) {
+        md_syslog('info', "Relay $hostip listed on SURBL (not in Spamhaus ZEN, continuing)");
+    }
+
+    my $rdns = md_async_interpret_rdns(
+        records => $r->{rdns},
+        ip      => $hostip,
+        error   => $errors->{rdns},
+    );
+    if (!$rdns->{has_rdns}) {
+        md_syslog('info', "Relay $hostip has no PTR record");
+    } elsif ($rdns->{dynamic}) {
+        md_syslog('info', "Relay $hostip has dynamic PTR: $rdns->{ptr}");
+    }
+
+    return ('CONTINUE', 'ok');
+}
+
+#***********************************************************************
+# filter_sender -- called when the MAIL FROM: envelope address arrives.
+#
+# Fires three DNS lookups in parallel for the sender domain:
+#   - SPF TXT record existence
+#   - MX record existence
+#   - DMARC TXT record
+#
+# Domains with neither SPF nor MX are rejected as likely forgeries.
+#***********************************************************************
+sub filter_sender {
+    my($sender, $ip, $hostname, $helo) = @_;
+
+    (my $addr = $sender) =~ s/^<|>$//g;
+    my ($domain) = ($addr =~ /\@([\w.\-]+)/);
+    return ('CONTINUE', 'ok') unless defined $domain && length $domain;
+
+    my $out = md_async_run_checks([
+        md_async_check_spf_record(  domain => $domain, name => 'spf_txt'),
+        md_async_check_mx_exists(   domain => $domain, name => 'mx'),
+        md_async_check_dmarc_record(domain => $domain, name => 'dmarc'),
+    ]);
+
+    my $r      = $out->{results};
+    my $errors = $out->{errors};
+
+    my $spf = md_async_interpret_spf_txt(
+        records => $r->{spf_txt},
+        error   => $errors->{spf_txt},
+        domain  => $domain,
+    );
+
+    my $has_mx = defined($r->{mx}) && @{ $r->{mx} // [] };
+
+    if (!$spf->{has_spf} && !$has_mx) {
+        md_graphdefang_log('no_spf_no_mx', $domain);
+        return ('REJECT', "550 5.7.1 Sender domain $domain has no SPF record and no MX");
+    }
+
+    my $dmarc_raw = defined($r->{dmarc}) ? $r->{dmarc}[0] : undef;
+    my $dmarc = md_async_interpret_dmarc($dmarc_raw);
+    if ($dmarc->{has_dmarc}) {
+        md_syslog('info', "DMARC policy for $domain: $dmarc->{policy}");
+    }
+
+    return ('CONTINUE', 'ok');
+}
+
+#***********************************************************************
+# filter_bad_filename -- helper: true for attachments with dangerous
+# extensions (identical to suggested-minimum-filter-for-windows-clients).
+#***********************************************************************
+sub filter_bad_filename {
+    my($entity) = @_;
+
+    my $bad_exts = '(ade|adp|app|asd|asf|asx|bas|bat|chm|cmd|com|cpl|crt|dll|exe|fxp|hlp|hta|hto|inf|ini|ins|isp|jse?|lib|lnk|mdb|mde|msc|msi|msp|mst|ocx|pcd|pif|prg|reg|scr|sct|sh|shb|shs|sys|url|vb|vbe|vbs|vcs|vxd|wmd|wms|wmz|wsc|wsf|wsh|\{[^\}]+\})';
+    my $re = '\.' . $bad_exts . '\.*$';
+
+    return 1 if (re_match($entity, $re));
+
+    if (re_match($entity, '\.zip$') && $Features{"Archive::Zip"}) {
+        my $bh = $entity->bodyhandle();
+        if (defined($bh)) {
+            my $path = $bh->path();
+            if (defined($path)) {
+                return re_match_in_zip_directory($path, $re);
+            }
+        }
+    }
+    return 0;
+}
+
+#***********************************************************************
+# filter_begin -- called just before MIME parts are processed.
+#
+# Guards suspicious headers, copies the message for scanning, then
+# calls clamd asynchronously (non-blocking socket I/O).
+#***********************************************************************
+sub filter_begin {
+    my($entity) = @_;
+
+    if ($SuspiciousCharsInHeaders) {
+        md_graphdefang_log('suspicious_chars');
+        action_quarantine_entire_message("Message quarantined because of suspicious characters in headers");
+        return action_discard();
+    }
+
+    md_copy_orig_msg_to_work_dir_as_mbox_file();
+
+    my($code, $category, $action) = md_async_message_contains_virus_clamd();
+
+    $FoundVirus = ($category eq "virus");
+
+    if ($FoundVirus) {
+        md_graphdefang_log('virus', $VirusName, $RelayAddr);
+        md_syslog('warning', "Discarding because of virus $VirusName");
+        return action_discard();
+    }
+
+    if ($action eq "tempfail") {
+        action_tempfail("Problem running virus-scanner");
+        md_syslog('warning', "Problem running virus scanner: code=$code, category=$category, action=$action");
+    }
+}
+
+#***********************************************************************
+# filter -- called once per MIME part.
+#***********************************************************************
+sub filter {
+    my($entity, $fname, $ext, $type) = @_;
+
+    return if message_rejected();
+
+    if (lc($type) eq "message/partial") {
+        md_graphdefang_log('message/partial');
+        return action_bounce("MIME type message/partial not accepted here");
+    }
+
+    if (filter_bad_filename($entity)) {
+        md_graphdefang_log('bad_filename', $fname, $type);
+        return action_drop_with_warning("An attachment named $fname was removed from this document as it\nconstituted a security hazard.  If you require this document, please contact\nthe sender and arrange an alternate means of receiving it.\n");
+    }
+
+    return action_accept();
+}
+
+#***********************************************************************
+# filter_multipart -- called for multipart container parts.
+#***********************************************************************
+sub filter_multipart {
+    my($entity, $fname, $ext, $type) = @_;
+
+    return if message_rejected();
+
+    if (filter_bad_filename($entity)) {
+        md_graphdefang_log('bad_filename', $fname, $type);
+        action_notify_administrator("A MULTIPART attachment of type $type, named $fname was dropped.\n");
+        return action_drop_with_warning("An attachment of type $type, named $fname was removed from this document as it\nconstituted a security hazard.  If you require this document, please contact\nthe sender and arrange an alternate means of receiving it.\n");
+    }
+
+    if (lc($type) eq "message/partial") {
+        md_graphdefang_log('message/partial');
+        return action_bounce("MIME type message/partial not accepted here");
+    }
+
+    return action_accept();
+}
+
+#***********************************************************************
+# defang_warning -- customise the defang notification message.
+#***********************************************************************
+sub defang_warning {
+    my($oldfname, $fname) = @_;
+    return "An attachment named '$oldfname' was converted to '$fname'.\n" .
+        "To recover the file, right-click on the attachment and Save As\n" .
+        "'$oldfname'\n";
+}
+
+#***********************************************************************
+# filter_end -- called after all MIME parts have been processed.
+#
+# Runs the SpamAssassin spamc check via a non-blocking async socket.
+# The md_async_spamc_check() call uses the same AnyEvent engine
+# initialised at the top of this filter.
+#***********************************************************************
+sub filter_end {
+    my($entity) = @_;
+
+    return if message_rejected();
+
+    if ($Features{"SpamAssassin"}) {
+        if (-s "./INPUTMSG" < 512*1024) {
+            my($score, $threshold, $report, $isspam) = md_async_spamc_check();
+            if (defined $score) {
+                my $stars = "*" x ($score < 40 ? int($score) : 40);
+                my($hits, $req, $names) = ($score, $threshold, '');
+
+                # Reconstruct $names from the report for header compatibility
+                if (defined $report && $report =~ /Content analysis details.*\n((?:[ \t]+[\d.]+[ \t]+\S+.*\n)+)/s) {
+                    my @rules = ($1 =~ /[ \t][\d.]+[ \t]+(\S+)/g);
+                    $names = join(',', @rules);
+                }
+
+                if (defined $isspam && $isspam eq 'true') {
+                    action_change_header("X-Spam-Score", "$hits ($stars) $names");
+                    md_graphdefang_log('spam', $hits, $RelayAddr);
+                    action_add_part($entity, "text/plain", "-suggest",
+                        "$report\n", "SpamAssassinReport.txt", "inline");
+                } else {
+                    action_delete_header("X-Spam-Score");
+                }
+            }
+        }
+    }
+
+    # # Rspamd async check (uncomment to use instead of / alongside SpamAssassin)
+    #
+    # my ($hits, $req, $names, $report, $action, $is_spam);
+    # if (-s "./INPUTMSG" < 512*1024) {
+    #     ($hits, $req, $names, $report, $action, $is_spam) = md_async_rspamd_check();
+    #     if ($is_spam eq "true") {
+    #         action_change_header("X-Spam-Score", "$hits/$req $names");
+    #         md_graphdefang_log('spam', $hits, $RelayAddr);
+    #     } else {
+    #         action_delete_header("X-Spam-Score");
+    #     }
+    # }
+
+    md_graphdefang_log('mail_in');
+}
+
+# DO NOT delete the next line, or Perl will complain.
+1;

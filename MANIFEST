@@ -58,6 +58,7 @@ examples/README
 examples/redhat-logrotate-file
 examples/stream-by-domain-filter
 examples/suggested-minimum-filter-for-windows-clients
+examples/suggested-filter-with-async-checks
 gen_id.c
 gen-ip-validator.pl
 install-sh
