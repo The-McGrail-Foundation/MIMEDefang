@@ -751,6 +751,21 @@ md_module_manpages:
 \t\t--name="Mail::MIMEDefang::Utils" \\
 \t\t--release=\$(MD_VERSION) \\
 \t\tmodules/lib/Mail/MIMEDefang/Utils.pm "modules/man/Mail::MIMEDefang::Utils.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::Async Documentation" \\
+\t\t--name="Mail::MIMEDefang::Async" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/Async.pm "modules/man/Mail::MIMEDefang::Async.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::Async::Checks Documentation" \\
+\t\t--name="Mail::MIMEDefang::Async::Checks" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/Async/Checks.pm "modules/man/Mail::MIMEDefang::Async::Checks.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::Async::Results Documentation" \\
+\t\t--name="Mail::MIMEDefang::Async::Results" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/Async/Results.pm "modules/man/Mail::MIMEDefang::Async::Results.3"
 
 # ============================================================
 # Extra install targets (run after the standard EUMM install)
@@ -801,7 +816,10 @@ install_man:
 \t    Mail::MIMEDefang::RFC2822.3 \\
 \t    Mail::MIMEDefang::SPF.3 \\
 \t    Mail::MIMEDefang::Unit.3 \\
-\t    Mail::MIMEDefang::Utils.3; do \\
+\t    Mail::MIMEDefang::Utils.3 \\
+\t    Mail::MIMEDefang::Async.3 \\
+\t    Mail::MIMEDefang::Async::Checks.3 \\
+\t    Mail::MIMEDefang::Async::Results.3; do \\
 \t    test -f "modules/man/\$\$m" && \$(MD_INSTALL_DATA) "modules/man/\$\$m" \$(DESTDIR)\$(MANDIR)/man3/\$\$m || true; \\
 \tdone
 \tfor m in mimedefang-filter.5; do \\

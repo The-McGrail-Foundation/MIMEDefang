@@ -208,6 +208,21 @@ lib/manpages:
 		--name="Mail::MIMEDefang::Utils" \
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/Utils.pm modules/man/Mail::MIMEDefang::Utils.3
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \
+		--center="Mail::MIMEDefang::Async Documentation" \
+		--name="Mail::MIMEDefang::Async" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang/Async.pm modules/man/Mail::MIMEDefang::Async.3
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \
+		--center="Mail::MIMEDefang::Async::Checks Documentation" \
+		--name="Mail::MIMEDefang::Async::Checks" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang/Async/Checks.pm modules/man/Mail::MIMEDefang::Async::Checks.3
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \
+		--center="Mail::MIMEDefang::Async::Results Documentation" \
+		--name="Mail::MIMEDefang::Async::Results" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang/Async/Results.pm modules/man/Mail::MIMEDefang::Async::Results.3
 
 distclean:: clean
 	rm -f config.log config.status Makefile config.cache config.h mimedefang.pl \
