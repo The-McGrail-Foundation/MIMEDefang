@@ -17,8 +17,6 @@
 #***********************************************************************
 
 use Mail::MIMEDefang::Async;
-use Mail::MIMEDefang::Async::Checks;
-use Mail::MIMEDefang::Async::Results;
 
 #***********************************************************************
 # Set administrator's e-mail address here.
