@@ -2,6 +2,10 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2026-06-10 Giovanni Bechis <g.bechis@snb.it>
+
+        * add Mail::MIMEDefang::Async module to run multiple tasks in parallel
+
 2026-05-13 Giovanni Bechis <g.bechis@snb.it>
 
         * add autoscaling support to activate or deactivate workers
