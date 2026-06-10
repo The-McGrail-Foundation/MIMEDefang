@@ -6,6 +6,10 @@ affect your filter.
 
         * add Mail::MIMEDefang::Async module to run multiple tasks in parallel
 
+2026-05-14 Giovanni Bechis <g.bechis@snb.it>
+
+        * add support for Clamav scan using tcp/ip on localhost
+
 2026-05-13 Giovanni Bechis <g.bechis@snb.it>
 
         * add autoscaling support to activate or deactivate workers
