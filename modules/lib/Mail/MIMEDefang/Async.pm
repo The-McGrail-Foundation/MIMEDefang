@@ -36,6 +36,23 @@ use Mail::MIMEDefang::Antispam qw(spam_assassin_check);
 use Mail::MIMEDefang::Net qw(reverse_ip_address_for_rbl);
 use Mail::MIMEDefang::SPF qw(md_spf_verify);
 use Mail::MIMEDefang::Utils qw(synthesize_received_header);
+use Mail::MIMEDefang::Async::Checks qw(
+    md_async_check_dnsbl
+    md_async_check_spf_record
+    md_async_check_mx_exists
+    md_async_check_rdns
+    md_async_check_dkim_record
+    md_async_check_dmarc_record
+);
+use Mail::MIMEDefang::Async::Results qw(
+    md_async_interpret_dnsbl
+    md_async_interpret_spamassassin
+    md_async_interpret_clamav
+    md_async_interpret_rdns
+    md_async_interpret_spf_txt
+    md_async_interpret_dmarc
+    md_async_score_results
+);
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(
@@ -50,6 +67,19 @@ our @EXPORT = qw(
     md_async_spamc_check
     md_async_spam_assassin_check
     md_async_rspamd_check
+    md_async_check_dnsbl
+    md_async_check_spf_record
+    md_async_check_mx_exists
+    md_async_check_rdns
+    md_async_check_dkim_record
+    md_async_check_dmarc_record
+    md_async_interpret_dnsbl
+    md_async_interpret_spamassassin
+    md_async_interpret_clamav
+    md_async_interpret_rdns
+    md_async_interpret_spf_txt
+    md_async_interpret_dmarc
+    md_async_score_results
 );
 our @EXPORT_OK;
 
@@ -72,17 +102,37 @@ sub _new {
         _errors         => {},
         _pending        => 0,
         _cv             => undef,
+        _generation     => 0,
     }, $class;
+
+    $self->_build_resolver;
+
+    return $self;
+}
+
+# Build (or rebuild) the private DNS resolver for the current process and
+# record the PID that owns it.
+sub _build_resolver {
+    my ($self) = @_;
 
     eval { require AnyEvent::DNS };
     croak "AnyEvent::DNS is required for Mail::MIMEDefang::Async: $@" if $@;
 
-    $self->{_resolver} = AnyEvent::DNS->new(
+    my $resolver = AnyEvent::DNS->new(
         timeout => [ $self->{dns_timeout} ],
         reuse   => 1,
     );
+    $resolver->os_config;
+    $self->{_resolver} = $resolver;
+    $self->{_pid}      = $$;
+    return $resolver;
+}
 
-    return $self;
+# Recreate the resolver if we have crossed a fork() boundary, so the inherited
+# (shared) socket from the master is never used to send queries.
+sub _ensure_resolver {
+    my ($self) = @_;
+    $self->_build_resolver if ($self->{_pid} // 0) != $$;
 }
 
 sub _run_checks {
@@ -94,14 +144,20 @@ sub _run_checks {
     eval { require AnyEvent };
     croak "AnyEvent is required for Mail::MIMEDefang::Async: $@" if $@;
 
+    $self->_ensure_resolver;
+    AnyEvent->now_update;
+
     $self->{_results} = {};
     $self->{_errors}  = {};
     $self->{_pending} = scalar @$checks;
     $self->{_cv}      = AnyEvent->condvar;
 
+    my $gen = ++$self->{_generation};
+
     my $deadline = AnyEvent->timer(
         after => $self->{global_timeout},
         cb    => sub {
+            return if $gen != $self->{_generation};
             carp "[Mail::MIMEDefang::Async] Global timeout reached – cancelling remaining checks";
             $self->{_cv}->send('timeout');
         },
@@ -117,6 +173,7 @@ sub _run_checks {
             my $check = shift @queue;
             my $fired = 0;
             $self->_dispatch($check, sub {
+                return if $gen != $self->{_generation};  # leaked from a prior batch
                 return if $fired++;   # prevent double-completion from stale callbacks
                 $sem++;
                 $drain->();
@@ -371,7 +428,10 @@ them.
 
 sub md_async_run_checks {
     my ($checks) = @_;
-    croak "Call md_async_init() before md_async_run_checks()" unless defined $_ENGINE;
+    unless (defined $_ENGINE) {
+        carp "md_async_run_checks() called before md_async_init() -- initialising with defaults";
+        $_ENGINE = Mail::MIMEDefang::Async->_new();
+    }
     return $_ENGINE->_run_checks($checks);
 }
 

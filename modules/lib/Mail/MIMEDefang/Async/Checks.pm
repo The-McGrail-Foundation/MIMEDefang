@@ -121,11 +121,13 @@ sub md_async_check_rdns {
     my $ip   = $args{ip}   // die "md_async_check_rdns: ip required";
     my $name = $args{name} // "rdns_${ip}";
 
+    my $suffix = ($ip =~ /:/) ? '.ip6.arpa' : '.in-addr.arpa';
+
     return {
         name => $name,
         type => 'dns',
         args => {
-            host    => reverse_ip_address_for_rbl($ip) . '.in-addr.arpa',
+            host    => reverse_ip_address_for_rbl($ip) . $suffix,
             type    => 'PTR',
             timeout => $args{timeout} // 5,
         },
