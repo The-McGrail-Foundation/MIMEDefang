@@ -116,9 +116,9 @@ sub t_dane_live : Test(2)
         if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
             skip "Net test disabled", 2;
         }
-        # dane.sys4.de is a well-known DANE test domain
-        my @records = md_check_dane_tlsa('dane.sys4.de', 25);
-        ok(scalar @records > 0, 'dane.sys4.de has TLSA records for port 25');
+        # nlnetlabs.nl is the DNS research organisation that developed DANE
+        my @records = md_check_dane_tlsa('nlnetlabs.nl', 25);
+        ok(scalar @records > 0, 'nlnetlabs.nl has TLSA records for port 25');
         ok(exists $records[0]{usage}, 'TLSA record has usage field');
     };
 }
