@@ -4,6 +4,10 @@ affect your filter.
 
 2026-06-11 Giovanni Bechis <g.bechis@snb.it>
 
+       * MTA-STS and DANE/TLSA policy checks
+
+2026-06-11 Giovanni Bechis <g.bechis@snb.it>
+
         * add BIMI support
 
 2026-06-10 Giovanni Bechis <g.bechis@snb.it>
