@@ -1581,7 +1581,7 @@ single line is output for each message.  If you omit $enum_recips,
 it defaults to 1.
 
 .TP
-.B md_graphdefang_log($event, $v1, $v2)
+.B md_graphdefang_log($event, $v1, $v2, $utf8_decode, $per_message)
 Logs an event with up to two optional additional parameters.  The log
 message has a specific format useful for graphing tools; the
 message looks like this:
@@ -1597,12 +1597,73 @@ is the recipient's e-mail address, and "subj" is the message subject.
 If a message has more than one recipient, md_graphdefang_log may log an event message
 for \fIeach\fR recipient, depending on how you called md_graphdefang_log_enable.
 
+The optional \fI$per_message\fR parameter (fifth argument, default 0) overrides
+per-recipient enumeration for a single call.  When set to 1, exactly one syslog
+line is emitted regardless of the \fI$EnumerateRecipients\fR setting — the actual
+recipient address is used when there is a single recipient, otherwise
+"rcpts=N" is used.  This is appropriate for message-level events such as
+\fImail_in\fR, \fImail_out\fR, and \fInon-spam\fR that are counters for the
+whole message rather than per-user statistics.  Example:
+
+.nf
+	md_graphdefang_log('mail_in', undef, undef, 0, 1);
+.fi
+
 Note that md_graphdefang_log should not be used in filter_relay, filter_sender
 or filter_recipient.  The global variables it relies on are not
 valid in that context.
 
 If you want to log general text strings, \fIdo not\fR use md_graphdefang_log.
 Instead, use md_syslog (described next).
+
+.TP
+.B md_graphdefang_log_array($event, $utf8_decode, \e$values, $per_message)
+A variant of \fBmd_graphdefang_log\fR that accepts an array reference instead
+of two fixed positional values, allowing any number of additional fields to
+be logged.
+
+The log line has the same format as \fBmd_graphdefang_log\fR, but the
+comma-separated value fields are taken from the array:
+
+.nf
+	MDLOG,msgid,event,val1,val2,...,valN,sender,recipient,subj
+.fi
+
+The parameters are:
+
+.RS
+.TP
+.I $event
+The event name (e.g. 'virus', 'spam').
+.TP
+.I $utf8_decode
+If set to 1, MIME-decode and UTF-8 encode the event name, subject, and each
+value before logging.  Defaults to 0.
+.TP
+.I \e$values
+A reference to an array of additional values associated with the event.
+Each element is percent-encoded.  Pass a reference to an empty array if
+there are no additional values.
+.TP
+.I $per_message
+Optional; defaults to 0.  When set to 1, exactly one syslog line is emitted
+regardless of the \fI$EnumerateRecipients\fR setting, the actual recipient
+address is used when there is a single recipient, otherwise "rcpts=N" is used.
+.RE
+
+Examples:
+
+.nf
+	my @info = ($virus_name, $scanner);
+	md_graphdefang_log_array('virus', 0, \e@info);
+
+	my @info = ($score, $tests);
+	md_graphdefang_log_array('spam', 1, \e@info, 0);
+.fi
+
+Note that \fBmd_graphdefang_log_array\fR should not be used in
+\fBfilter_relay\fR, \fBfilter_sender\fR or \fBfilter_recipient\fR.
+The global variables it relies on are not valid in that context.
 
 .TP
 .B md_syslog($level, $msg)
