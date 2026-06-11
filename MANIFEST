@@ -98,6 +98,7 @@ modules/lib/Mail/MIMEDefang/Net.pm
 modules/lib/Mail/MIMEDefang.pm
 modules/lib/Mail/MIMEDefang/RFC2822.pm
 modules/lib/Mail/MIMEDefang/SPF.pm
+modules/lib/Mail/MIMEDefang/TLSPolicy.pm
 modules/lib/Mail/MIMEDefang/Unit.pm
 modules/lib/Mail/MIMEDefang/Utils.pm
 notifier.c
@@ -161,6 +162,7 @@ t/recipient.t
 t/sender.t
 t/smtp.t
 t/spf.t
+t/tlspolicy.t
 t/utils.t
 utils.c
 watch-mimedefang.8

@@ -267,6 +267,15 @@ else
     fi
     AC_MSG_RESULT($HAVE_BIMI)
 
+    AC_MSG_CHECKING([for Perl module Crypt::OpenSSL::X509])
+    (echo "use Crypt::OpenSSL::X509;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_CRYPT_OPENSSL_X509=no
+    else
+	HAVE_CRYPT_OPENSSL_X509=yes
+    fi
+    AC_MSG_RESULT($HAVE_CRYPT_OPENSSL_X509)
+
     AC_MSG_CHECKING([for Perl module AnyEvent])
     (echo "use AnyEvent;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
     if test $? != 0 ; then
@@ -1233,6 +1242,14 @@ if test "$HAVE_BIMI" = "no" ; then
    echo "Could not find Mail::BIMI Perl module."
    echo "BIMI checks will be limited to DNS record existence (no SVG/VMC validation)."
    echo "Install it with: cpanm Mail::BIMI"
+   echo ""
+fi
+
+if test "$HAVE_CRYPT_OPENSSL_X509" = "no" ; then
+   echo ""
+   echo "Could not find Crypt::OpenSSL::X509 Perl module."
+   echo "md_verify_dane_cert() will skip TLSA records with selector=1 (SPKI)."
+   echo "Install it with: cpanm Crypt::OpenSSL::X509"
    echo ""
 fi
 

@@ -204,6 +204,11 @@ lib/manpages:
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/RFC2822.pm modules/man/Mail::MIMEDefang::RFC2822.3
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \
+		--center="Mail::MIMEDefang::TLSPolicy Documentation" \
+		--name="Mail::MIMEDefang::TLSPolicy" \
+		--release=$(VERSION) \
+		modules/lib/Mail/MIMEDefang/TLSPolicy.pm modules/man/Mail::MIMEDefang::TLSPolicy.3
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \
 		--center="Mail::MIMEDefang::Unit Documentation" \
 		--name="Mail::MIMEDefang::Unit" \
 		--release=$(VERSION) \

@@ -291,6 +291,19 @@ if ($ENABLE_CHECK_PERL_MODULES) {
     }
 }
 
+# Crypt::OpenSSL::X509 optional module check
+{
+    print "\nChecking optional Perl module (DANE TLSA selector=1 / SPKI verification):\n";
+    my $ok;
+    eval "use Crypt::OpenSSL::X509; \$ok = 1";
+    printf "  %-35s %s\n", 'Crypt::OpenSSL::X509', $ok ? 'found' : 'not found';
+    unless ($ok) {
+        warn "\nNOTE: Crypt::OpenSSL::X509 is not installed.\n"
+           . "      md_verify_dane_cert() will skip TLSA records with selector=1\n"
+           . "      (SubjectPublicKeyInfo). Install with: cpanm Crypt::OpenSSL::X509\n";
+    }
+}
+
 # MIME::Tools version advisory
 {
     my $mt_ver = eval { require MIME::Tools; $MIME::Tools::VERSION } // 'unknown';
@@ -760,6 +773,11 @@ md_module_manpages:
 \t\t--release=\$(MD_VERSION) \\
 \t\tmodules/lib/Mail/MIMEDefang/SPF.pm "modules/man/Mail::MIMEDefang::SPF.3"
 \t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::TLSPolicy Documentation" \\
+\t\t--name="Mail::MIMEDefang::TLSPolicy" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/TLSPolicy.pm "modules/man/Mail::MIMEDefang::TLSPolicy.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
 \t\t--center="Mail::MIMEDefang::Unit Documentation" \\
 \t\t--name="Mail::MIMEDefang::Unit" \\
 \t\t--release=\$(MD_VERSION) \\
@@ -834,6 +852,7 @@ install_man:
 \t    Mail::MIMEDefang::Net.3 \\
 \t    Mail::MIMEDefang::RFC2822.3 \\
 \t    Mail::MIMEDefang::SPF.3 \\
+\t    Mail::MIMEDefang::TLSPolicy.3 \\
 \t    Mail::MIMEDefang::Unit.3 \\
 \t    Mail::MIMEDefang::Utils.3 \\
 \t    Mail::MIMEDefang::Async.3 \\

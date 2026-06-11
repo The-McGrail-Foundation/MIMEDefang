@@ -36,7 +36,7 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_blacklisted email_is_blacklisted
                  relay_is_blacklisted_multi relay_is_blacklisted_multi_count relay_is_blacklisted_multi_list
                  is_public_ip4_address is_public_ip6_address md_get_bogus_mx_hosts get_mx_ip_addresses
-                 md_get_dmarc_record);
+                 md_get_dmarc_record md_dns_txt);
 our @EXPORT_OK = qw(get_host_name get_ptr_record md_init);
 
 sub md_init {
@@ -649,6 +649,32 @@ sub relay_is_blacklisted_multi_list {
   # If in list context, return the array.  Otherwise, return
   # array reference.
   return (wantarray ? @$result : $result);
+}
+
+=item md_dns_txt($resolver, $name)
+
+Query C<$name> for TXT records using the supplied C<Net::DNS::Resolver>
+object and return the first TXT string found, or C<undef> on any error
+(NXDOMAIN, SERVFAIL, no TXT records).
+
+=cut
+
+sub md_dns_txt {
+    my ($res, $name) = @_;
+    my $packet = $res->query($name, 'TXT');
+    return unless defined $packet;
+    return if $packet->header->rcode eq 'NXDOMAIN';
+    return if $packet->header->rcode eq 'SERVFAIL';
+    return unless defined $packet->answer;
+
+    for my $rr ($packet->answer) {
+        next unless $rr->type eq 'TXT';
+        my $txt = $rr->rdstring;
+        $txt =~ s/^"|"$//g;
+        $txt =~ s/"\s*"//g;
+        return $txt;
+    }
+    return;
 }
 
 =back
