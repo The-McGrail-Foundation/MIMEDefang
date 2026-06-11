@@ -87,7 +87,7 @@ our $VERSION = '3.6';
       $results_fh
       init_globals print_and_flush detect_and_load_perl_modules
       init_status_tag push_status_tag pop_status_tag
-      signal_changed signal_unchanged md_syslog md_graphdefang_log
+      signal_changed signal_unchanged md_syslog md_graphdefang_log md_graphdefang_log_array
       write_result_line in_message_context in_filter_context in_filter_wrapup
       in_filter_end percent_decode percent_encode percent_encode_for_graphdefang
       send_mail send_multipart_mail send_quarantine_notifications signal_complete send_admin_mail
@@ -408,10 +408,70 @@ sub md_graphdefang_log
     my $value1 = shift;
     my $value2 = shift;
     my $utf8_decode = shift;
+    my $per_message = shift;
 
     $value1 = "" unless defined($value1);
     $value2 = "" unless defined($value2);
     $utf8_decode = 0 unless defined($utf8_decode);
+
+    my @info;
+    push(@info, $value1);
+    push(@info, $value2);
+
+    return md_graphdefang_log_array($event,$utf8_decode,\@info,$per_message);
+}
+
+=item md_graphdefang_log_array
+
+This is called to log events that occur during mimedefang processing.
+It should be called from mimedefang-filter with appropriate
+event names and values.
+
+Possible examples:
+
+C<md_graphdefang_log_array('virus',0,\@info);>
+
+If you need to log UTF-8 strings you can call the sub as:
+
+C<md_graphdefang_log_array('spam',1,\@info);>
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: md_graphdefang_log_array
+# %ARGUMENTS:
+#  event -- The name of the event that is being logged.  Examples
+#           include virus, spam, mail, etc.
+#  utf8_decode -- (optional) A boolean value that indicates if we want to
+#                 decode UTF-8 encoded strings
+#  values -- (optional) An array of values associated with the event being logged.
+#  per_message -- (optional) A boolean value that indicates if the log should be printed
+#                  once per recipient or just one time.
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  This is called to log events that occur during mimedefang processing.
+#  It should be called from mimedefang-filter with appropriate
+#  event names and values. Possible examples:
+#      md_graphdefang_log_array('virus',0,\@info);
+#      md_graphdefang_log_array('spam',1,\@info);
+#***********************************************************************
+sub md_graphdefang_log_array
+{
+    return unless defined($GraphDefangSyslogFacility);
+    return if (!in_message_context("md_graphdefang_log"));
+
+    my $event = shift;
+    my $utf8_decode = shift;
+    my $info = shift;
+    my $per_message = shift;
+    my @info = @$info;
+
+    $utf8_decode = 0 unless defined($utf8_decode);
+    $per_message = 0 unless defined($per_message);
+    if(not defined $info) {
+      push(@info, "");
+    }
 
     my $lcsender = percent_encode_for_graphdefang(lc($Sender));
 
@@ -427,41 +487,41 @@ sub md_graphdefang_log
         $value2 = mime_to_perl_string($value2);
         $subj =~ s/\P{Print}//g;
         $event =~ s/\P{Print}//g;
-        $value1 =~ s/\P{Print}//g;
-        $value2 =~ s/\P{Print}//g;
         if (utf8::is_utf8($subj)) {
           utf8::encode($subj);
         }
         if (utf8::is_utf8($event)) {
           utf8::encode($event);
         }
-        if (utf8::is_utf8($value1)) {
-          utf8::encode($value1);
-        }
-        if (utf8::is_utf8($value2)) {
-          utf8::encode($value2);
-        }
+	      foreach my $val ( @info ) {
+          $val =~ s/\P{Print}//g;
+          if (utf8::is_utf8($val)) {
+            utf8::encode($val);
+          }
+	      }
       };
     } else {
       $subj = percent_encode_for_graphdefang($Subject);
       $event = percent_encode_for_graphdefang($event);
-      $value1 = percent_encode_for_graphdefang($value1);
-      $value2 = percent_encode_for_graphdefang($value2);
+      foreach my $val ( @info ) {
+        $val = percent_encode_for_graphdefang($val);
+      }
     }
-    if ($EnumerateRecipients || scalar(@Recipients) == 1) {
-	foreach my $recipient (@Recipients) {
-	    my $lcrecipient = percent_encode_for_graphdefang(lc($recipient));
-	    md_syslog("$GraphDefangSyslogFacility|info","MDLOG,$id," .
-	              "$event,$value1,$value2,$lcsender," .
-	              "$lcrecipient,$subj");
-	}
-    } else {
-	my $lcrecipient = "rcpts=" . scalar(@Recipients);
-	$lcrecipient = percent_encode_for_graphdefang($lcrecipient);
-	md_syslog("$GraphDefangSyslogFacility|info","MDLOG,$id," .
-	          "$event,$value1,$value2,$lcsender," .
-		  "$lcrecipient,$subj");
-    }
+    my $enumerate = !$per_message && $EnumerateRecipients;
+    if ($enumerate || scalar(@Recipients) == 1) {
+	    foreach my $recipient (@Recipients) {
+	      my $lcrecipient = percent_encode_for_graphdefang(lc($recipient));
+	      md_syslog("$GraphDefangSyslogFacility|info","MDLOG,$id," .
+	                "$event," . join(",", @info) . ",$lcsender," .
+	                "$lcrecipient,$subj");
+	  }
+  } else {
+	  my $lcrecipient = "rcpts=" . scalar(@Recipients);
+	  $lcrecipient = percent_encode_for_graphdefang($lcrecipient);
+	  md_syslog("$GraphDefangSyslogFacility|info","MDLOG,$id," .
+	          "$event," . join(",", @info) . ",$lcsender," .
+		        "$lcrecipient,$subj");
+  }
 }
 
 =item detect_and_load_perl_modules

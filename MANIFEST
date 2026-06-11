@@ -152,6 +152,7 @@ t/dates.t
 t/dkim.t
 t/dockerPostfix.sh
 t/dockerSendmail.sh
+t/graphdefang.t
 t/headers.t
 t/helo.t
 t/Makefile
