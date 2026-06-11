@@ -530,6 +530,9 @@ sub detect_and_load_perl_modules() {
         }
       }
       $Features{"Net::DNS"} = $use_dns;
+      if(exists &Mail::MIMEDefang::BIMI::md_init) {
+        Mail::MIMEDefang::BIMI::md_init();
+      }
       if(exists &Mail::MIMEDefang::Actions::md_init) {
         Mail::MIMEDefang::Actions::md_init();
       }

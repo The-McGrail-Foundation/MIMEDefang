@@ -89,6 +89,7 @@ modules/lib/Mail/MIMEDefang/Async/Checks.pm
 modules/lib/Mail/MIMEDefang/Async/Results.pm
 modules/lib/Mail/MIMEDefang/Antivirus.pm
 modules/lib/Mail/MIMEDefang/Authres.pm
+modules/lib/Mail/MIMEDefang/BIMI.pm
 modules/lib/Mail/MIMEDefang/DKIM/ARC.pm
 modules/lib/Mail/MIMEDefang/DKIM.pm
 modules/lib/Mail/MIMEDefang/Mail.pm
@@ -120,6 +121,7 @@ t/arc.t
 t/async.t
 t/authres.t
 t/autoscale.t
+t/bimi.t
 t/core.t
 t/critic.t
 t/data/arc1.eml

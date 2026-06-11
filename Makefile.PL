@@ -278,6 +278,19 @@ if ($ENABLE_CHECK_PERL_MODULES) {
     }
 }
 
+# Mail::BIMI optional module check
+{
+    print "\nChecking optional Perl module (BIMI validation):\n";
+    my $ok;
+    eval "use Mail::BIMI; \$ok = 1";
+    printf "  %-35s %s\n", 'Mail::BIMI', $ok ? 'found' : 'not found';
+    unless ($ok) {
+        warn "\nNOTE: Mail::BIMI is not installed.\n"
+           . "      BIMI checks will be limited to DNS record existence\n"
+           . "      (no SVG/VMC validation). Install with: cpanm Mail::BIMI\n";
+    }
+}
+
 # MIME::Tools version advisory
 {
     my $mt_ver = eval { require MIME::Tools; $MIME::Tools::VERSION } // 'unknown';
@@ -707,6 +720,11 @@ md_module_manpages:
 \t\t--release=\$(MD_VERSION) \\
 \t\tmodules/lib/Mail/MIMEDefang/Authres.pm "modules/man/Mail::MIMEDefang::Authres.3"
 \t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::BIMI Documentation" \\
+\t\t--name="Mail::MIMEDefang::BIMI" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/BIMI.pm "modules/man/Mail::MIMEDefang::BIMI.3"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
 \t\t--center="Mail::MIMEDefang::DKIM Documentation" \\
 \t\t--name="Mail::MIMEDefang::DKIM" \\
 \t\t--release=\$(MD_VERSION) \\
@@ -808,6 +826,7 @@ install_man:
 \t    Mail::MIMEDefang::Antispam.3 \\
 \t    Mail::MIMEDefang::Antivirus.3 \\
 \t    Mail::MIMEDefang::Authres.3 \\
+\t    Mail::MIMEDefang::BIMI.3 \\
 \t    Mail::MIMEDefang::DKIM.3 \\
 \t    Mail::MIMEDefang::DKIM::ARC.3 \\
 \t    Mail::MIMEDefang::Mail.3 \\

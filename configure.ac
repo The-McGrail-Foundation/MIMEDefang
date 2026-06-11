@@ -258,6 +258,15 @@ else
     fi
     AC_MSG_RESULT($HAVE_DKIM)
 
+    AC_MSG_CHECKING([for Perl module Mail::BIMI])
+    (echo "use Mail::BIMI;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_BIMI=no
+    else
+	HAVE_BIMI=yes
+    fi
+    AC_MSG_RESULT($HAVE_BIMI)
+
     AC_MSG_CHECKING([for Perl module AnyEvent])
     (echo "use AnyEvent;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
     if test $? != 0 ; then
@@ -1216,6 +1225,14 @@ if test "$HAVE_DKIM" = "no" ; then
    echo ""
    echo "Could not find Mail::DKIM Perl module... do not use"
    echo "md_dkim_sign, md_dkim_verify or md_authres functions in your filter."
+   echo ""
+fi
+
+if test "$HAVE_BIMI" = "no" ; then
+   echo ""
+   echo "Could not find Mail::BIMI Perl module."
+   echo "BIMI checks will be limited to DNS record existence (no SVG/VMC validation)."
+   echo "Install it with: cpanm Mail::BIMI"
    echo ""
 fi
 

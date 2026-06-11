@@ -25,6 +25,7 @@ use warnings;
 
 require Exporter;
 
+use Mail::MIMEDefang::BIMI;
 use Mail::MIMEDefang::DKIM;
 use Mail::MIMEDefang::Net;
 use Mail::MIMEDefang::SPF;
@@ -58,13 +59,19 @@ The domain name of the server where MIMEDefang is running on
 
 The MTA helo server name
 
+=item C<$bimi_domain> (optional)
+
+The From: header domain to use for BIMI lookup.  When provided and when DMARC
+passes at enforcement level, a C<bimi=pass> (or C<bimi=fail>) result is
+appended to the Authentication-Results header.
+
 =back
 
 =cut
 
 sub md_authres {
 
-  my ($spfmail, $relayip, $serverdomain, $helo) = @_;
+  my ($spfmail, $relayip, $serverdomain, $helo, $bimi_domain) = @_;
   my $dkimoldver = 1;
 
   if(not defined $spfmail and not defined $relayip and not defined $serverdomain) {
@@ -116,6 +123,29 @@ sub md_authres {
         $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $helo doesn't specify if $relayip is a permitted sender) smtp.helo=$helo;";
       }
     }
+    if (defined $bimi_domain && $bimi_domain ne '') {
+      my $dmarc_record = md_get_dmarc_record($bimi_domain);
+      my $dmarc_policy = 'none';
+      if (defined $dmarc_record && $dmarc_record =~ /\bp=(\w+)/) {
+        $dmarc_policy = lc($1);
+      }
+      # Determine an effective DMARC result using relaxed alignment:
+      # pass if DKIM passes and the DKIM signing domain aligns with $bimi_domain,
+      # or if SPF passes and the mail-from domain aligns.
+      my $effective_dmarc = 'fail';
+      my $bimi_org = _org_domain($bimi_domain);
+      if (defined $dkimres && $dkimres eq 'pass' && defined $dkimdom) {
+        $effective_dmarc = 'pass' if _org_domain($dkimdom) eq $bimi_org;
+      }
+      if ($effective_dmarc ne 'pass' && defined $spfcode && $spfcode eq 'pass') {
+        my ($spf_localpart, $spf_domain) = split /\@/, $spfmail, 2;
+        if (defined $spf_domain && _org_domain($spf_domain) eq $bimi_org) {
+          $effective_dmarc = 'pass';
+        }
+      }
+      my $bimi_res = md_bimi_verify($bimi_domain, $effective_dmarc, $dmarc_policy);
+      $authres .= "\r\n\tbimi=" . $bimi_res . " header.d=$bimi_domain;";
+    }
     $authres =~ s/\r//gs;
     return $authres;
   }
@@ -125,5 +155,17 @@ sub md_authres {
 =back
 
 =cut
+
+# Return the "organizational domain" for relaxed DMARC alignment:
+# strip all labels except the last two (e.g. mail.example.com -> example.com).
+# This is a simplification; a production deployment may use the Public Suffix List.
+sub _org_domain {
+  my ($domain) = @_;
+  return '' unless defined $domain && $domain ne '';
+  $domain = lc $domain;
+  my @labels = split /\./, $domain;
+  return $domain if @labels <= 2;
+  return join('.', @labels[-2..-1]);
+}
 
 1;
