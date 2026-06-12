@@ -37,8 +37,8 @@ Typical usage:
   # then verify the connecting MX is permitted before requiring TLS.
   my $policy = md_check_mta_sts($recipient_domain);
   if (defined $policy && $policy->{mode} eq 'enforce') {
-      if (!md_verify_sts_mx($mx_hostname, $policy)) {
-          action_bounce("MX host $mx_hostname not permitted by MTA-STS policy");
+      if (!md_verify_sts_mx($rcpt_host, $policy)) {
+          action_bounce("MX host $rcpt_host not permitted by MTA-STS policy");
       }
   }
 
