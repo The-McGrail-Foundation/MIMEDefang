@@ -258,8 +258,8 @@ else
     fi
     AC_MSG_RESULT($HAVE_DKIM)
 
-    AC_MSG_CHECKING([for Perl module Mail::BIMI])
-    (echo "use Mail::BIMI;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    AC_MSG_CHECKING([for Perl module Mail::BIMI >= 3])
+    (echo "use Mail::BIMI 3;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
     if test $? != 0 ; then
 	HAVE_BIMI=no
     else

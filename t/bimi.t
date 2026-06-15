@@ -51,10 +51,10 @@ sub t_bimi_lookup_live : Test(3)
     if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
       skip "Net test disabled", 3;
     }
-    # google.com publishes a BIMI record
-    my $rec = md_bimi_lookup('google.com');
+    # valimail.com publishes a BIMI record
+    my $rec = md_bimi_lookup('valimail.com');
     if (!defined $rec) {
-      skip "google.com BIMI record not found (may have changed)", 3;
+      skip "valimail.com BIMI record not found (may have changed)", 3;
     }
     is($rec->{version}, 'BIMI1', 'BIMI record version is BIMI1');
     ok(defined $rec->{l} && $rec->{l} ne '', 'BIMI record has a logo URL');

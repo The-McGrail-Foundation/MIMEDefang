@@ -17,10 +17,11 @@ alongside authenticated messages.
 A BIMI record is only considered valid when the sending domain passes DMARC
 at enforcement level (C<p=quarantine> or C<p=reject>).
 
-When the C<Mail::BIMI> Perl module is installed, C<md_bimi_lookup> and
-C<md_bimi_verify> use it for richer validation, including SVG logo integrity
-and Verified Mark Certificate (VMC) chain verification. Without C<Mail::BIMI>
-the checks are limited to DNS record existence and a non-empty C<l=> tag.
+When the C<Mail::BIMI> Perl module (version 3.x or later) is installed,
+C<md_bimi_lookup> and C<md_bimi_verify> use it for richer validation,
+including SVG logo integrity and Verified Mark Certificate (VMC) chain
+verification. Without C<Mail::BIMI> the checks are limited to DNS record
+existence and a non-empty C<l=> tag.
 
 =head1 METHODS
 
@@ -102,12 +103,14 @@ sub md_bimi_lookup {
     local $@;
     my $result = eval {
       my $bimi_obj = Mail::BIMI->new(domain => $domain, selector => 'default');
-      my $record   = $bimi_obj->record;
-      return unless $record && !$record->is_error;
+      my $record  = $bimi_obj->record;
+      return unless $record;
+      my $hashref = $record->record_hashref // {};
+      return unless %$hashref;
       my %rec = (version => 'BIMI1');
-      $rec{l} = $record->l_value->value if $record->l_value;
-      $rec{a} = $record->a_value->value if $record->a_value;
-      $rec{raw} = join('', $record->value // '');
+      $rec{l} = $hashref->{l} if defined $hashref->{l};
+      $rec{a} = $hashref->{a} if defined $hashref->{a};
+      $rec{raw} = $record->retrieved_record // '';
       return \%rec;
     };
     return $result unless $@;

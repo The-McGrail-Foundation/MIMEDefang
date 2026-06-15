@@ -282,10 +282,10 @@ if ($ENABLE_CHECK_PERL_MODULES) {
 {
     print "\nChecking optional Perl module (BIMI validation):\n";
     my $ok;
-    eval "use Mail::BIMI; \$ok = 1";
-    printf "  %-35s %s\n", 'Mail::BIMI', $ok ? 'found' : 'not found';
+    eval "use Mail::BIMI 3; \$ok = 1";
+    printf "  %-35s %s\n", 'Mail::BIMI >= 3', $ok ? 'found' : 'not found';
     unless ($ok) {
-        warn "\nNOTE: Mail::BIMI is not installed.\n"
+        warn "\nNOTE: Mail::BIMI >= 3 is not installed.\n"
            . "      BIMI checks will be limited to DNS record existence\n"
            . "      (no SVG/VMC validation). Install with: cpanm Mail::BIMI\n";
     }
