@@ -177,7 +177,8 @@ sub md_check_mta_sts {
         } elsif ($line =~ /^max_age\s*:\s*(\d+)/i) {
             $policy{max_age} = int($1);
         } elsif ($line =~ /^mx\s*:\s*(.+)/i) {
-            push @{$policy{mx}}, $1;
+            (my $mx_val = $1) =~ s/\s+$//;
+            push @{$policy{mx}}, $mx_val;
         }
     }
 
