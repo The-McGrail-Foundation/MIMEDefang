@@ -34,7 +34,12 @@ use POSIX          qw(uname);
 # ---------------------------------------------------------------------------
 # Version
 # ---------------------------------------------------------------------------
-my $VERSION = '3.6';
+my $VERSION;
+eval {
+  use lib 'modules/lib';
+  use Mail::MIMEDefang;
+  $VERSION = Mail::MIMEDefang->md_version;
+};
 
 # ---------------------------------------------------------------------------
 # AV scanner table  (binary => template token)
