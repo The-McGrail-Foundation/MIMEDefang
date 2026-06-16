@@ -479,9 +479,13 @@ WriteMakefile(
     AUTHOR           => 'The McGrail Foundation <https://mimedefang.org>',
     ABSTRACT         => 'E-mail filtering with Sendmail Milter',
 
-    META_MERGE => {
+    META_ADD => {
         'meta-spec' => { version => 2 },
-        license     => [ 'GPL-2.0-only' ],
+        license     => [ 'gpl_2' ],
+    },
+
+    META_MERGE => {
+        keywords    => [qw(email milter spam sendmail postfix filter)],
         resources => {
             repository => {
                 type => 'git',
@@ -491,8 +495,34 @@ WriteMakefile(
             bugtracker => {
                 web => 'https://github.com/The-McGrail-Foundation/MIMEDefang/issues'
             },
-         },
-
+        },
+        prereqs => {
+            runtime => {
+                recommends => {
+                    'Unix::Syslog'          => 0,
+                    'Sys::Syslog'           => 0,
+                    'AnyEvent'              => 0,
+                    'AnyEvent::DNS'         => 0,
+                    'AnyEvent::Socket'      => 0,
+                    'Mail::BIMI'            => '3',
+                    'Crypt::OpenSSL::X509'  => 0,
+                    'Mail::SpamAssassin'    => 0,
+                    'Mail::DKIM'            => 0,
+                    'Mail::SPF'             => 0,
+                    'HTML::Parser'          => 0,
+                    'IO::Socket::SSL'       => 0,
+                    'JSON'                  => 0,
+                    'LWP::UserAgent'        => 0,
+                },
+            },
+            develop => {
+                requires => {
+                    'Test::Class'        => 0,
+                    'Test::Most'         => 0,
+                    'Test::Perl::Critic' => 0,
+                },
+            },
+        },
     },
 
     # Perl module sources
