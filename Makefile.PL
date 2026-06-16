@@ -650,6 +650,7 @@ MAKE
         # md-mx-ctrl
         my $ctrl_objs = join(' ', qw(
             md-mx-ctrl.o
+            dynbuf.o
             utils.o
         ));
         my $ctrl_ldflags = '$(MD_LDFLAGS_COMMON)';

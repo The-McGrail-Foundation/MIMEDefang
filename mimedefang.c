@@ -27,7 +27,6 @@ typedef int md_socklen_t;
 
 #include "config.h"
 #include "mimedefang.h"
-#include "dynbuf.h"
 
 #include <ctype.h>
 #include <errno.h>
