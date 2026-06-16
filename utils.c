@@ -713,7 +713,7 @@ MXSenderOK(char const *sockname,
 {
     char cmd[SMALLBUF];
     char ans[SMALLBUF];
-    int l, l2, i;
+    size_t l, l2, i;
 
     char const *sender = sender_argv[0];
 
@@ -800,7 +800,7 @@ MXRecipientOK(char const *sockname,
 {
     char cmd[SMALLBUF];
     char ans[SMALLBUF];
-    int i, l, l2;
+    size_t i, l, l2;
     char const *recipient = recip_argv[0];
 
     *msg = 0;
