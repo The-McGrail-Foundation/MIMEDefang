@@ -211,8 +211,6 @@ static int write_dbuf(dynamic_buffer *dbuf,
 
 static void append_percent_encoded(dynamic_buffer *dbuf,
 				   char const *buf);
-static int safe_append_header(dynamic_buffer *dbuf,
-			      char *str);
 
 static sfsistat cleanup(SMFICTX *ctx);
 static sfsistat mfclose(SMFICTX *ctx);
@@ -3019,37 +3017,6 @@ append_mx_command(dynamic_buffer *dbuf,
 	append_percent_encoded(dbuf, buf);
     }
     dbuf_putc(dbuf, '\n');
-}
-
-/**********************************************************************
-* %FUNCTION: safe_append_header
-* %ARGUMENTS:
-*  dbuf -- dynamic buffer to append to
-*  str -- a string value
-* %RETURNS:
-*  0 if header seems OK; 1 if suspicious character found.
-* %DESCRIPTION:
-*  Writes "str" to dbuf with the following changes:
-*    CR   -> written as space
-***********************************************************************/
-static int
-safe_append_header(dynamic_buffer *dbuf,
-		   char *str)
-{
-    int suspicious = 0;
-
-    for(; *str; str++) {
-	/* Do not write \r to header file -- convert to space */
-	if (*str == '\r') {
-	    if (*(str+1) != '\n') {
-		suspicious = 1;
-		dbuf_putc(dbuf, ' ');
-		continue;
-	    }
-	}
-	dbuf_putc(dbuf, *str);
-    }
-    return suspicious;
 }
 
 static int

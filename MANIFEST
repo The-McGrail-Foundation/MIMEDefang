@@ -116,6 +116,7 @@ SpamAssassin/spamassassin.cf
 syslog-fac.c
 systemd-units/mimedefang-multiplexor.service
 systemd-units/mimedefang.service
+t/c_unit.t
 t/actions.t
 t/antispam.t
 t/arc.t
@@ -149,6 +150,7 @@ t/data/uri.eml
 t/data/uri-html.eml
 t/data/zip.eml
 t/dates.t
+t/test_safe_append_header.c
 t/dkim.t
 t/dockerPostfix.sh
 t/dockerSendmail.sh

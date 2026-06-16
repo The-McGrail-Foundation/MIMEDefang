@@ -23,6 +23,7 @@
 #include <stddef.h>
 #include <sys/types.h>
 #include <sys/socket.h>   /* For struct sockaddr */
+#include "dynbuf.h"
 
 extern void chomp(char *str);
 extern int percent_encode(char const *in, char *out, int outlen);
@@ -96,6 +97,7 @@ extern void dump_milter_buildlib_info(void);
 #endif
 
 extern char *gen_mx_id(char *);
+extern int safe_append_header(dynamic_buffer *dbuf, char *str);
 /* Magic return values */
 #define MD_TEMPFAIL                    -1
 #define MD_REJECT                       0

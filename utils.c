@@ -15,6 +15,7 @@
 #define _DEFAULT_SOURCE 1
 
 #include "config.h"
+#include "dynbuf.h"
 #include "mimedefang.h"
 
 #include <stdio.h>
@@ -1356,4 +1357,38 @@ write_and_lock_pidfile(char const *pidfile, char **lockfile, int pidfile_fd)
     /* Do NOT close lockfile_fd... it will close and lock will be released
        when we exit */
     return lockfile_fd;
+}
+
+/**********************************************************************
+* %FUNCTION: safe_append_header
+* %ARGUMENTS:
+*  dbuf -- dynamic buffer to append to
+*  str -- a string value
+* %RETURNS:
+*  0 if header seems OK; 1 if suspicious character found.
+* %DESCRIPTION:
+*  Writes "str" to dbuf with the following changes:
+*    CR followed by LF -> CR suppressed (normalized to \n like body)
+*    bare CR           -> written as space
+***********************************************************************/
+int
+safe_append_header(dynamic_buffer *dbuf,
+		   char *str)
+{
+    int suspicious = 0;
+
+    for(; *str; str++) {
+	/* Do not write \r to header file */
+	if (*str == '\r') {
+	    if (*(str+1) != '\n') {
+		/* Bare CR: replace with space */
+		suspicious = 1;
+		dbuf_putc(dbuf, ' ');
+	    }
+	    /* CR before LF: suppress (CRLF -> LF, consistent with body) */
+	    continue;
+	}
+	dbuf_putc(dbuf, *str);
+    }
+    return suspicious;
 }
