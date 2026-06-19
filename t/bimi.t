@@ -7,6 +7,7 @@ use Test::Most;
 
 use Mail::MIMEDefang;
 use Mail::MIMEDefang::BIMI;
+use MIME::Parser;
 
 init_globals;
 Mail::MIMEDefang::BIMI::md_init();
@@ -60,6 +61,38 @@ sub t_bimi_lookup_live : Test(3)
     ok(defined $rec->{l} && $rec->{l} ne '', 'BIMI record has a logo URL');
     ok(defined $rec->{raw}, 'BIMI record has raw TXT string');
   };
+}
+
+sub t_bimi_get_selector_present : Test(1)
+{
+  # t/data/dkim1.eml contains: BIMI-Selector: v=BIMI1; s=brand1;
+  my $parser = MIME::Parser->new;
+  $parser->output_to_core(1);
+  my $entity = $parser->parse_open('t/data/dkim1.eml');
+  is(md_bimi_get_selector($entity), 'brand1',
+     'md_bimi_get_selector returns selector from BIMI-Selector header');
+}
+
+sub t_bimi_get_selector_absent : Test(1)
+{
+  my $parser = MIME::Parser->new;
+  $parser->output_to_core(1);
+  my $entity = $parser->parse_open('t/data/uri.eml');
+  is(md_bimi_get_selector($entity), 'default',
+     'md_bimi_get_selector returns default when header is absent');
+}
+
+sub t_bimi_get_selector_undef : Test(1)
+{
+  is(md_bimi_get_selector(undef), 'default',
+     'md_bimi_get_selector returns default for undef entity');
+}
+
+sub t_bimi_lookup_invalid_selector : Test(1)
+{
+  my $rec = md_bimi_lookup('example.com', '../evil');
+  ok(!defined($rec) || ref($rec) eq 'HASH',
+     'md_bimi_lookup survives an invalid selector string');
 }
 
 sub t_bimi_mail_bimi_module : Test(1)

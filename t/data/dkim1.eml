@@ -3,6 +3,7 @@ DKIM-Signature: v=1; a=rsa-sha1; d=sa-test.spamassassin.org; h=from:to
 	vxHXq7bMZ9+UHGuKBsbQKsDHmmk=; b=oRxHoP0YN5LfqwKiqM0iFIeG6J0odmtG
 	bttw9VPWjmTouQl15+EEPNfmWNyKqbXYSs0BbmfkWZuYHSf56lj1F89xqbf62w2h
 	cnelgVK2HSbyD8kzbAAGR/yPWamnRhne
+BIMI-Selector: v=BIMI1; s=brand1;
 From: SpamAssassin Test <test@sa-test.spamassassin.org>
 To: undisclosed-recipients:;
 Subject: test message 1

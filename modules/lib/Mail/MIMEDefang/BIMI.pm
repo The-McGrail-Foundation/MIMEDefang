@@ -40,7 +40,7 @@ use Mail::MIMEDefang;
 use Net::DNS;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(md_bimi_lookup md_bimi_verify);
+our @EXPORT = qw(md_bimi_lookup md_bimi_verify md_bimi_get_selector);
 our @EXPORT_OK = qw(md_init);
 
 =item md_init
@@ -61,9 +61,52 @@ sub md_init {
   }
 }
 
-=item md_bimi_lookup($domain)
+sub _validate_selector {
+  my ($sel) = @_;
+  $sel //= 'default';
+  unless ($sel =~ /\A[A-Za-z0-9-]+\z/) {
+    md_syslog('err', "md_bimi: invalid selector '$sel', using 'default'");
+    return 'default';
+  }
+  return $sel;
+}
+
+=item md_bimi_get_selector($entity)
+
+Extract the BIMI selector from the C<BIMI-Selector> header of a
+C<MIME::Entity> object.  The header format is:
+
+  BIMI-Selector: v=BIMI1; s=brand1;
+
+Returns the selector string (e.g. C<"brand1">) on success, or C<"default">
+when the header is absent, malformed, or C<$entity> is undefined.
+
+Typical usage in C<filter_begin($entity)>:
+
+  my $selector = md_bimi_get_selector($entity);
+  my $result   = md_bimi_verify($domain, $dmarc_result, $policy, $selector);
+
+=cut
+
+sub md_bimi_get_selector {
+  my ($entity) = @_;
+  return 'default' unless defined $entity;
+  my $hdr = $entity->head->get('BIMI-Selector') // '';
+  chomp $hdr;
+  if ($hdr =~ /\bv=BIMI1\b/i && $hdr =~ /\bs=([A-Za-z0-9-]+)/i) {
+    return $1;
+  }
+  return 'default';
+}
+
+=item md_bimi_lookup($domain [, $selector])
 
 Look up the BIMI DNS TXT record for C<$domain>.
+
+The optional C<$selector> argument specifies which BIMI selector to query
+(e.g. C<"brand1"> → C<brand1._bimi.$domain>).  When omitted or C<undef>,
+C<"default"> is used.  Use C<md_bimi_get_selector> to derive the selector
+from the message's C<BIMI-Selector> header.
 
 Returns a hashref with the following keys on success:
 
@@ -92,7 +135,8 @@ Returns C<undef> if no BIMI record is found or if C<Net::DNS> is not available.
 =cut
 
 sub md_bimi_lookup {
-  my ($domain) = @_;
+  my ($domain, $selector) = @_;
+  $selector = _validate_selector($selector);
 
   unless (defined $domain && $domain ne '') {
     md_syslog('err', 'md_bimi_lookup: domain is required');
@@ -102,7 +146,7 @@ sub md_bimi_lookup {
   if ($Features{"Mail::BIMI"}) {
     local $@;
     my $result = eval {
-      my $bimi_obj = Mail::BIMI->new(domain => $domain, selector => 'default');
+      my $bimi_obj = Mail::BIMI->new(domain => $domain, selector => $selector);
       my $record  = $bimi_obj->record;
       return unless $record;
       my $hashref = $record->record_hashref // {};
@@ -126,7 +170,7 @@ sub md_bimi_lookup {
   my $res = Net::DNS::Resolver->new;
   $res->defnames(0);
 
-  my $lookup = 'default._bimi.' . $domain;
+  my $lookup = $selector . '._bimi.' . $domain;
   my $packet = $res->query($lookup, 'TXT');
 
   if (!defined($packet) ||
@@ -159,7 +203,7 @@ sub md_bimi_lookup {
   return;
 }
 
-=item md_bimi_verify($domain, $dmarc_result, $dmarc_policy)
+=item md_bimi_verify($domain, $dmarc_result, $dmarc_policy [, $selector])
 
 Verify that a domain's BIMI record is valid given the DMARC result.
 
@@ -203,12 +247,19 @@ The DMARC result string, e.g. C<"pass"> or C<"fail">.
 
 The DMARC policy in effect: C<"none">, C<"quarantine">, or C<"reject">.
 
+=item C<$selector>
+
+Optional BIMI selector string.  Defaults to C<"default">.  Pass the value
+returned by C<md_bimi_get_selector($entity)> to honour the message's
+C<BIMI-Selector> header.
+
 =back
 
 =cut
 
 sub md_bimi_verify {
-  my ($domain, $dmarc_result, $dmarc_policy) = @_;
+  my ($domain, $dmarc_result, $dmarc_policy, $selector) = @_;
+  $selector = _validate_selector($selector);
 
   return 'fail' unless defined $domain && $domain ne '';
   return 'fail' unless defined $dmarc_result && lc($dmarc_result) eq 'pass';
@@ -219,7 +270,7 @@ sub md_bimi_verify {
   if ($Features{"Mail::BIMI"}) {
     local $@;
     my $valid = eval {
-      my $bimi_obj = Mail::BIMI->new(domain => $domain, selector => 'default');
+      my $bimi_obj = Mail::BIMI->new(domain => $domain, selector => $selector);
       my $record   = $bimi_obj->record;
       return 0 unless $record;
       return $record->is_valid ? 1 : 0;
@@ -231,7 +282,7 @@ sub md_bimi_verify {
     return $valid ? 'pass' : 'fail';
   }
 
-  my $bimi = md_bimi_lookup($domain);
+  my $bimi = md_bimi_lookup($domain, $selector);
   return 'fail' unless defined $bimi;
   return 'fail' unless defined $bimi->{l} && $bimi->{l} ne '';
 
