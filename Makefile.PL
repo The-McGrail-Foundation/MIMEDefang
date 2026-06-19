@@ -314,10 +314,8 @@ if ($ENABLE_CHECK_PERL_MODULES) {
     my $mt_ver = eval { require MIME::Tools; $MIME::Tools::VERSION } // 'unknown';
     print "\nMIME::Tools version  : $mt_ver\n";
     if ($mt_ver ne 'unknown') {
-        (my $numeric = $mt_ver) =~ s/\.//g;
-        $numeric = sprintf('%05d', $numeric + 0);
         warn "WARNING: MIME::Tools >= 5.412 is strongly recommended (found $mt_ver)\n"
-            if $numeric < 54120;
+            if $mt_ver + 0 < 5.412;
     }
 }
 
