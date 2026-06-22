@@ -244,7 +244,7 @@ distclean:: clean
 	redhat/mimedefang-init redhat/mimedefang.spec redhat/mimedefang-sysconfig \
 	script/mimedefang-util.1 modules/man/*.3
 	rm -rf autom4te.cache
-	rm -f mimedefang-*.tar.gz mimedefang-*.tar.gz.sig
+	rm -f Mail-MIMEDefang-*.tar.gz Mail-MIMEDefang-*.tar.gz.sig
 
 install-redhat: install
 	$(INSTALL) -m 755 -d $(DESTDIR)${sysconfdir}/rc.d/init.d
@@ -349,22 +349,22 @@ install: all
 	fi
 
 distro: FORCE
-	mkdir mimedefang-$(VERSION)
-	tar -c -T MANIFEST -f - | (cd mimedefang-$(VERSION); tar xf -)
-	$(PERL) -p -e 's/#VERSION#/$(VERSION)/;s/#RELEASE#/1/;s/#BETA#//g' < redhat/mimedefang-spec.in > mimedefang-$(VERSION)/redhat/mimedefang.spec
-	tar cvf mimedefang-$(VERSION).tar mimedefang-$(VERSION)
-	gzip -v -f -9 mimedefang-$(VERSION).tar
-	rm -rf mimedefang-$(VERSION)
-	gpg --detach-sign mimedefang-$(VERSION).tar.gz
+	mkdir Mail-MIMEDefang-$(VERSION)
+	tar -c -T MANIFEST -f - | (cd Mail-MIMEDefang-$(VERSION); tar xf -)
+	$(PERL) -p -e 's/#VERSION#/$(VERSION)/;s/#RELEASE#/1/;s/#BETA#//g' < redhat/mimedefang-spec.in > Mail-MIMEDefang-$(VERSION)/redhat/mimedefang.spec
+	tar cvf Mail-MIMEDefang-$(VERSION).tar Mail-MIMEDefang-$(VERSION)
+	gzip -v -f -9 Mail-MIMEDefang-$(VERSION).tar
+	rm -rf Mail-MIMEDefang-$(VERSION)
+	gpg --detach-sign Mail-MIMEDefang-$(VERSION).tar.gz
 
 distro-beta: beta-check
-	mkdir mimedefang-$(VERSION)-BETA-$(BETA)
-	tar -c -T MANIFEST -f - | (cd mimedefang-$(VERSION)-BETA-$(BETA); tar xf -)
-	$(PERL) -p -e 's/#VERSION#/$(VERSION)/;s/#RELEASE#/0.b$(BETA)/;s/#BETA#/-BETA-$(BETA)/g' < redhat/mimedefang-spec.in > mimedefang-$(VERSION)-BETA-$(BETA)/redhat/mimedefang.spec
-	tar cvf mimedefang-$(VERSION)-BETA-$(BETA).tar mimedefang-$(VERSION)-BETA-$(BETA)
-	gzip -v -f -9 mimedefang-$(VERSION)-BETA-$(BETA).tar
-	rm -rf mimedefang-$(VERSION)-BETA-$(BETA)
-	gpg --detach-sign mimedefang-$(VERSION)-BETA-$(BETA).tar.gz
+	mkdir Mail-MIMEDefang-$(VERSION)-BETA-$(BETA)
+	tar -c -T MANIFEST -f - | (cd Mail-MIMEDefang-$(VERSION)-BETA-$(BETA); tar xf -)
+	$(PERL) -p -e 's/#VERSION#/$(VERSION)/;s/#RELEASE#/0.b$(BETA)/;s/#BETA#/-BETA-$(BETA)/g' < redhat/mimedefang-spec.in > Mail-MIMEDefang-$(VERSION)-BETA-$(BETA)/redhat/mimedefang.spec
+	tar cvf Mail-MIMEDefang-$(VERSION)-BETA-$(BETA).tar Mail-MIMEDefang-$(VERSION)-BETA-$(BETA)
+	gzip -v -f -9 Mail-MIMEDefang-$(VERSION)-BETA-$(BETA).tar
+	rm -rf Mail-MIMEDefang-$(VERSION)-BETA-$(BETA)
+	gpg --detach-sign Mail-MIMEDefang-$(VERSION)-BETA-$(BETA).tar.gz
 
 beta-check:
 	@if test "$(BETA)" = "" ; then \
@@ -373,13 +373,13 @@ beta-check:
 	fi
 
 distro-rc: rc-check
-	mkdir mimedefang-$(VERSION)-rc$(RC)
-	tar -c -T MANIFEST -f - | (cd mimedefang-$(VERSION)-rc$(RC); tar xf -)
-	$(PERL) -p -e 's/#VERSION#/$(VERSION)/;s/#RELEASE#/0.rc$(RC)/;s/#RC#/-rc$(RC)/g' < redhat/mimedefang-spec.in > mimedefang-$(VERSION)-rc$(RC)/redhat/mimedefang.spec
-	tar cvf mimedefang-$(VERSION)-rc$(RC).tar mimedefang-$(VERSION)-rc$(RC)
-	gzip -v -f -9 mimedefang-$(VERSION)-rc$(RC).tar
-	rm -rf mimedefang-$(VERSION)-rc$(RC)
-	gpg --detach-sign mimedefang-$(VERSION)-rc$(RC).tar.gz
+	mkdir Mail-MIMEDefang-$(VERSION)-rc$(RC)
+	tar -c -T MANIFEST -f - | (cd Mail-MIMEDefang-$(VERSION)-rc$(RC); tar xf -)
+	$(PERL) -p -e 's/#VERSION#/$(VERSION)/;s/#RELEASE#/0.rc$(RC)/;s/#RC#/-rc$(RC)/g' < redhat/mimedefang-spec.in > Mail-MIMEDefang-$(VERSION)-rc$(RC)/redhat/mimedefang.spec
+	tar cvf Mail-MIMEDefang-$(VERSION)-rc$(RC).tar Mail-MIMEDefang-$(VERSION)-rc$(RC)
+	gzip -v -f -9 Mail-MIMEDefang-$(VERSION)-rc$(RC).tar
+	rm -rf Mail-MIMEDefang-$(VERSION)-rc$(RC)
+	gpg --detach-sign Mail-MIMEDefang-$(VERSION)-rc$(RC).tar.gz
 
 rc-check:
 	@if test "$(RC)" = "" ; then \

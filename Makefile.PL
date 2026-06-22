@@ -471,7 +471,7 @@ WriteMakefile(
     NAME             => 'Mail::MIMEDefang',
     INSTALLDIRS      => ($ARGS{INSTALLDIRS} // 'site'),
     %install_overrides,
-    DISTNAME         => "mimedefang",
+    DISTNAME         => "Mail-MIMEDefang",
     VERSION          => $VERSION,
     MIN_PERL_VERSION => '5.008009',
     AUTHOR           => 'The McGrail Foundation <https://mimedefang.org>',
@@ -573,7 +573,7 @@ WriteMakefile(
         'script/mimedefang-util.1',
         'modules/man',
     )},
-    realclean => { FILES => 'mimedefang-*.tar.gz mimedefang-*.tar.gz.sig' },
+    realclean => { FILES => 'Mail-MIMEDefang-*.tar.gz Mail-MIMEDefang-*.tar.gz.sig' },
 
     postamble => {
       'custom' =>  <<"MAKE",

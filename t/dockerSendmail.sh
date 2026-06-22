@@ -12,13 +12,13 @@ dnf remove -y --noautoremove mimedefang 1>/dev/null 2>&1 || true
 echo ">>> make distclean..."
 make distclean 1>/dev/null 2>&1 || true
 # Remove any stale tarball from a previous build (source tree is bind-mounted)
-rm -f mimedefang-*.tar.gz mimedefang-*.tar
+rm -f Mail-MIMEDefang-*.tar.gz Mail-MIMEDefang-*.tar
 echo ">>> perl Makefile.PL..."
 perl Makefile.PL MAKEMETA=1 INSTALLDIRS=vendor 1>/dev/null 2>&1 || { echo "perl Makefile.PL FAILED"; exit 1; }
 echo ">>> make tardist..."
 make tardist 1>/dev/null 2>&1 || { echo "make tardist FAILED"; exit 1; }
 mkdir -p ~/rpmbuild/SOURCES ~/rpmbuild/BUILD
-cp "mimedefang-${VER}.tar.gz" ~/rpmbuild/SOURCES
+cp "Mail-MIMEDefang-${VER}.tar.gz" ~/rpmbuild/SOURCES
 perl -p -e "s/#VERSION#/${VER}/;s/#RELEASE#/1/;s/#BETA#//g" < redhat/mimedefang-spec.in > redhat/mimedefang.spec
 rm -rf ~/rpmbuild/RPMS/x86_64/mimedefang-*
 echo ">>> rpmbuild -bb..."

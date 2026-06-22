@@ -9,8 +9,8 @@ examples/init-script
 md-mx-ctrl
 md-mx-ctrl.8
 mimedefang
-mimedefang-*.tar.gz
-mimedefang-*.tar.gz.sig
+Mail-MIMEDefang-*.tar.gz
+Mail-MIMEDefang-*.tar.gz.sig
 mimedefang-filter.5
 mimedefang-multiplexor
 mimedefang-multiplexor.8
