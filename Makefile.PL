@@ -41,6 +41,12 @@ eval {
   $VERSION = Mail::MIMEDefang->md_version;
 };
 
+# Split "3.7-rc1" -> base "3.7" and prerelease "rc1".
+# RPM forbids hyphens in Version:; the prerelease part goes into Release:.
+my ($BASE_VERSION, $PRERELEASE) = ($VERSION =~ /^([^-]+)(?:-(.+))?$/);
+$BASE_VERSION //= $VERSION;
+$PRERELEASE   //= '';
+
 # ---------------------------------------------------------------------------
 # AV scanner table  (binary => template token)
 # Keys must match the @TOKEN@ names used in mimedefang.pl.in
@@ -560,7 +566,10 @@ WriteMakefile(
         MD_CONFSUBDIR      => $CONFSUBDIR,
         MD_IPHEADER        => $IPHEADER,
         MD_SENDMAILPROG    => $SENDMAILPROG,
-        MD_VERSION         => $VERSION,
+        MD_VERSION         => $BASE_VERSION,
+        MD_BASE_VERSION    => $BASE_VERSION,
+        MD_PRERELEASE      => $PRERELEASE,
+        MD_RPM_RELEASE     => $PRERELEASE ? "0.$PRERELEASE" : '1',
         MD_MANDIR          => $MANDIR,
         BINDIR             => $BINDIR_DEFAULT,
         SBINDIR            => ($Config{siteprefix} || '/usr/local') . '/sbin',
@@ -578,6 +587,7 @@ WriteMakefile(
         'xs_init.c',
         'mimedefang-release.8',
         'script/mimedefang-util.1',
+        'redhat/mimedefang.spec',
     )},
     realclean => { FILES => 'Mail-MIMEDefang-*.tar.gz Mail-MIMEDefang-*.tar.gz.sig' },
 
@@ -839,6 +849,15 @@ install-redhat: install
 
 distgpg: dist
 	gpg --detach-sign \$(DISTVNAME).tar.gz
+
+# ============================================================
+# RPM spec file (generated from redhat/mimedefang-spec.in)
+# ============================================================
+spec: redhat/mimedefang.spec
+
+redhat/mimedefang.spec: redhat/mimedefang-spec.in
+\t\$(PERL) -pe 's/#VERSION#/\$(MD_BASE_VERSION)/g; s/#RELEASE#/\$(MD_RPM_RELEASE)/g; \$(if \$(MD_PRERELEASE),s/^(Summary:.*)/\%global prerelease -\$(MD_PRERELEASE)\\n\$\$1/;)' \\
+\t  redhat/mimedefang-spec.in > \$\@
 
 MAKE
     }
