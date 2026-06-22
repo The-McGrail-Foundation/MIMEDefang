@@ -16,7 +16,7 @@ echo ">>> make tardist..."
 make tardist 1>/dev/null 2>&1 || { echo "make tardist FAILED"; exit 1; }
 mkdir -p ~/rpmbuild/SOURCES ~/rpmbuild/BUILD
 cp "Mail-MIMEDefang-${VER}.tar.gz" ~/rpmbuild/SOURCES
-perl -p -e "s/#VERSION#/${VER}/;s/#RELEASE#/1/;s/#BETA#//g" < redhat/mimedefang-spec.in > redhat/mimedefang.spec
+make spec 1>/dev/null 2>&1 || { echo "make spec FAILED"; exit 1; }
 rm -rf ~/rpmbuild/RPMS/x86_64/mimedefang-*
 echo ">>> rpmbuild -bb..."
 rpmbuild -bb redhat/mimedefang.spec 1>/dev/null 2>&1 || { echo "rpmbuild FAILED"; exit 1; }
