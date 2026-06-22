@@ -837,6 +837,9 @@ install-redhat: install
 \t\$(MD_INSTALL_DATA) examples/suggested-minimum-filter-for-windows-clients \\
 \t    \$(DESTDIR)\$(MD_CONFDIR)/mimedefang-filter
 
+distgpg: dist
+	gpg --detach-sign \$(DISTVNAME).tar.gz
+
 MAKE
     }
 }
