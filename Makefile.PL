@@ -529,7 +529,14 @@ WriteMakefile(
 
     # man-page sections
     MAN1PODS              => {},
-    MAN3PODS              => {},
+    MAN3PODS              => {
+        map {
+            (my $mod = $_) =~ s{^modules/lib/}{};
+            $mod =~ s{/}{::}g;
+            $mod =~ s{\.pm$}{};
+            $_ => "\$(INST_MAN3DIR)/$mod.\$(MAN3EXT)"
+        } @PM_FILES
+    },
     INSTALLVENDORMAN1DIR  => $MANDIR . '/man1',
     INSTALLVENDORMAN3DIR  => $MANDIR . '/man3',
 
@@ -571,7 +578,6 @@ WriteMakefile(
         'xs_init.c',
         'mimedefang-release.8',
         'script/mimedefang-util.1',
-        'modules/man',
     )},
     realclean => { FILES => 'Mail-MIMEDefang-*.tar.gz Mail-MIMEDefang-*.tar.gz.sig' },
 
@@ -724,7 +730,7 @@ md-mx-ctrl: $ctrl_objs
 # ============================================================
 # pod2man: generate man pages from POD in scripts and modules
 # ============================================================
-pod2man: mimedefang-release.8 script/mimedefang-util.1 md_module_manpages
+pod2man: mimedefang-release.8 script/mimedefang-util.1
 
 mimedefang-release.8: mimedefang-release.pl
 \t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=8 --perm_rw=644 \\
@@ -739,103 +745,6 @@ script/mimedefang-util.1: script/mimedefang-util
 \t\t--release=\$(MD_VERSION) \\
 \t\tscript/mimedefang-util script/mimedefang-util.1
 
-md_module_manpages:
-\t\$(MKPATH) modules/man
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang Documentation" \\
-\t\t--name="Mail::MIMEDefang" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang.pm "modules/man/Mail::MIMEDefang.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::Actions Documentation" \\
-\t\t--name="Mail::MIMEDefang::Actions" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/Actions.pm "modules/man/Mail::MIMEDefang::Actions.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::Antispam Documentation" \\
-\t\t--name="Mail::MIMEDefang::Antispam" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/Antispam.pm "modules/man/Mail::MIMEDefang::Antispam.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::Antivirus Documentation" \\
-\t\t--name="Mail::MIMEDefang::Antivirus" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/Antivirus.pm "modules/man/Mail::MIMEDefang::Antivirus.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::Authres Documentation" \\
-\t\t--name="Mail::MIMEDefang::Authres" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/Authres.pm "modules/man/Mail::MIMEDefang::Authres.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::BIMI Documentation" \\
-\t\t--name="Mail::MIMEDefang::BIMI" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/BIMI.pm "modules/man/Mail::MIMEDefang::BIMI.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::DKIM Documentation" \\
-\t\t--name="Mail::MIMEDefang::DKIM" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/DKIM.pm "modules/man/Mail::MIMEDefang::DKIM.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::DKIM::ARC Documentation" \\
-\t\t--name="Mail::MIMEDefang::DKIM::ARC" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/DKIM/ARC.pm "modules/man/Mail::MIMEDefang::DKIM::ARC.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::Mail Documentation" \\
-\t\t--name="Mail::MIMEDefang::Mail" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/Mail.pm "modules/man/Mail::MIMEDefang::Mail.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::MIME Documentation" \\
-\t\t--name="Mail::MIMEDefang::MIME" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/MIME.pm "modules/man/Mail::MIMEDefang::MIME.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::Net Documentation" \\
-\t\t--name="Mail::MIMEDefang::Net" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/Net.pm "modules/man/Mail::MIMEDefang::Net.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::RFC2822 Documentation" \\
-\t\t--name="Mail::MIMEDefang::RFC2822" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/RFC2822.pm "modules/man/Mail::MIMEDefang::RFC2822.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::SPF Documentation" \\
-\t\t--name="Mail::MIMEDefang::SPF" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/SPF.pm "modules/man/Mail::MIMEDefang::SPF.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::TLSPolicy Documentation" \\
-\t\t--name="Mail::MIMEDefang::TLSPolicy" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/TLSPolicy.pm "modules/man/Mail::MIMEDefang::TLSPolicy.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::Unit Documentation" \\
-\t\t--name="Mail::MIMEDefang::Unit" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/Unit.pm "modules/man/Mail::MIMEDefang::Unit.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::Utils Documentation" \\
-\t\t--name="Mail::MIMEDefang::Utils" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/Utils.pm "modules/man/Mail::MIMEDefang::Utils.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::Async Documentation" \\
-\t\t--name="Mail::MIMEDefang::Async" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/Async.pm "modules/man/Mail::MIMEDefang::Async.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::Async::Checks Documentation" \\
-\t\t--name="Mail::MIMEDefang::Async::Checks" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/Async/Checks.pm "modules/man/Mail::MIMEDefang::Async::Checks.3"
-\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
-\t\t--center="Mail::MIMEDefang::Async::Results Documentation" \\
-\t\t--name="Mail::MIMEDefang::Async::Results" \\
-\t\t--release=\$(MD_VERSION) \\
-\t\tmodules/lib/Mail/MIMEDefang/Async/Results.pm "modules/man/Mail::MIMEDefang::Async::Results.3"
 
 # ============================================================
 # Extra install targets (run after the standard EUMM install)
@@ -869,31 +778,9 @@ install_scripts:
 \t    \$(MD_INSTALL_PROGRAM) script/mimedefang-util \$(DESTDIR)\$(BINDIR)/mimedefang-util || true
 
 install_man:
-\t\$(MKPATH) \$(DESTDIR)\$(MANDIR)/man1 \$(DESTDIR)\$(MANDIR)/man3 \$(DESTDIR)\$(MANDIR)/man5 \$(DESTDIR)\$(MANDIR)/man7 \$(DESTDIR)\$(MANDIR)/man8
+\t\$(MKPATH) \$(DESTDIR)\$(MANDIR)/man1 \$(DESTDIR)\$(MANDIR)/man5 \$(DESTDIR)\$(MANDIR)/man7 \$(DESTDIR)\$(MANDIR)/man8
 \ttest -f script/mimedefang-util.1 && \\
 \t    \$(MD_INSTALL_DATA) script/mimedefang-util.1 \$(DESTDIR)\$(MANDIR)/man1/mimedefang-util.1 || true
-\tfor m in \\
-\t    Mail::MIMEDefang.3 \\
-\t    Mail::MIMEDefang::Actions.3 \\
-\t    Mail::MIMEDefang::Antispam.3 \\
-\t    Mail::MIMEDefang::Antivirus.3 \\
-\t    Mail::MIMEDefang::Authres.3 \\
-\t    Mail::MIMEDefang::BIMI.3 \\
-\t    Mail::MIMEDefang::DKIM.3 \\
-\t    Mail::MIMEDefang::DKIM::ARC.3 \\
-\t    Mail::MIMEDefang::Mail.3 \\
-\t    Mail::MIMEDefang::MIME.3 \\
-\t    Mail::MIMEDefang::Net.3 \\
-\t    Mail::MIMEDefang::RFC2822.3 \\
-\t    Mail::MIMEDefang::SPF.3 \\
-\t    Mail::MIMEDefang::TLSPolicy.3 \\
-\t    Mail::MIMEDefang::Unit.3 \\
-\t    Mail::MIMEDefang::Utils.3 \\
-\t    Mail::MIMEDefang::Async.3 \\
-\t    Mail::MIMEDefang::Async::Checks.3 \\
-\t    Mail::MIMEDefang::Async::Results.3; do \\
-\t    test -f "modules/man/\$\$m" && \$(MD_INSTALL_DATA) "modules/man/\$\$m" \$(DESTDIR)\$(MANDIR)/man3/\$\$m || true; \\
-\tdone
 \tfor m in mimedefang-filter.5; do \\
 \t    test -f \$\$m && \$(MD_INSTALL_DATA) \$\$m \$(DESTDIR)\$(MANDIR)/man5/\$\$m || true; \\
 \tdone
