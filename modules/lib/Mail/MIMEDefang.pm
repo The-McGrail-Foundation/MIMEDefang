@@ -50,7 +50,7 @@ our @ISA = qw(Exporter);
 our @EXPORT;
 our @EXPORT_OK;
 
-our $VERSION = '3.6';
+our $VERSION = '3.7-rc1';
 
 @EXPORT = qw{
       $AddWarningsInline @StatusTags
