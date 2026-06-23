@@ -40,6 +40,10 @@ sub include_mimedefang : Test(startup)
 	no warnings 'redefine';
 	local *CORE::GLOBAL::exit = sub { };
 	local @ARGV = ();
+	local $SIG{__WARN__} = sub {
+		my $w = shift;
+		warn $w unless $w =~ /unlikely to be reached/;
+	};
 	do './mimedefang.pl.in';
 	use warnings 'redefine';
 }
