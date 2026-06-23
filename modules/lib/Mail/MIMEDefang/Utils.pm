@@ -431,10 +431,16 @@ sub re_match_in_tgz_directory {
     open(my $tar_pipe, "-|", @unz_args)
                         || croak "can't open @unz_args|: $!";
     while(<$tar_pipe>) {
-      if(/(?:[a-z-]+)\s+(?:.*)\s+(?:\d+)\s+(?:\d+\-\d+\-\d+)\s+(?:\d+\:\d+)\s+(.*)/) {
+      # GNU tar: "-rw-r--r-- user/group 12345 2024-01-01 00:00 filename"
+      if (/[a-zA-Z-]+\s+\S+\s+\d+\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+(.+)/) {
         $file = $1;
-        return 1 if ((defined $file) and ($file =~ /$regexp/i));
+      # BSD tar: "-rw-r--r--  0 user group 12345 Jan  1 00:00 2024 filename"
+      } elsif (/[a-zA-Z-]+\s+\d+\s+\S+\s+\S+\s+\d+\s+[A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}\s+\d{4}\s+(.+)/) {
+        $file = $1;
+      } else {
+        next;
       }
+      return 1 if ((defined $file) and ($file =~ /$regexp/i));
     }
     close($tar_pipe);
   }
