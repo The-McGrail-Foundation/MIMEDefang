@@ -23,7 +23,7 @@ affect your filter.
         * add autoscaling support to activate or deactivate workers
 	  when needed
 
-2025-02-36 Giovanni Bechis <g.bechis@snb.it>
+2025-02-26 Giovanni Bechis <g.bechis@snb.it>
 
         * MIMEDefang 3.6 released
 
