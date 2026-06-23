@@ -493,12 +493,12 @@ sub md_graphdefang_log_array
         if (utf8::is_utf8($event)) {
           utf8::encode($event);
         }
-	      foreach my $val ( @info ) {
+        foreach my $val ( @info ) {
           $val =~ s/\P{Print}//g;
           if (utf8::is_utf8($val)) {
             utf8::encode($val);
           }
-	      }
+        }
       };
     } else {
       $subj = percent_encode_for_graphdefang($Subject);
