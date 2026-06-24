@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 
-my $cc     = $ENV{MD_CC} || $ENV{CC} || 'gcc';
+my $cc     = $ENV{MD_CC} || $ENV{CC} || 'cc';
 my $cflags = '-I. -std=c89 -D_BSD_SOURCE -D_DEFAULT_SOURCE';
 my $libs   = 'utils.c dynbuf.c';
 
