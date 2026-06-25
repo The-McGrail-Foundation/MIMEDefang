@@ -134,10 +134,10 @@ sub t_re_match_tgz_directory : Test(2)
 {
   my ($done, @parts);
 
-  $Features{'tar'} = '/usr/bin/tar';
+  ($Features{'tar'}) = grep { -x "$_/tar" } split(/:/, $ENV{PATH} // '');
 
   SKIP: {
-    skip "tar(1) is needed for this test to work", 1 unless -f $Features{'tar'};
+    skip "tar(1) is needed for this test to work", 1 unless $Features{'tar'};
 
     # Set up temporary dir
     system('rm', '-rf', 't/tmp');
