@@ -407,9 +407,7 @@ sub re_match_in_tgz_directory {
   my ($rf, $beginmark, $file);
 
   my @unz_args;
-  if($zname =~ /\.tar/) {
-    @unz_args = ("tar", "tvf", $zname);
-  } elsif($zname =~ /\.(?:tar\.bz2|tbz)/) {
+  if($zname =~ /\.(?:tar\.bz2|tbz)/) {
     @unz_args = ("tar", "jtvf", $zname);
   } elsif($zname =~ /\.(?:tar\.gz|tgz)/) {
     @unz_args = ("tar", "ztvf", $zname);
@@ -417,6 +415,8 @@ sub re_match_in_tgz_directory {
     @unz_args = ("tar", "--lzip", "tvf", $zname);
   } elsif($zname =~ /\.(?:tar\.zst)/) {
     @unz_args = ("tar", "--use-compress-program=unzstd", "tvf", $zname);
+  } elsif($zname =~ /\.tar/) {
+    @unz_args = ("tar", "tvf", $zname);
   } else {
     md_syslog('err', "Attempted to use re_match_in_tgz_directory, but filename $zname is not supported.");
     return 0;

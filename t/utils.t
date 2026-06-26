@@ -172,6 +172,47 @@ sub t_re_match_tgz_directory : Test(2)
   };
 }
 
+sub t_re_match_tar_directory : Test(2)
+{
+  my ($done, @parts);
+
+  ($Features{'tar'}) = grep { -x "$_/tar" } split(/:/, $ENV{PATH} // '');
+
+  SKIP: {
+    skip "tar(1) is needed for this test to work", 1 unless $Features{'tar'};
+
+    # Set up temporary dir
+    system('rm', '-rf', 't/tmp');
+    mkdir('t/tmp', 0755);
+
+    # Make a parser
+    my $parser = MIME::Parser->new();
+    $parser->extract_nested_messages(1);
+    $parser->extract_uuencode(1);
+    $parser->output_to_core(0);
+    $parser->tmp_to_core(0);
+    my $filer = MIME::Parser::FileInto->new('t/tmp');
+    $filer->ignore_filename(1);
+    $parser->filer($filer);
+
+    detect_and_load_perl_modules();
+    my $entity = $parser->parse_open("t/data/tar.eml");
+    @parts = $entity->parts();
+    foreach my $part (@parts) {
+      my $bh = $part->bodyhandle();
+      if (defined($bh)) {
+        my $path = $bh->path();
+        next unless defined($path) && $path =~ /\.tar$/;
+        $done = re_match_in_tgz_directory($path, "\.exe");
+        is($done, 1);
+        $done = re_match_in_tgz_directory($path, "\.txt");
+        is($done, 0);
+      }
+    }
+    system('rm', '-rf', 't/tmp');
+  };
+}
+
 sub t_gen_mx_id : Test(1)
 {
   my $str = Mail::MIMEDefang::Utils::gen_mx_id();
