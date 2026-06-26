@@ -145,6 +145,7 @@ t/data/mimedefang-test-filter
 t/data/multipart.eml
 t/data/rspamd.conf
 t/data/spf1.eml
+t/data/tar.eml
 t/data/tgz.eml
 t/data/uri.eml
 t/data/uri-html.eml
