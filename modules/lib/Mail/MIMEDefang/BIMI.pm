@@ -7,6 +7,8 @@
 
 Mail::MIMEDefang::BIMI - Brand Indicators for Message Identification support for MIMEDefang
 
+=encoding utf8
+
 =head1 DESCRIPTION
 
 Mail::MIMEDefang::BIMI provides methods to look up and verify BIMI DNS records

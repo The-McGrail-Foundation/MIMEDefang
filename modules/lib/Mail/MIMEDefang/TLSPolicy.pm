@@ -7,6 +7,8 @@
 
 Mail::MIMEDefang::TLSPolicy - MTA-STS and DANE/TLSA policy checks for MIMEDefang
 
+=encoding utf8
+
 =head1 DESCRIPTION
 
 Mail::MIMEDefang::TLSPolicy provides methods to verify outbound TLS policy
@@ -260,7 +262,7 @@ sub md_check_dane_tlsa {
 =item md_verify_sts_mx($mx_host, $policy)
 
 Returns true if C<$mx_host> matches at least one MX hostname pattern
-in C<$policy->{mx}> (a hashref returned by L</md_check_mta_sts>).
+in C<$policy->{mx}> (a hashref returned by L</md_check_mta_sts($domain [, %opts])>).
 
 Matching follows RFC 8461: a pattern beginning with C<*.> matches any
 single DNS label prepended to the rest of the pattern
@@ -294,7 +296,7 @@ sub md_verify_sts_mx {
 =item md_verify_dane_cert($cert_der, \@tlsa)
 
 Verify a DER-encoded X.509 certificate against a list of DANE TLSA records
-as returned by L</md_check_dane_tlsa>.
+as returned by L</md_check_dane_tlsa($domain, $port)>.
 
 Returns true if the certificate matches at least one record, false otherwise.
 
