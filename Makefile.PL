@@ -35,11 +35,19 @@ use POSIX          qw(uname);
 # Version
 # ---------------------------------------------------------------------------
 my $VERSION;
-eval {
-  use lib 'modules/lib';
-  use Mail::MIMEDefang;
-  $VERSION = Mail::MIMEDefang->md_version;
-};
+{
+    my $pm = 'modules/lib/Mail/MIMEDefang.pm';
+    if (open my $fh, '<', $pm) {
+        while (<$fh>) {
+            if (/^\s*our\s+\$VERSION\s*=\s*['"]([^'"]+)['"]\s*;/) {
+                $VERSION = $1;
+                last;
+            }
+        }
+        close $fh;
+    }
+    die "Cannot determine version from $pm\n" unless defined $VERSION;
+}
 
 # Split "3.7-rc1" -> base "3.7" and prerelease "rc1".
 # RPM forbids hyphens in Version:; the prerelease part goes into Release:.
