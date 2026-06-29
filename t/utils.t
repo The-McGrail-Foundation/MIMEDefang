@@ -134,7 +134,7 @@ sub t_re_match_tgz_directory : Test(2)
 {
   my ($done, @parts);
 
-  ($Features{'tar'}) = grep { -x "$_/tar" } split(/:/, $ENV{PATH} // '');
+  ($Features{'tar'}) = map { "$_/tar" } grep { -x "$_/tar" } split(/:/, $ENV{PATH} // '');
 
   SKIP: {
     skip "tar(1) is needed for this test to work", 1 unless $Features{'tar'};
@@ -176,7 +176,7 @@ sub t_re_match_tar_directory : Test(2)
 {
   my ($done, @parts);
 
-  ($Features{'tar'}) = grep { -x "$_/tar" } split(/:/, $ENV{PATH} // '');
+  ($Features{'tar'}) = map { "$_/tar" } grep { -x "$_/tar" } split(/:/, $ENV{PATH} // '');
 
   SKIP: {
     skip "tar(1) is needed for this test to work", 1 unless $Features{'tar'};

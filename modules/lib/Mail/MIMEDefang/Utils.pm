@@ -356,12 +356,12 @@ sub re_match_in_7zip_directory {
   my($zname, $regexp) = @_;
   my ($rf, $beginmark, $file);
 
-  my @unz_args = ("7za", "l", $zname);
-
   unless ($Features{"7zip"}) {
           md_syslog('err', "Attempted to use re_match_in_7zip_directory, but 7zip binary is not installed.");
           return 0;
   }
+
+  my @unz_args = ($Features{"7zip"}, "l", $zname);
 
   if ( -f $zname ) {
     open(my $unz_pipe, "-|", @unz_args)
@@ -406,25 +406,25 @@ sub re_match_in_tgz_directory {
   my($zname, $regexp) = @_;
   my ($rf, $beginmark, $file);
 
-  my @unz_args;
-  if($zname =~ /\.(?:tar\.bz2|tbz)/) {
-    @unz_args = ("tar", "jtvf", $zname);
-  } elsif($zname =~ /\.(?:tar\.gz|tgz)/) {
-    @unz_args = ("tar", "ztvf", $zname);
-  } elsif($zname =~ /\.(?:tar\.lz)/) {
-    @unz_args = ("tar", "--lzip", "tvf", $zname);
-  } elsif($zname =~ /\.(?:tar\.zst)/) {
-    @unz_args = ("tar", "--use-compress-program=unzstd", "tvf", $zname);
-  } elsif($zname =~ /\.tar/) {
-    @unz_args = ("tar", "tvf", $zname);
-  } else {
-    md_syslog('err', "Attempted to use re_match_in_tgz_directory, but filename $zname is not supported.");
-    return 0;
-  }
-
   unless ($Features{"tar"}) {
           md_syslog('err', "Attempted to use re_match_in_tgz_directory, but tar binary is not installed.");
           return 0;
+  }
+
+  my @unz_args;
+  if($zname =~ /\.(?:tar\.bz2|tbz)/) {
+    @unz_args = ($Features{"tar"}, "jtvf", $zname);
+  } elsif($zname =~ /\.(?:tar\.gz|tgz)/) {
+    @unz_args = ($Features{"tar"}, "ztvf", $zname);
+  } elsif($zname =~ /\.(?:tar\.lz)/) {
+    @unz_args = ($Features{"tar"}, "--lzip", "tvf", $zname);
+  } elsif($zname =~ /\.(?:tar\.zst)/) {
+    @unz_args = ($Features{"tar"}, "--use-compress-program=unzstd", "tvf", $zname);
+  } elsif($zname =~ /\.tar/) {
+    @unz_args = ($Features{"tar"}, "tvf", $zname);
+  } else {
+    md_syslog('err', "Attempted to use re_match_in_tgz_directory, but filename $zname is not supported.");
+    return 0;
   }
 
   if ( -f $zname ) {
@@ -467,6 +467,10 @@ sub dummy_zip_error_handler {} ;
 
 sub md_init {
   local $@;
+  my ($tar_bin) = map { "$_/tar" } grep { -x "$_/tar" } split(/:/, $ENV{PATH} // '');
+  $Features{"tar"} = $tar_bin // '';
+  my ($zip_bin) = map { "$_/7za" } grep { -x "$_/7za" } split(/:/, $ENV{PATH} // '');
+  $Features{"7zip"} = $zip_bin // '';
   my $use_zip = 0;
   if (!defined($Features{"Archive::Zip"}) or ($Features{"Archive::Zip"} eq 1)) {
     eval {
