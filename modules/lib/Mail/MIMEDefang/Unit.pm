@@ -42,7 +42,7 @@ sub include_mimedefang : Test(startup)
 	local @ARGV = ();
 	local $SIG{__WARN__} = sub {
 		my $w = shift;
-		warn $w unless $w =~ /unlikely to be reached/;
+		warn $w unless $w =~ /unlikely to be reached|Maybe you meant system/;
 	};
 	do './mimedefang.pl.in';
 	use warnings 'redefine';
