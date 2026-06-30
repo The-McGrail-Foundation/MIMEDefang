@@ -1,0 +1,60 @@
+# docker-compose-postfix.yml
+# ---------------------------
+# Two profiles:
+#   ci    – used to build & run the test suite
+#   prod  – production postfix + MIMEDefang service
+#
+# CI usage:
+#   docker compose -f docker-compose-postfix.yml --profile ci up --build --exit-code-from mimedefang-postfix-ci
+#
+# Production usage:
+#   docker compose -f docker-compose-postfix.yml --profile prod up -d
+
+name: mimedefang-postfix
+
+services:
+
+  # ── CI / test service ──────────────────────────────────────────────────────
+  mimedefang-postfix-ci:
+    profiles: [ci]
+    image: mimedefang/postfix:ci
+    container_name: mimedefang-postfix-ci
+    working_dir: /tests
+    volumes:
+      - .:/tests                        # mount full repo so t/ scripts can build
+    command: sh t/docker/dockerPostfix.sh
+
+  # ── Production service ────────────────────────────────────────────────────
+  mimedefang-postfix:
+    profiles: [prod]
+    image: mimedefang/postfix:latest
+    container_name: mimedefang-postfix
+    hostname: mail.example.com
+    restart: unless-stopped
+
+    environment:
+      MAIL_DOMAIN: "example.com"
+      MAIL_HOST:   "mail.example.com"
+      # RELAY_HOST:  "[smtp.isp.com]:587"
+      RELAY_NETS:  "127.0.0.0/8 [::1]/128"
+      MIN_WORKERS: "2"
+      MAX_WORKERS: "10"
+      MAX_IDLE:    "2"
+      SMTP_PORT:   "25"
+      ENABLE_SUBMISSION: "no"
+      TZ: "Europe/Rome"
+
+    ports:
+      - "25:25"
+      # - "587:587"    # uncomment together with ENABLE_SUBMISSION=yes
+
+    volumes:
+      - ./mimedefang-filter:/etc/mail/mimedefang-filter:ro
+      # - ./extra.cf:/etc/postfix/extra.cf:ro    # extra postfix main.cf keys
+      # - ./tls:/etc/pki/tls/mimedefang:ro
+      - postfix-spool:/var/spool/MIMEDefang
+      - postfix-quarantine:/var/spool/MD-Quarantine
+
+volumes:
+  postfix-spool:
+  postfix-quarantine:

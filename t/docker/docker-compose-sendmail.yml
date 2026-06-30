@@ -1,0 +1,60 @@
+# docker-compose-sendmail.yml
+# ----------------------------
+# Two profiles:
+#   ci    – used to build & run the test suite
+#   prod  – production sendmail + MIMEDefang service
+#
+# CI usage (mirrors the upstream pattern):
+#   docker compose -f docker-compose-sendmail.yml --profile ci up --build --exit-code-from mimedefang-sendmail-ci
+#
+# Production usage:
+#   docker compose -f docker-compose-sendmail.yml --profile prod up -d
+
+name: mimedefang-sendmail
+
+services:
+
+  # ── CI / test service ──────────────────────────────────────────────────────
+  mimedefang-sendmail-ci:
+    profiles: [ci]
+    image: mimedefang/sendmail:ci
+    container_name: mimedefang-sendmail-ci
+    working_dir: /tests
+    volumes:
+      - .:/tests                        # mount full repo so t/ scripts can build
+    command: sh t/docker/dockerSendmail.sh
+
+  # ── Production service ────────────────────────────────────────────────────
+  mimedefang-sendmail:
+    profiles: [prod]
+    image: mimedefang/sendmail:latest
+    container_name: mimedefang-sendmail
+    hostname: mail.example.com
+    restart: unless-stopped
+
+    environment:
+      MAIL_DOMAIN: "example.com"
+      MAIL_HOST:   "mail.example.com"
+      # SMART_HOST: "[smtp.isp.com]"
+      MIN_WORKERS: "2"
+      MAX_WORKERS: "10"
+      MAX_IDLE:    "2"
+      LOG_LEVEL:   "9"
+      SMTP_PORT:   "25"
+      ENABLE_SUBMISSION: "no"
+      TZ: "Europe/Rome"
+
+    ports:
+      - "25:25"
+      # - "587:587"    # uncomment together with ENABLE_SUBMISSION=yes
+
+    volumes:
+      - ./mimedefang-filter:/etc/mail/mimedefang-filter:ro
+      # - ./sendmail.mc:/etc/mail/sendmail.mc:ro   # full custom mc
+      # - ./tls:/etc/pki/tls/mimedefang:ro
+      - sendmail-spool:/var/spool/MIMEDefang
+      - sendmail-quarantine:/var/spool/MD-Quarantine
+
+volumes:
+  sendmail-spool:
+  sendmail-quarantine:

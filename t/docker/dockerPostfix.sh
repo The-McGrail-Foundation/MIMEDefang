@@ -5,14 +5,11 @@ echo "Building MIMEDefang inside Docker..."
 VER=$(perl -I modules/lib -e 'use Mail::MIMEDefang; print Mail::MIMEDefang::md_version();')
 echo "MIMEDefang source version: $VER"
 
-echo ">>> Installing initscripts..."
-dnf install -y initscripts 1>/dev/null 2>&1 || true
 echo ">>> Removing existing mimedefang package..."
 dnf remove -y --noautoremove mimedefang 1>/dev/null 2>&1 || true
 echo ">>> make distclean..."
 make distclean 1>/dev/null 2>&1 || true
-# Remove any stale tarball from a previous build (source tree is bind-mounted)
-rm -f Mail-MIMEDefang-*.tar.gz Mail-MIMEDefang-*.tar
+
 echo ">>> perl Makefile.PL..."
 perl Makefile.PL MAKEMETA=1 INSTALLDIRS=vendor 1>/dev/null 2>&1 || { echo "perl Makefile.PL FAILED"; exit 1; }
 echo ">>> make tardist..."
@@ -24,9 +21,14 @@ rm -rf ~/rpmbuild/RPMS/x86_64/mimedefang-*
 echo ">>> rpmbuild -bb..."
 rpmbuild -bb redhat/mimedefang.spec 1>/dev/null 2>&1 || { echo "rpmbuild FAILED"; exit 1; }
 echo ">>> dnf install..."
-dnf -y install perl-AnyEvent ~/rpmbuild/RPMS/x86_64/mimedefang-* || { echo "dnf install FAILED"; exit 1; }
+dnf -y install ~/rpmbuild/RPMS/x86_64/mimedefang-* || { echo "dnf install FAILED"; exit 1; }
 
 cp t/data/mimedefang-test-filter /etc/mail/mimedefang-filter
+
+# Ensure Postfix uses the inet milter socket (RPM %post may reset this)
+postconf -e 'smtpd_milters = inet:127.0.0.1:10997'
+postconf -e 'non_smtpd_milters = $smtpd_milters'
+postconf -e 'milter_default_action = tempfail'
 
 chown root t/data/md.conf
 mkdir -p /root/.spamassassin
@@ -38,7 +40,10 @@ mkdir -p /var/spool/MIMEDefang
 chown defang:defang /var/spool/MIMEDefang
 chmod 750 /var/spool/MIMEDefang
 
-# Custom rsyslog config with SysSock.Use="on" (Fedora default disables /dev/log)
+# Enable Postfix file-based logging (no syslog daemon in Docker)
+postconf -e 'maillog_file = /var/log/maillog'
+touch /var/log/maillog
+
 cat > /tmp/rsyslog-test.conf << 'EOF'
 module(load="imuxsock" SysSock.Use="on")
 *.* /var/log/messages
@@ -61,46 +66,18 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
-# Add our test domain name to hosts(5) to make sendmail(8) start faster
-H=$(tail -n1 /etc/hosts)
-cp /etc/hosts ~/hosts.new
-sed -i "s/$H/$H example.com/" ~/hosts.new
-cp -f ~/hosts.new /etc/hosts
+echo "Starting mimedefang-multiplexor..."
+/usr/bin/mimedefang-multiplexor -D -m 2 -x 10 -y 0 -U defang -b 600 -l \
+    -s /var/spool/MIMEDefang/mimedefang-multiplexor.sock \
+    >/var/log/multiplexor.log 2>&1 &
 
-echo "Starting mimedefang services..."
-cat > /tmp/supervisord-test.conf << 'EOF'
-[supervisord]
-nodaemon=true
-logfile=/var/log/supervisord.log
-logfile_maxbytes=10MB
-loglevel=info
+echo "Starting mimedefang..."
+/usr/bin/mimedefang -D -m /var/spool/MIMEDefang/mimedefang-multiplexor.sock \
+    -U defang -q -p inet:10997 \
+    >/var/log/mimedefang-milter.log 2>&1 &
 
-[program:multiplexor]
-startsecs = 0
-autorestart = true
-priority = 10
-stdout_logfile=/var/log/multiplexor.log
-stderr_logfile=/var/log/multiplexor.log
-command=/usr/bin/mimedefang-multiplexor -D -m 2 -x 10 -y 0 -U defang -b 600 -l -s /var/spool/MIMEDefang/mimedefang-multiplexor.sock
-
-[program:mimedefang]
-startsecs = 0
-autorestart = true
-startretries = 10
-priority = 20
-stdout_logfile=/var/log/mimedefang-milter.log
-stderr_logfile=/var/log/mimedefang-milter.log
-command=/usr/bin/mimedefang -D -m /var/spool/MIMEDefang/mimedefang-multiplexor.sock -U defang -q -p inet:10997
-
-[program:sendmail]
-startsecs = 0
-autorestart = false
-priority = 30
-command=/bin/bash -c "/usr/sbin/sendmail -bd"
-EOF
-
-echo "Starting mimedefang services via supervisord..."
-/usr/bin/supervisord -c /tmp/supervisord-test.conf &
+echo "Starting postfix..."
+/usr/sbin/postfix start
 
 echo "Waiting for multiplexor socket..."
 for i in $(seq 1 30); do

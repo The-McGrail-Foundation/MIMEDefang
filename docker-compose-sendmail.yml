@@ -1,9 +1,0 @@
-name: mimedefang-sendmail
-services:
-    mimedefang-sendmail:
-        container_name: mimedefang-sendmail
-        image: mimedefang/sendmail:latest
-        working_dir: /tests
-        volumes:
-         - .:/tests
-        command: sh t/dockerSendmail.sh
