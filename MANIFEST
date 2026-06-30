@@ -42,8 +42,6 @@ contrib/linuxorg/spam-trusted-hosts
 contrib/munin/mimedefang_munin_plugin
 contrib/README
 contrib/word-to-html
-docker-compose-postfix.yml
-docker-compose-sendmail.yml
 drop_privs.c
 dynbuf.c
 dynbuf.h
@@ -151,10 +149,12 @@ t/data/uri.eml
 t/data/uri-html.eml
 t/data/zip.eml
 t/dates.t
+t/docker/docker-compose-postfix.yml
+t/docker/docker-compose-sendmail.yml
+t/docker/dockerPostfix.sh
+t/docker/dockerSendmail.sh
 t/test_safe_append_header.c
 t/dkim.t
-t/dockerPostfix.sh
-t/dockerSendmail.sh
 t/graphdefang.t
 t/headers.t
 t/helo.t
@@ -163,6 +163,7 @@ t/mime.t
 t/net.t
 t/relay.t
 t/recipient.t
+t/run-tests.sh
 t/sender.t
 t/smtp.t
 t/spf.t
