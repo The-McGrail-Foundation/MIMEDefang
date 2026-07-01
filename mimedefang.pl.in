@@ -512,7 +512,8 @@ sub do_main_loop
 
 	# EOF on STDIN... time to bye-bye...
 	if(defined(&filter_cleanup)) {
-		exit(filter_cleanup());
+		my $exit_code = filter_cleanup();
+		exit(defined($exit_code) ? $exit_code : 0);
 	}
 	exit(0);
 }
