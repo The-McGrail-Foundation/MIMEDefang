@@ -52,7 +52,7 @@ eventpriv.h
 event_tcp.c
 event_tcp.h
 examples/init-script.in
-examples/README
+examples/README.md
 examples/redhat-logrotate-file
 examples/stream-by-domain-filter
 examples/suggested-minimum-filter-for-windows-clients
