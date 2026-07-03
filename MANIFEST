@@ -40,7 +40,7 @@ contrib/linuxorg/README
 contrib/linuxorg/spam-deliver
 contrib/linuxorg/spam-trusted-hosts
 contrib/munin/mimedefang_munin_plugin
-contrib/README
+contrib/README.md
 contrib/word-to-html
 drop_privs.c
 dynbuf.c
