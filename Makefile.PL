@@ -323,6 +323,19 @@ if ($ENABLE_CHECK_PERL_MODULES) {
     }
 }
 
+# B::Keywords optional module check
+{
+    print "\nChecking optional Perl module (mimedefang.pl -test undefined-subroutine check):\n";
+    my $ok;
+    eval "use B::Keywords; \$ok = 1";
+    printf "  %-35s %s\n", 'B::Keywords', $ok ? 'found' : 'not found';
+    unless ($ok) {
+        warn "\nNOTE: B::Keywords is not installed.\n"
+           . "      mimedefang.pl -test will skip checking filters for calls to\n"
+           . "      undefined subroutines.\n";
+    }
+}
+
 # MIME::Tools version advisory
 {
     my $mt_ver = eval { require MIME::Tools; $MIME::Tools::VERSION } // 'unknown';

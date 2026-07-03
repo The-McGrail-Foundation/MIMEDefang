@@ -38,10 +38,12 @@ in a file (e.g. \fBtest-filter\fR) and run this command:
 	mimedefang.pl -f test-filter -test
 .fi
 
-This tests the filter for syntactic correctness.  If it passes, you can
-install it as a production filter.  (Note that the test tests only for
-correct Perl syntax; it doesn't make sure your filter does something
-sensible.)
+This tests the filter for syntactic correctness, and also warns about any
+calls to subroutines that don't exist anywhere in MIMEDefang or the filter
+itself. If it passes, you can install it as a production filter.
+(Note that this does not make sure your filter does something sensible; the
+undefined-subroutine check is a best-effort warning and does not affect the
+exit code.)
 
 .SH MISCELLANEOUS OPTIONS
 

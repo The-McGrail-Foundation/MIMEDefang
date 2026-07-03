@@ -290,6 +290,57 @@ sub stream_by_domain {
 }
 
 #***********************************************************************
+# %PROCEDURE: _check_undefined_subs
+# %ARGUMENTS:
+#  filter -- path to the mimedefang-filter file
+# %RETURNS:
+#  List of subroutine names called by the filter that are not defined
+#  anywhere in the currently-loaded program (MIMEDefang core modules or
+#  the filter itself).  Empty (false) if none were found, or if the
+#  check could not run.
+# %DESCRIPTION:
+#  Heuristically scans the filter's source for calls to subroutines that
+#  are not defined anywhere in the currently-loaded program.  This catches
+#  typos that would otherwise only fail at runtime.  This is a
+#  best-effort check; it is up to the caller to warn about the results.
+#  Requires the optional B::Keywords module to reliably tell Perl
+#  keywords/builtins apart from real subroutine calls;
+#  the check is silently skipped if it isn't installed,
+#  rather than risk false positives from an incomplete builtins list.
+#***********************************************************************
+sub _check_undefined_subs {
+    my($filter) = @_;
+    my @undefined_subs;
+
+    return @undefined_subs unless eval { require B::Keywords; 1 };
+
+    my $fh;
+    return @undefined_subs unless open($fh, '<', $filter);
+    local $/;
+    my $src = <$fh>;
+    close($fh);
+    return @undefined_subs unless defined($src);
+
+    no strict 'refs';
+    my %builtins = map { $_ => 1 } (@{"B::Keywords::Functions"}, @{"B::Keywords::Barewords"});
+    use strict 'refs';
+
+    my %seen;
+    while ($src =~ /(?<![\w:>\$\@\%])((?:\w+::)*\w+)\s*\(/g) {
+	my $name = $1;
+	next if $builtins{$name};
+	next if $seen{$name}++;
+
+	my $fq = ($name =~ /::/) ? $name : "main::$name";
+	next if defined(&{$fq});
+
+	push(@undefined_subs, $name);
+    }
+
+    return @undefined_subs;
+}
+
+#***********************************************************************
 # %PROCEDURE: main
 # %ARGUMENTS:
 #  workdir -- directory to "chdir" to and do all work in.
@@ -385,8 +436,11 @@ sub main {
     # check dir
     $workdir = $ARGV[0];
     if ($workdir eq "-test") {
-	printf("Filter $Filter seems syntactically correct.\n");
-	exit(0);
+	  foreach my $name (_check_undefined_subs($Filter)) {
+	      print STDERR "WARNING: filter calls undefined subroutine '$name' -- check for typos\n";
+	  }
+	  printf("Filter $Filter seems syntactically correct.\n");
+	  exit(0);
     }
     if ($workdir eq "-validate") {
 	if (defined(&filter_validate)) {

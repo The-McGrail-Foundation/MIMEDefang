@@ -321,6 +321,15 @@ else
     fi
     AC_MSG_RESULT($HAVE_NET_SMTP)
 
+    AC_MSG_CHECKING([for Perl module B::Keywords])
+    (echo "use B::Keywords;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_B_KEYWORDS=no
+    else
+	HAVE_B_KEYWORDS=yes
+    fi
+    AC_MSG_RESULT($HAVE_B_KEYWORDS)
+
     dnl Check MIME::Tools version
     dirs=`echo 'print "@INC\n";' | $PERL`
     foundit=""
@@ -1273,6 +1282,14 @@ if test "$HAVE_NET_SMTP" = "no" ; then
    echo "Could not find Net::SMTP Perl module... you will not be able"
    echo "to release quarantined messages using mimedefang-release(8)"
    echo "in smtp mode."
+   echo ""
+fi
+
+if test "$HAVE_B_KEYWORDS" = "no" ; then
+   echo ""
+   echo "Could not find B::Keywords Perl module."
+   echo "mimedefang.pl -test will skip checking filters for calls to"
+   echo "undefined subroutines."
    echo ""
 fi
 
