@@ -12,10 +12,6 @@ echo $* | fgrep -e '--sysconfdir' > /dev/null 2>&1 || sysconfdir='/etc'
 
 AC_PROG_CC
 # Enforce C89 standard
-AC_PROG_CC_C89
-if test "$ac_cv_prog_cc_c89" = "no"; then
-    AC_MSG_ERROR([C89 support is required])
-fi
 CFLAGS="$CFLAGS -std=c89 -D_BSD_SOURCE -D_DEFAULT_SOURCE"
 
 AC_CHECK_PROGS(AR, ar, no)
@@ -97,7 +93,55 @@ if test "$un" = "SunOS 5.9" ; then
    ac_cv_func_wait3_rusage=yes
 fi
 
-AC_FUNC_WAIT3
+dnl Inlined from Autoconf's AC_FUNC_WAIT3 (now obsolete upstream); kept
+dnl here since HAVE_WAIT3 must specifically mean "wait3 fills in rusage",
+dnl which mimedefang-multiplexor.c relies on for worker resource accounting.
+AC_CACHE_CHECK([for wait3 that fills in rusage],
+	       [ac_cv_func_wait3_rusage],
+[AC_RUN_IFELSE([AC_LANG_SOURCE(
+[AC_INCLUDES_DEFAULT[
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <sys/wait.h>
+/* HP-UX has wait3 but does not fill in rusage at all.  */
+int
+main (void)
+{
+  struct rusage r;
+  int i;
+  /* Use a field that we can force nonzero --
+     voluntary context switches.
+     For systems like NeXT and OSF/1 that don't set it,
+     also use the system CPU time.  And page faults (I/O) for Linux.  */
+  r.ru_nvcsw = 0;
+  r.ru_stime.tv_sec = 0;
+  r.ru_stime.tv_usec = 0;
+  r.ru_majflt = r.ru_minflt = 0;
+  switch (fork ())
+    {
+    case 0: /* Child.  */
+      sleep(1); /* Give up the CPU.  */
+      _exit(0);
+      break;
+    case -1: /* What can we do?  */
+      _exit(0);
+      break;
+    default: /* Parent.  */
+      wait3(&i, 0, &r);
+      /* Avoid "text file busy" from rm on fast HP-UX machines.  */
+      sleep(2);
+      return (r.ru_nvcsw == 0 && r.ru_majflt == 0 && r.ru_minflt == 0
+	      && r.ru_stime.tv_sec == 0 && r.ru_stime.tv_usec == 0);
+    }
+}]])],
+	       [ac_cv_func_wait3_rusage=yes],
+	       [ac_cv_func_wait3_rusage=no],
+	       [ac_cv_func_wait3_rusage=no])])
+if test $ac_cv_func_wait3_rusage = yes; then
+  AC_DEFINE(HAVE_WAIT3, 1,
+	    [Define to 1 if you have the 'wait3' system call.
+	     Deprecated, you should no longer depend upon 'wait3'.])
+fi
 
 AC_PATH_PROG(NM, nm)
 
@@ -1241,7 +1285,6 @@ if test "$HAVE_BIMI" = "no" ; then
    echo ""
    echo "Could not find Mail::BIMI Perl module."
    echo "BIMI checks will be limited to DNS record existence (no SVG/VMC validation)."
-   echo "Install it with: cpanm Mail::BIMI"
    echo ""
 fi
 
@@ -1249,7 +1292,6 @@ if test "$HAVE_CRYPT_OPENSSL_X509" = "no" ; then
    echo ""
    echo "Could not find Crypt::OpenSSL::X509 Perl module."
    echo "md_verify_dane_cert() will skip TLSA records with selector=1 (SPKI)."
-   echo "Install it with: cpanm Crypt::OpenSSL::X509"
    echo ""
 fi
 
@@ -1257,7 +1299,7 @@ if test "$HAVE_ANYEVENT" = "no" || test "$HAVE_ANYEVENT_DNS" = "no" || test "$HA
    echo ""
    echo "Could not find all AnyEvent Perl modules (AnyEvent, AnyEvent::DNS,"
    echo "AnyEvent::Socket).  Do not use md_async_* functions"
-   echo "in your filter.  Install them with: cpanm AnyEvent"
+   echo "in your filter."
    echo ""
 fi
 

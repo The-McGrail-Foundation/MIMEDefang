@@ -3611,10 +3611,6 @@ ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $
 ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 # Enforce C89 standard
-
-if test "$ac_cv_prog_cc_c89" = "no"; then
-    as_fn_error $? "C89 support is required" "$LINENO" 5
-fi
 CFLAGS="$CFLAGS -std=c89 -D_BSD_SOURCE -D_DEFAULT_SOURCE"
 
 for ac_prog in ar
@@ -4196,7 +4192,6 @@ printf "%s\n" "#define HAVE_WAIT3 1" >>confdefs.h
 
 fi
 
-
 # Extract the first word of "nm", so it can be a program name with args.
 set dummy nm; ac_word=$2
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
@@ -4481,6 +4476,61 @@ printf %s "checking for Perl module Mail::DKIM... " >&6; }
     fi
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $HAVE_DKIM" >&5
 printf "%s\n" "$HAVE_DKIM" >&6; }
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl module Mail::BIMI >= 3" >&5
+printf %s "checking for Perl module Mail::BIMI >= 3... " >&6; }
+    (echo "use Mail::BIMI 3;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_BIMI=no
+    else
+	HAVE_BIMI=yes
+    fi
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $HAVE_BIMI" >&5
+printf "%s\n" "$HAVE_BIMI" >&6; }
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl module Crypt::OpenSSL::X509" >&5
+printf %s "checking for Perl module Crypt::OpenSSL::X509... " >&6; }
+    (echo "use Crypt::OpenSSL::X509;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_CRYPT_OPENSSL_X509=no
+    else
+	HAVE_CRYPT_OPENSSL_X509=yes
+    fi
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $HAVE_CRYPT_OPENSSL_X509" >&5
+printf "%s\n" "$HAVE_CRYPT_OPENSSL_X509" >&6; }
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl module AnyEvent" >&5
+printf %s "checking for Perl module AnyEvent... " >&6; }
+    (echo "use AnyEvent;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_ANYEVENT=no
+    else
+	HAVE_ANYEVENT=yes
+    fi
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $HAVE_ANYEVENT" >&5
+printf "%s\n" "$HAVE_ANYEVENT" >&6; }
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl module AnyEvent::DNS" >&5
+printf %s "checking for Perl module AnyEvent::DNS... " >&6; }
+    (echo "use AnyEvent::DNS;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_ANYEVENT_DNS=no
+    else
+	HAVE_ANYEVENT_DNS=yes
+    fi
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $HAVE_ANYEVENT_DNS" >&5
+printf "%s\n" "$HAVE_ANYEVENT_DNS" >&6; }
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl module AnyEvent::Socket" >&5
+printf %s "checking for Perl module AnyEvent::Socket... " >&6; }
+    (echo "use AnyEvent::Socket;" ; echo "exit(0);") | $PERL > /dev/null 2>&1
+    if test $? != 0 ; then
+	HAVE_ANYEVENT_SOCKET=no
+    else
+	HAVE_ANYEVENT_SOCKET=yes
+    fi
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $HAVE_ANYEVENT_SOCKET" >&5
+printf "%s\n" "$HAVE_ANYEVENT_SOCKET" >&6; }
 
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl module Digest::MD5" >&5
 printf %s "checking for Perl module Digest::MD5... " >&6; }
@@ -8585,6 +8635,28 @@ if test "$HAVE_DKIM" = "no" ; then
    echo ""
    echo "Could not find Mail::DKIM Perl module... do not use"
    echo "md_dkim_sign, md_dkim_verify or md_authres functions in your filter."
+   echo ""
+fi
+
+if test "$HAVE_BIMI" = "no" ; then
+   echo ""
+   echo "Could not find Mail::BIMI Perl module."
+   echo "BIMI checks will be limited to DNS record existence (no SVG/VMC validation)."
+   echo ""
+fi
+
+if test "$HAVE_CRYPT_OPENSSL_X509" = "no" ; then
+   echo ""
+   echo "Could not find Crypt::OpenSSL::X509 Perl module."
+   echo "md_verify_dane_cert() will skip TLSA records with selector=1 (SPKI)."
+   echo ""
+fi
+
+if test "$HAVE_ANYEVENT" = "no" || test "$HAVE_ANYEVENT_DNS" = "no" || test "$HAVE_ANYEVENT_SOCKET" = "no" ; then
+   echo ""
+   echo "Could not find all AnyEvent Perl modules (AnyEvent, AnyEvent::DNS,"
+   echo "AnyEvent::Socket).  Do not use md_async_* functions"
+   echo "in your filter."
    echo ""
 fi
 
