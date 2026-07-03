@@ -3,9 +3,6 @@
 This directory contains user-contributed programs and files. See each
 file for copyright information.
 
-Please don't ask me <dfs@roaringpenguin.com> for help with anything in
-this directory. I didn't write any of it. :-)
-
 ## `fang.pl`
 
 A Perl script which attempts to reconstruct a message from the contents
