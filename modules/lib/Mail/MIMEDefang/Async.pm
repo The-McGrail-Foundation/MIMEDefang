@@ -903,7 +903,7 @@ sub md_async_rspamd_check {
             host       => $host,
             port       => $port,
             request    => $request,
-            read_until => qr/(?!)/,    # never matches — rely on on_eof
+            read_until => qr/(?!)/,    # never matches - rely on on_eof
             max_bytes  => 131072,
             timeout    => 30,
         },

@@ -1599,7 +1599,7 @@ for \fIeach\fR recipient, depending on how you called md_graphdefang_log_enable.
 
 The optional \fI$per_message\fR parameter (fifth argument, default 0) overrides
 per-recipient enumeration for a single call.  When set to 1, exactly one syslog
-line is emitted regardless of the \fI$EnumerateRecipients\fR setting — the actual
+line is emitted regardless of the \fI$EnumerateRecipients\fR setting - the actual
 recipient address is used when there is a single recipient, otherwise
 "rcpts=N" is used.  This is appropriate for message-level events such as
 \fImail_in\fR, \fImail_out\fR, and \fInon-spam\fR that are counters for the
