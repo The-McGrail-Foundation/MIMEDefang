@@ -457,7 +457,7 @@ sub md_async_relay_is_blacklisted {
         args => { host => $host, type => 'A' },
     }]);
 
-    return undef if $out->{errors}{_rbl_check};
+    return if $out->{errors}{_rbl_check};
 
     my $records = $out->{results}{_rbl_check};
     my @hits = grep { !/^127\.255\.255\./ } @$records;
@@ -499,7 +499,7 @@ sub md_async_email_is_blacklisted {
         args => { host => "$hashed.$zone", type => 'A' },
     }]);
 
-    return undef if $out->{errors}{_hashbl_check};
+    return if $out->{errors}{_hashbl_check};
 
     my $records = $out->{results}{_hashbl_check};
     return 0 unless defined $records && @$records;
