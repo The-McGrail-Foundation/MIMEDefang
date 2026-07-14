@@ -9,12 +9,12 @@ my $libs   = 'utils.c dynbuf.c';
 my @sources = sort glob 't/test_*.c';
 
 unless (@sources) {
-    print "1..0 # no C test files found\n";
+    print "1..0 # Skip no C test files found\n";
     exit 0;
 }
 
 unless (-f 'config.h') {
-    print "1..0 # config.h missing; run perl Makefile.PL or ./configure first\n";
+    print "1..0 # Skip config.h missing; run perl Makefile.PL or ./configure first\n";
     exit 0;
 }
 
