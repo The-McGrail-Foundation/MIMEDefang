@@ -2,6 +2,10 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2026-07-14 Giovanni Bechis <g.bechis@snb.it>
+
+        * MIMEDefang 3.7.1 released
+
 2026-07-14 Giovanni Bechis <gbechis@pccc.com>
 
 	* md_spf_verify() now falls back to a raw DNS TXT lookup for the
