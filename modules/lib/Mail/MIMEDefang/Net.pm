@@ -651,16 +651,21 @@ sub relay_is_blacklisted_multi_list {
   return (wantarray ? @$result : $result);
 }
 
-=item md_dns_txt($resolver, $name)
+=item md_dns_txt($resolver, $name [, $filter])
 
 Query C<$name> for TXT records using the supplied C<Net::DNS::Resolver>
 object and return the first TXT string found, or C<undef> on any error
 (NXDOMAIN, SERVFAIL, no TXT records).
 
+The optional C<$filter> argument is a C<Regexp> (e.g. C<qr/^v=spf1\b/i>);
+when given, only a TXT record whose text matches C<$filter> is returned,
+which lets callers pick a specific record type (SPF, BIMI, ...) out of a
+domain that publishes several unrelated TXT records.
+
 =cut
 
 sub md_dns_txt {
-    my ($res, $name) = @_;
+    my ($res, $name, $filter) = @_;
     my $packet = $res->query($name, 'TXT');
     return unless defined $packet;
     return if $packet->header->rcode eq 'NXDOMAIN';
@@ -672,6 +677,7 @@ sub md_dns_txt {
         my $txt = $rr->rdstring;
         $txt =~ s/^"|"$//g;
         $txt =~ s/"\s*"//g;
+        next if defined $filter and $txt !~ $filter;
         return $txt;
     }
     return;

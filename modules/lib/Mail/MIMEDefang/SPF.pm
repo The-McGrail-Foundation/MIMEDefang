@@ -25,7 +25,10 @@ use warnings;
 
 require Exporter;
 
+use Mail::MIMEDefang;
+use Mail::MIMEDefang::Net qw(md_dns_txt);
 use Mail::SPF;
+use Net::DNS;
 
 our @ISA = qw(Exporter);
 our @EXPORT;
@@ -125,6 +128,20 @@ sub md_spf_verify {
     $spf_record = $spfres->request->record->text;
     $helospf_record = $helo_spfres->request->record->text();
   };
+  # On a permerror (e.g. a syntactically invalid record), Mail::SPF never
+  # hands back a parsed record object, so the eval above leaves the text
+  # undefined even though a raw record exists in DNS. Fetch it directly.
+  if((not defined $spf_record or (defined $helo and not defined $helospf_record))
+      and $Features{"Net::DNS"}) {
+    my $res = Net::DNS::Resolver->new;
+    $res->defnames(0);
+    if(not defined $spf_record and $spfmail =~ /\@(.*)/) {
+      $spf_record = md_dns_txt($res, $1, qr/^v=spf1\b/i);
+    }
+    if(defined $helo and not defined $helospf_record) {
+      $helospf_record = md_dns_txt($res, $helo, qr/^v=spf1\b/i);
+    }
+  }
   if(defined $helo) {
     return ($spfres->code, $spfres->local_explanation, $helo_spfres->code, $helo_spfres->local_explanation, $spf_record, $helospf_record);
   } else {
