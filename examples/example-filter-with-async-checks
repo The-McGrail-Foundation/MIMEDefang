@@ -5,7 +5,10 @@
 #
 # Example filter using Mail::MIMEDefang::Async to run DNS blacklist,
 # sender-domain, virus, and spam checks in parallel rather than
-# sequentially.
+# sequentially.  It also performs the same authentication checks
+# rspamd(8) does by default -- SPF, DKIM, and DMARC (with alignment
+# and policy enforcement), plus BIMI -- and publishes the result in
+# an Authentication-Results header.
 #
 # Requires: AnyEvent, AnyEvent::DNS, AnyEvent::Socket, AnyEvent::Handle
 #
@@ -17,6 +20,10 @@
 #***********************************************************************
 
 use Mail::MIMEDefang::Async;
+use Mail::MIMEDefang::Authres qw(md_authres md_org_domain);
+use Mail::MIMEDefang::DKIM;
+use Mail::MIMEDefang::Net qw(get_host_name);
+use Mail::MIMEDefang::SPF;
 
 #***********************************************************************
 # Set administrator's e-mail address here.
@@ -30,6 +37,18 @@ $AdminName = "MIMEDefang Administrator's Full Name";
 $DaemonAddress = 'mimedefang@localhost';
 
 $AddWarningsInline = 0;
+
+#***********************************************************************
+# Points added to the SpamAssassin score in filter_end() when DMARC
+# alignment fails, instead of rejecting the message outright here --
+# same idea as rspamd's DMARC_POLICY_REJECT/QUARANTINE symbols, which
+# feed the final score rather than causing an immediate reject.
+#
+# If SpamAssassin's own DMARC plugin (Mail::SpamAssassin::Plugin::DMARC)
+# is enabled, it already scores these same failures.
+#***********************************************************************
+$DMARCRejectScore     = 0.5;
+$DMARCQuarantineScore = 0.25;
 
 md_graphdefang_log_enable('mail', 1);
 
@@ -163,6 +182,22 @@ sub filter_sender {
         md_syslog('info', "DMARC policy for $domain: $dmarc->{policy}");
     }
 
+    #*******************************************************************
+    # Real (pass/fail) SPF verification, bare SPF failure is not
+    # rejected here, SPF only feeds the DMARC alignment decision made
+    # later in filter_begin() once the From: header is available.
+    #*******************************************************************
+    $Helo        = $helo;
+    $SPFMailFrom = $addr;
+    $SPFDomain   = $domain;
+    $SPFResult   = undef;
+
+    my ($spfcode, $spfexpl) = md_spf_verify($addr, $ip, $helo);
+    if (defined $spfcode) {
+        $SPFResult = $spfcode;
+        md_syslog('info', "SPF result for $addr from $ip: $spfcode") unless $spfcode eq 'none';
+    }
+
     return ('CONTINUE', 'ok');
 }
 
@@ -203,6 +238,59 @@ sub filter_begin {
         md_graphdefang_log('suspicious_chars');
         action_quarantine_entire_message("Message quarantined because of suspicious characters in headers");
         return action_discard();
+    }
+
+    #*******************************************************************
+    # DKIM verification, DMARC alignment/enforcement, BIMI, and the
+    # Authentication-Results header.
+    #*******************************************************************
+    my $from_header = $entity->head->get('From');
+    my ($from_domain) = (defined $from_header ? ($from_header =~ /\@([\w.\-]+)/) : ());
+
+    my ($dkimres, $dkimdom) = md_dkim_verify();
+
+    my $authres = md_authres($SPFMailFrom, $RelayAddr, get_host_name(), $Helo, $from_domain);
+    if (defined $authres) {
+        action_change_header("Authentication-Results", $authres);
+    }
+
+    $DMARCScore = 0;
+
+    if (defined $from_domain && length $from_domain) {
+        my $dmarc_record = md_get_dmarc_record($from_domain);
+        if (defined $dmarc_record) {
+            my $policy = 'none';
+            $policy = lc($1) if ($dmarc_record =~ /\bp=(\w+)/);
+
+            # DMARCbis testing mode: the record carries its own "t=y" tag
+            # (distinct from the policy itself) to say "don't enforce yet".
+            my $testing = ($dmarc_record =~ /\bt=y\b/i) ? 1 : 0;
+
+            my $from_org = md_org_domain($from_domain);
+            my $aligned  = 0;
+            $aligned = 1 if (defined $dkimres && $dkimres eq 'pass'
+                              && defined $dkimdom && md_org_domain($dkimdom) eq $from_org);
+            $aligned = 1 if (!$aligned && defined $SPFResult && $SPFResult eq 'pass'
+                              && defined $SPFDomain && md_org_domain($SPFDomain) eq $from_org);
+
+            if (!$aligned) {
+                if ($testing) {
+                    md_graphdefang_log('dmarc_testing', $from_domain);
+                    md_syslog('info', "Message from $from_domain failed DMARC alignment, but domain has DMARCbis testing (t=y) enabled -- not enforced");
+                } elsif ($policy eq 'reject') {
+                    $DMARCScore += $DMARCRejectScore;
+                    md_graphdefang_log('dmarc_reject', $from_domain);
+                    md_syslog('info', "Message from $from_domain failed DMARC alignment, policy is p=reject -- adding $DMARCRejectScore to spam score");
+                } elsif ($policy eq 'quarantine') {
+                    $DMARCScore += $DMARCQuarantineScore;
+                    md_graphdefang_log('dmarc_quarantine', $from_domain);
+                    md_syslog('info', "Message from $from_domain failed DMARC alignment, policy is p=quarantine -- adding $DMARCQuarantineScore to spam score");
+                } else {
+                    md_graphdefang_log('dmarc_none', $from_domain);
+                    md_syslog('info', "Message from $from_domain failed DMARC alignment, policy is p=none (monitor only)");
+                }
+            }
+        }
     }
 
     md_copy_orig_msg_to_work_dir_as_mbox_file();
@@ -292,6 +380,12 @@ sub filter_end {
         if (-s "./INPUTMSG" < 512*1024) {
             my($score, $threshold, $report, $isspam) = md_async_spamc_check();
             if (defined $score) {
+                if ($DMARCScore) {
+                    $score += $DMARCScore;
+                    $isspam = 'true' if ($score >= $threshold);
+                    $report .= "\nDMARC alignment failure added $DMARCScore points to the score above.\n" if defined $report;
+                }
+
                 my $stars = "*" x ($score < 40 ? int($score) : 40);
                 my($hits, $req, $names) = ($score, $threshold, '');
 

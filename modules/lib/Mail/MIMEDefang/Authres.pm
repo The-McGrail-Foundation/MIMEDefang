@@ -35,6 +35,7 @@ our @EXPORT;
 our @EXPORT_OK;
 
 @EXPORT = qw(md_authres);
+@EXPORT_OK = qw(md_org_domain);
 
 =item md_authres
 
@@ -133,13 +134,13 @@ sub md_authres {
       # pass if DKIM passes and the DKIM signing domain aligns with $bimi_domain,
       # or if SPF passes and the mail-from domain aligns.
       my $effective_dmarc = 'fail';
-      my $bimi_org = _org_domain($bimi_domain);
+      my $bimi_org = md_org_domain($bimi_domain);
       if (defined $dkimres && $dkimres eq 'pass' && defined $dkimdom) {
-        $effective_dmarc = 'pass' if _org_domain($dkimdom) eq $bimi_org;
+        $effective_dmarc = 'pass' if md_org_domain($dkimdom) eq $bimi_org;
       }
       if ($effective_dmarc ne 'pass' && defined $spfcode && $spfcode eq 'pass') {
         my ($spf_localpart, $spf_domain) = split /\@/, $spfmail, 2;
-        if (defined $spf_domain && _org_domain($spf_domain) eq $bimi_org) {
+        if (defined $spf_domain && md_org_domain($spf_domain) eq $bimi_org) {
           $effective_dmarc = 'pass';
         }
       }
@@ -152,14 +153,17 @@ sub md_authres {
   return;
 }
 
+=item md_org_domain
+
+Returns the "organizational domain" of a domain name, for use in relaxed
+DMARC alignment checks (e.g. C<mail.example.com> -> C<example.com>). This is
+a simplification; a production deployment may use the Public Suffix List.
+
 =back
 
 =cut
 
-# Return the "organizational domain" for relaxed DMARC alignment:
-# strip all labels except the last two (e.g. mail.example.com -> example.com).
-# This is a simplification; a production deployment may use the Public Suffix List.
-sub _org_domain {
+sub md_org_domain {
   my ($domain) = @_;
   return '' unless defined $domain && $domain ne '';
   $domain = lc $domain;
