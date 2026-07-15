@@ -46,6 +46,7 @@ ExecStart=/bin/sh -c 'HOME=${SPOOLDIR:=/var/spool/MIMEDefang} \
     `[ -n "$MX_QUEUE_TIMEOUT" ] && echo "-Q $MX_QUEUE_TIMEOUT"` \
     `[ -n "$MX_NOTIFIER" ] && echo "-O $MX_NOTIFIER"` \
     `[ -n "$MX_RECIPOK_PERDOMAIN_LIMIT" ] && echo "-y $MX_RECIPOK_PERDOMAIN_LIMIT"` \
+    `[ "$MX_AUTOSCALE" = "yes" ] && echo "-k"` \
     -s $MX_SOCKET'
 ExecStartPre=/bin/rm -f $MX_SOCKET
 ExecStopPost=/bin/rm -f $MX_SOCKET
