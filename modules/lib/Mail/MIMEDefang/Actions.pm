@@ -43,6 +43,8 @@ our @EXPORT_OK;
   action_external_filter get_quarantine_dir action_sm_quarantine action_greylist
   action_accept_with_warning action_notify_administrator action_replace_with_warning
   action_replace_with_url action_drop_with_warning action_delete_all_headers
+  action_insert_header_now action_add_header_now action_change_header_now
+  action_delete_header_now action_delete_all_headers_now
   message_rejected process_added_parts add_recipient delete_recipient change_sender
 };
 
@@ -336,6 +338,278 @@ sub action_delete_all_headers {
 	$count--;
     }
     return 1;
+}
+
+#***********************************************************************
+# %PROCEDURE: _read_inputmsg_headers
+# %ARGUMENTS:
+#  in -- open filehandle on ./INPUTMSG, positioned at the start
+# %RETURNS:
+#  An arrayref of { name => header-name, raw => raw-header-text }
+#  entries, one per logical header (folded continuation lines are kept
+#  attached to their parent header's raw text).  On return, $in is
+#  positioned right after the header/body separator blank line (or at
+#  EOF if there was no body).
+#***********************************************************************
+sub _read_inputmsg_headers {
+    my($in) = @_;
+    my(@headers, $line);
+
+    while (defined($line = <$in>)) {
+        last if ($line eq "\n" || $line eq "\r\n");
+        if ($line =~ /^[ \t]/ && @headers) {
+            $headers[-1]->{raw} .= $line;
+            next;
+        }
+        my($name) = ($line =~ /^([^:\s]+):/);
+        $name = "" unless defined($name);
+        push(@headers, { name => $name, raw => $line });
+    }
+    return \@headers;
+}
+
+#***********************************************************************
+# %PROCEDURE: _rewrite_inputmsg_headers
+# %ARGUMENTS:
+#  transform -- coderef called as $transform->($headers), where $headers
+#               is the arrayref returned by _read_inputmsg_headers.  It
+#               should modify @$headers in place.
+# %RETURNS:
+#  1 on success, 0 on failure (e.g. ./INPUTMSG does not exist yet)
+# %DESCRIPTION:
+#  Rewrites the header block of ./INPUTMSG in place (leaving the body
+#  untouched) so that anything which re-reads ./INPUTMSG later in the
+#  same filter invocation -- most notably spam_assassin_mail() and
+#  rspamd_check() in Mail::MIMEDefang::Antispam -- sees the change.
+#  This is independent of (and in addition to) the milter command queued
+#  via write_result_line(), which is what actually changes the message
+#  Sendmail/Postfix delivers.
+#***********************************************************************
+sub _rewrite_inputmsg_headers {
+    my($transform) = @_;
+
+    my $in;
+    return 0 unless (open($in, "<", "./INPUTMSG"));
+
+    my $headers = _read_inputmsg_headers($in);
+    $transform->($headers);
+
+    my $tmp = "./INPUTMSG.$$.tmp";
+    my $out;
+    unless (open($out, ">", $tmp)) {
+        close($in);
+        return 0;
+    }
+
+    foreach my $h (@$headers) {
+        print $out $h->{raw};
+    }
+    print $out "\n";
+
+    my($n, $buf);
+    while (($n = read($in, $buf, 65536)) > 0) {
+        print $out $buf;
+    }
+    close($in);
+
+    unless (close($out)) {
+        unlink($tmp);
+        return 0;
+    }
+    unless (rename($tmp, "./INPUTMSG")) {
+        unlink($tmp);
+        return 0;
+    }
+    return 1;
+}
+
+=item action_insert_header_now
+
+Like C<action_insert_header>, but also patches C<./INPUTMSG> immediately,
+so a C<spam_assassin_check>/C<spam_assassin_is_spam>/C<rspamd_check> call
+later in the same filter invocation sees the new header.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: action_insert_header_now
+# %ARGUMENTS:
+#  header -- header name (eg: X-My-Header)
+#  value -- header value (eg: any text goes here)
+#  position -- where to place it (eg: 0 [default] to make it first)
+# %RETURNS:
+#  1 on success, 0 on failure
+# %DESCRIPTION:
+#  Makes a note for milter to insert a header in the message in the
+#  specified position (see action_insert_header), and also rewrites
+#  ./INPUTMSG so the header is visible to SpamAssassin/Rspamd checks
+#  run later in the same filter invocation.
+#***********************************************************************
+sub action_insert_header_now {
+    my($header, $value, $pos) = @_;
+    return 0 if (!in_message_context("action_insert_header_now"));
+    $pos = 0 unless defined($pos);
+
+    action_insert_header($header, $value, $pos);
+
+    return _rewrite_inputmsg_headers(sub {
+        my($headers) = @_;
+        my $at = $pos;
+        $at = 0 if ($at < 0);
+        $at = scalar(@$headers) if ($at > scalar(@$headers));
+        splice(@$headers, $at, 0, { name => $header, raw => "$header: $value\n" });
+    });
+}
+
+=item action_add_header_now
+
+Like C<action_add_header>, but also patches C<./INPUTMSG> immediately,
+so a C<spam_assassin_check>/C<spam_assassin_is_spam>/C<rspamd_check> call
+later in the same filter invocation sees the new header.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: action_add_header_now
+# %ARGUMENTS:
+#  header -- header name (eg: X-My-Header)
+#  value -- header value (eg: any text goes here)
+# %RETURNS:
+#  1 on success, 0 on failure
+# %DESCRIPTION:
+#  Makes a note for milter to add a header to the message (see
+#  action_add_header), and also rewrites ./INPUTMSG so the header is
+#  visible to SpamAssassin/Rspamd checks run later in the same filter
+#  invocation.
+#***********************************************************************
+sub action_add_header_now {
+    my($header, $value) = @_;
+    return 0 if (!in_message_context("action_add_header_now"));
+
+    action_add_header($header, $value);
+
+    return _rewrite_inputmsg_headers(sub {
+        my($headers) = @_;
+        push(@$headers, { name => $header, raw => "$header: $value\n" });
+    });
+}
+
+=item action_change_header_now
+
+Like C<action_change_header>, but also patches C<./INPUTMSG> immediately,
+so a C<spam_assassin_check>/C<spam_assassin_is_spam>/C<rspamd_check> call
+later in the same filter invocation sees the changed header.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: action_change_header_now
+# %ARGUMENTS:
+#  header -- header name (eg: X-My-Header)
+#  value -- header value (eg: any text goes here)
+#  index -- index of header to change (default 1)
+# %RETURNS:
+#  1 on success, 0 on failure
+# %DESCRIPTION:
+#  Makes a note for milter to change a header in the message (see
+#  action_change_header), and also rewrites ./INPUTMSG so the change is
+#  visible to SpamAssassin/Rspamd checks run later in the same filter
+#  invocation.
+#***********************************************************************
+sub action_change_header_now {
+    my($header, $value, $idx) = @_;
+    return 0 if (!in_message_context("action_change_header_now"));
+    $idx = 1 unless defined($idx);
+
+    action_change_header($header, $value, $idx);
+
+    return _rewrite_inputmsg_headers(sub {
+        my($headers) = @_;
+        my $count = 0;
+        foreach my $h (@$headers) {
+            next unless (lc($h->{name}) eq lc($header));
+            $count++;
+            if ($count == $idx) {
+                $h->{raw} = "$header: $value\n";
+                last;
+            }
+        }
+    });
+}
+
+=item action_delete_header_now
+
+Like C<action_delete_header>, but also patches C<./INPUTMSG> immediately,
+so a C<spam_assassin_check>/C<spam_assassin_is_spam>/C<rspamd_check> call
+later in the same filter invocation no longer sees the deleted header.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: action_delete_header_now
+# %ARGUMENTS:
+#  header -- header name (eg: X-My-Header)
+#  index -- index of header to delete (default 1)
+# %RETURNS:
+#  1 on success, 0 on failure
+# %DESCRIPTION:
+#  Makes a note for milter to delete a header in the message (see
+#  action_delete_header), and also rewrites ./INPUTMSG so the deletion is
+#  visible to SpamAssassin/Rspamd checks run later in the same filter
+#  invocation.
+#***********************************************************************
+sub action_delete_header_now {
+    my($header, $idx) = @_;
+    return 0 if (!in_message_context("action_delete_header_now"));
+    $idx = 1 unless defined($idx);
+
+    action_delete_header($header, $idx);
+
+    return _rewrite_inputmsg_headers(sub {
+        my($headers) = @_;
+        my $count = 0;
+        for (my $i = 0; $i < scalar(@$headers); $i++) {
+            next unless (lc($headers->[$i]->{name}) eq lc($header));
+            $count++;
+            if ($count == $idx) {
+                splice(@$headers, $i, 1);
+                last;
+            }
+        }
+    });
+}
+
+=item action_delete_all_headers_now
+
+Like C<action_delete_all_headers>, but also patches C<./INPUTMSG>
+immediately, so a C<spam_assassin_check>/C<spam_assassin_is_spam>/
+C<rspamd_check> call later in the same filter invocation no longer sees
+any instance of the deleted header.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: action_delete_all_headers_now
+# %ARGUMENTS:
+#  header -- header name (eg: X-My-Header)
+# %RETURNS:
+#  1 on success, 0 on failure
+# %DESCRIPTION:
+#  Makes a note for milter to delete all instances of header (see
+#  action_delete_all_headers), and also rewrites ./INPUTMSG so the
+#  deletion is visible to SpamAssassin/Rspamd checks run later in the
+#  same filter invocation.
+#***********************************************************************
+sub action_delete_all_headers_now {
+    my($header) = @_;
+    return 0 if (!in_message_context("action_delete_all_headers_now"));
+
+    action_delete_all_headers($header);
+
+    return _rewrite_inputmsg_headers(sub {
+        my($headers) = @_;
+        @$headers = grep { lc($_->{name}) ne lc($header) } @$headers;
+    });
 }
 
 =item action_accept

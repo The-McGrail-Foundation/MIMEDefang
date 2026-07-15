@@ -359,4 +359,193 @@ sub t_add_part_and_process : Test(3)
   system('rm', '-rf', 't/tmp');
 }
 
+sub t_insert_header_now : Test(4)
+{
+  no warnings qw(redefine once);
+  local *::md_syslog = sub {};
+  use warnings qw(redefine once);
+
+  init_globals();
+  $CWD = '.';
+  $InMessageContext = 1;
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+
+  open(my $fh, '>', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  print $fh "Subject: Hello\nFrom: sender\@example.com\n\nBody line 1\nBody line 2\n";
+  close($fh);
+
+  my $ret = action_insert_header_now('X-Test', 'insertedvalue');
+  is($ret, 1, 'action_insert_header_now returns 1');
+  if (defined $results_fh) {
+    close $results_fh;
+    undef $results_fh;
+  }
+
+  open(my $rfh, '<', './RESULTS') or die "Cannot open RESULTS: $!";
+  my $raw = do { local $/; <$rfh> };
+  close($rfh);
+  like($raw, qr/^NX-Test 0 insertedvalue$/m, 'action_insert_header_now wrote N line');
+
+  open(my $ifh, '<', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  my $msg = do { local $/; <$ifh> };
+  close($ifh);
+  is($msg, "X-Test: insertedvalue\nSubject: Hello\nFrom: sender\@example.com\n\nBody line 1\nBody line 2\n",
+     'action_insert_header_now put the new header first and left the body untouched');
+  like($msg, qr/\n\nBody line 1\nBody line 2\n$/, 'body is unchanged');
+
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+}
+
+sub t_add_header_now : Test(3)
+{
+  no warnings qw(redefine once);
+  local *::md_syslog = sub {};
+  use warnings qw(redefine once);
+
+  init_globals();
+  $CWD = '.';
+  $InMessageContext = 1;
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+
+  open(my $fh, '>', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  print $fh "Subject: Hello\nFrom: sender\@example.com\n\nBody line 1\n";
+  close($fh);
+
+  my $ret = action_add_header_now('X-Added', 'addedvalue');
+  is($ret, 1, 'action_add_header_now returns 1');
+  if (defined $results_fh) {
+    close $results_fh;
+    undef $results_fh;
+  }
+
+  open(my $rfh, '<', './RESULTS') or die "Cannot open RESULTS: $!";
+  my $raw = do { local $/; <$rfh> };
+  close($rfh);
+  like($raw, qr/^HX-Added addedvalue$/m, 'action_add_header_now wrote H line');
+
+  open(my $ifh, '<', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  my $msg = do { local $/; <$ifh> };
+  close($ifh);
+  is($msg, "Subject: Hello\nFrom: sender\@example.com\nX-Added: addedvalue\n\nBody line 1\n",
+     'action_add_header_now appended the new header at the end of the header block');
+
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+}
+
+sub t_change_header_now : Test(4)
+{
+  no warnings qw(redefine once);
+  local *::md_syslog = sub {};
+  use warnings qw(redefine once);
+
+  init_globals();
+  $CWD = '.';
+  $InMessageContext = 1;
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+
+  open(my $fh, '>', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  print $fh "X-Dup: one\nX-Folded: line1\n continuation\nX-Dup: two\n\nBody\n";
+  close($fh);
+
+  my $ret = action_change_header_now('X-Dup', 'changed', 2);
+  is($ret, 1, 'action_change_header_now returns 1');
+  if (defined $results_fh) {
+    close $results_fh;
+    undef $results_fh;
+  }
+
+  open(my $rfh, '<', './RESULTS') or die "Cannot open RESULTS: $!";
+  my $raw = do { local $/; <$rfh> };
+  close($rfh);
+  like($raw, qr/^IX-Dup 2 changed$/m, 'action_change_header_now wrote I line');
+
+  open(my $ifh, '<', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  my $msg = do { local $/; <$ifh> };
+  close($ifh);
+  is($msg, "X-Dup: one\nX-Folded: line1\n continuation\nX-Dup: changed\n\nBody\n",
+     'action_change_header_now changed only the 2nd X-Dup instance and preserved the folded header');
+  like($msg, qr/X-Dup: one\n/, 'first X-Dup instance is untouched');
+
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+}
+
+sub t_delete_header_now : Test(3)
+{
+  no warnings qw(redefine once);
+  local *::md_syslog = sub {};
+  use warnings qw(redefine once);
+
+  init_globals();
+  $CWD = '.';
+  $InMessageContext = 1;
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+
+  open(my $fh, '>', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  print $fh "X-Dup: one\nX-Folded: line1\n continuation\nX-Dup: two\n\nBody\n";
+  close($fh);
+
+  my $ret = action_delete_header_now('X-Dup', 1);
+  is($ret, 1, 'action_delete_header_now returns 1');
+  if (defined $results_fh) {
+    close $results_fh;
+    undef $results_fh;
+  }
+
+  open(my $rfh, '<', './RESULTS') or die "Cannot open RESULTS: $!";
+  my $raw = do { local $/; <$rfh> };
+  close($rfh);
+  like($raw, qr/^JX-Dup 1$/m, 'action_delete_header_now wrote J line');
+
+  open(my $ifh, '<', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  my $msg = do { local $/; <$ifh> };
+  close($ifh);
+  is($msg, "X-Folded: line1\n continuation\nX-Dup: two\n\nBody\n",
+     'action_delete_header_now removed only the 1st X-Dup instance and preserved the folded header');
+
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+}
+
+sub t_delete_all_headers_now : Test(2)
+{
+  no warnings qw(redefine once);
+  local *::md_syslog = sub {};
+  use warnings qw(redefine once);
+
+  init_globals();
+  $CWD = '.';
+  $InMessageContext = 1;
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+  unlink('./HEADERS') if -f './HEADERS';
+
+  open(my $fh, '>', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  print $fh "X-Dup: one\nX-Folded: line1\n continuation\nX-Dup: two\nX-Dup: three\n\nBody\n";
+  close($fh);
+
+  open(my $hfh, '>', './HEADERS') or die "Cannot open HEADERS: $!";
+  print $hfh "X-Dup: one\nX-Folded: line1\nX-Dup: two\nX-Dup: three\n";
+  close($hfh);
+
+  my $ret = action_delete_all_headers_now('X-Dup');
+  is($ret, 1, 'action_delete_all_headers_now returns 1');
+
+  open(my $ifh, '<', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  my $msg = do { local $/; <$ifh> };
+  close($ifh);
+  is($msg, "X-Folded: line1\n continuation\n\nBody\n",
+     'action_delete_all_headers_now removed every X-Dup instance and preserved the folded header');
+
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+  unlink('./HEADERS') if -f './HEADERS';
+}
+
 __PACKAGE__->runtests();
