@@ -39,6 +39,16 @@ $DaemonAddress = 'mimedefang@localhost';
 $AddWarningsInline = 0;
 
 #***********************************************************************
+# $SALocalTestsOnly defaults to 1, which disables SpamAssassin's
+# network-dependent tests (Received/RBL/Razor/DNS-based checks such as
+# SPF, DKIM, DMARC and URIBL) to avoid adding DNS lookup latency to the
+# SMTP transaction.  This filter already runs its own SPF/DKIM/DMARC/BIMI
+# checks asynchronously, so set it to 0 to also let SpamAssassin itself
+# run its network tests.
+#***********************************************************************
+$SALocalTestsOnly = 0;
+
+#***********************************************************************
 # Points added to the SpamAssassin score in filter_end() when DMARC
 # alignment fails, instead of rejecting the message outright here --
 # same idea as rspamd's DMARC_POLICY_REJECT/QUARANTINE symbols, which

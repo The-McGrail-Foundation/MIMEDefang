@@ -39,6 +39,15 @@ $DaemonAddress = 'mimedefang@localhost';
 $AddWarningsInline = 0;
 
 #***********************************************************************
+# $SALocalTestsOnly defaults to 1, which disables SpamAssassin's
+# network-dependent tests (Received/RBL/Razor/DNS-based checks such as
+# SPF, DKIM, DMARC and URIBL) to avoid adding DNS lookup latency to the
+# SMTP transaction.  Set it to 0 here if you want SpamAssassin to run
+# those checks too.
+#***********************************************************************
+$SALocalTestsOnly = 0;
+
+#***********************************************************************
 # To enable syslogging of virus and spam activity, add the following
 # to the filter:
 # md_graphdefang_log_enable();
