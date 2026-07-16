@@ -339,23 +339,12 @@ sub apply_results_to_head {
 sub header_from_eml {
     my ($file, $header) = @_;
     open(my $fh, '<', $file) or die "Cannot open $file: $!\n";
-    my $value;
-    while (my $line = <$fh>) {
-        last if $line =~ /^\r?\n$/;
-        if ($line =~ /^\Q$header\E:\s*(.*\S)?\s*$/i) {
-            $value = $1;
-            # Consume folded continuation lines
-            while (my $next = <$fh>) {
-                last unless $next =~ /^[ \t]/;
-                $next =~ s/^\s+/ /;
-                $value .= $next;
-                chomp $value;
-            }
-            last;
-        }
-    }
+    my $head = MIME::Head->new;
+    $head->read($fh);
     close($fh);
+    my $value = $head->get($header, 0);
     return unless defined $value;
+    chomp $value;
     # Extract a bare address out of "Display Name <addr>" if present.
     if ($value =~ /<([^<>\s]+)>/) {
         return $1;
