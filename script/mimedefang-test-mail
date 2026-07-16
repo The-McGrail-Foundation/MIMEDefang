@@ -63,12 +63,15 @@ for my $kv (@{ $opt{macro} }) {
 }
 
 # ------------------------------------------------------------------
-# Locate a *built* mimedefang.pl (template placeholders like @SPOOLDIR@
-# must already be substituted -- mimedefang.pl.in itself won't work here).
+# Locate a *built* mimedefang.pl
 # ------------------------------------------------------------------
-my $mimedefang_pl = File::Spec->catfile($FindBin::Bin, File::Spec->updir, 'mimedefang.pl');
-unless (-r $mimedefang_pl) {
-    die "Cannot find a built mimedefang.pl at $mimedefang_pl.\n" .
+my @mimedefang_pl_candidates = (
+    File::Spec->catfile($FindBin::Bin, 'mimedefang.pl'),
+    File::Spec->catfile($FindBin::Bin, File::Spec->updir, 'mimedefang.pl'),
+);
+my ($mimedefang_pl) = grep { -r $_ } @mimedefang_pl_candidates;
+unless ($mimedefang_pl) {
+    die "Cannot find a built mimedefang.pl (tried: @mimedefang_pl_candidates).\n" .
         "Run ./configure && make (or perl Makefile.PL && make) first.\n";
 }
 
