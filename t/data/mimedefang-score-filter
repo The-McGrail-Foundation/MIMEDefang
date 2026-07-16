@@ -1,0 +1,40 @@
+# -*- Perl -*-
+#***********************************************************************
+#
+# mimedefang-score-filter
+#
+# Minimal filter used by t/mimedefang_test_mail.t to compare the
+# SpamAssassin score produced through Mail::MIMEDefang::Antispam against
+# the standalone spamassassin CLI, using a hermetic prefs file so the
+# comparison doesn't depend on any locally-installed SpamAssassin rules.
+#
+#***********************************************************************
+
+sub filter {
+    my ($entity) = @_;
+
+    if ($Features{"SpamAssassin"}) {
+        my ($hits, $req, $names, $report) = spam_assassin_check('t/data/sa-test-prefs.cf');
+        print STDERR "SCORE=$hits NAMES=$names\n";
+
+        # Dump the exact bytes SpamAssassin scored (Return-Path + the synthesized
+        # Received header + the original message, same as spam_assassin_mail())
+        # so an independent `spamassassin` CLI run against the very same input
+        # can be compared for parity.
+        open(my $in, '<', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+        my @msg = <$in>;
+        close($in);
+        my @sahdrs;
+        push(@sahdrs, "Return-Path: $Sender\n");
+        push(@sahdrs, split(/^/m, Mail::MIMEDefang::Utils::synthesize_received_header()));
+        unshift(@msg, @sahdrs);
+        open(my $out, '>', './SAMSG') or die "Cannot write SAMSG: $!";
+        print $out @msg;
+        close($out);
+    } else {
+        print STDERR "SCORE=NONE\n";
+    }
+}
+
+# DO NOT delete the next line, or Perl will complain.
+1;

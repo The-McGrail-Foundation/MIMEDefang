@@ -589,6 +589,7 @@ WriteMakefile(
         'xs_init.c',
         'mimedefang-release.8',
         'script/mimedefang-util.1',
+        'script/mimedefang-test-mail.1',
         'modules/man',
         'redhat/mimedefang.spec',
     )},
@@ -743,7 +744,7 @@ md-mx-ctrl: $ctrl_objs
 # ============================================================
 # pod2man: generate man pages from POD in scripts and modules
 # ============================================================
-pod2man: mimedefang-release.8 script/mimedefang-util.1 md_module_manpages
+pod2man: mimedefang-release.8 script/mimedefang-util.1 script/mimedefang-test-mail.1 md_module_manpages
 
 mimedefang-release.8: mimedefang-release.pl
 \t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=8 --perm_rw=644 \\
@@ -757,6 +758,12 @@ script/mimedefang-util.1: script/mimedefang-util
 \t\t--center="MIMEDefang Documentation" \\
 \t\t--release=\$(MD_VERSION) \\
 \t\tscript/mimedefang-util script/mimedefang-util.1
+
+script/mimedefang-test-mail.1: script/mimedefang-test-mail
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=1 --perm_rw=644 \\
+\t\t--center="MIMEDefang Documentation" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tscript/mimedefang-test-mail script/mimedefang-test-mail.1
 
 md_module_manpages:
 \t\$(MKPATH) modules/man
@@ -886,12 +893,16 @@ install_scripts:
 \t    \$(MD_INSTALL_PROGRAM) watch-multiple-mimedefangs.tcl \$(DESTDIR)\$(BINDIR)/watch-multiple-mimedefangs.tcl || true
 \ttest -f script/mimedefang-util && \\
 \t    \$(MD_INSTALL_PROGRAM) script/mimedefang-util \$(DESTDIR)\$(BINDIR)/mimedefang-util || true
+\ttest -f script/mimedefang-test-mail && \\
+\t    \$(MD_INSTALL_PROGRAM) script/mimedefang-test-mail \$(DESTDIR)\$(BINDIR)/mimedefang-test-mail || true
 
 install_man: pod2man
 \t\$(MKPATH) \$(DESTDIR)\$(INSTALLMAN1DIR) \$(DESTDIR)\$(INSTALLMAN3DIR) \\
 \t          \$(DESTDIR)\$(MANDIR)/man5 \$(DESTDIR)\$(MANDIR)/man7 \$(DESTDIR)\$(MANDIR)/man8
 \ttest -f script/mimedefang-util.1 && \\
 \t    \$(MD_INSTALL_DATA) script/mimedefang-util.1 \$(DESTDIR)\$(INSTALLMAN1DIR)/mimedefang-util.1 || true
+\ttest -f script/mimedefang-test-mail.1 && \\
+\t    \$(MD_INSTALL_DATA) script/mimedefang-test-mail.1 \$(DESTDIR)\$(INSTALLMAN1DIR)/mimedefang-test-mail.1 || true
 \tfor m in \\
 \t    Mail::MIMEDefang.$MAN3EXT \\
 \t    Mail::MIMEDefang::Actions.$MAN3EXT \\

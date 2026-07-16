@@ -1,0 +1,497 @@
+#!/usr/bin/perl
+
+#***********************************************************************
+#
+# mimedefang-test-mail
+#
+# Debug tool: run mimedefang-filter against a single .eml file in-process,
+# the same way mimedefang.pl itself would (filter_relay, filter_helo,
+# filter_sender, filter_recipient, filter_begin, filter, filter_end),
+# without needing a running MTA, milter socket, or multiplexor.
+#
+# This NEVER relays or delivers mail: send_mail()/send_admin_mail() are
+# stubbed out so notifications are only reported, never actually sent.
+#
+# * This program may be distributed under the terms of the GNU General
+# * Public License, Version 2.
+#
+#***********************************************************************
+
+use strict;
+use warnings;
+no warnings 'once';
+use FindBin;
+use File::Temp qw( tempdir );
+use File::Copy qw( copy );
+use File::Spec;
+use Getopt::Long;
+use Pod::Usage;
+use MIME::Head;
+
+my %opt = (
+    filter     => '/etc/mail/mimedefang-filter',
+    to         => [],
+    macro      => [],
+);
+
+GetOptions(
+    \%opt,
+    'filter|f=s',
+    'from=s',
+    'to=s@',
+    'relay-ip=s'   => \$opt{relay_ip},
+    'relay-host=s' => \$opt{relay_host},
+    'helo=s',
+    'macro=s@',
+    'keep-workdir',
+    'output|o=s',
+    'help|h',
+) or pod2usage(2);
+
+pod2usage(1) if $opt{help};
+
+my $eml = shift @ARGV or pod2usage("Missing .eml file argument");
+pod2usage("No such file: $eml") unless -r $eml;
+$eml = File::Spec->rel2abs($eml);
+$opt{filter} = File::Spec->rel2abs($opt{filter}) unless $opt{filter} eq '/dev/null';
+
+my %macros;
+for my $kv (@{ $opt{macro} }) {
+    my ($name, $value) = split(/=/, $kv, 2);
+    pod2usage("Invalid --macro '$kv', expected NAME=VALUE") unless defined $value;
+    $macros{$name} = $value;
+}
+
+# ------------------------------------------------------------------
+# Locate a *built* mimedefang.pl (template placeholders like @SPOOLDIR@
+# must already be substituted -- mimedefang.pl.in itself won't work here).
+# ------------------------------------------------------------------
+my $mimedefang_pl = File::Spec->catfile($FindBin::Bin, File::Spec->updir, 'mimedefang.pl');
+unless (-r $mimedefang_pl) {
+    die "Cannot find a built mimedefang.pl at $mimedefang_pl.\n" .
+        "Run ./configure && make (or perl Makefile.PL && make) first.\n";
+}
+
+# ------------------------------------------------------------------
+# Load mimedefang.pl in-process without running it. It ends with
+# `exit(&main) unless caller;` -- under `do`, caller() is true, so
+# main() is not auto-invoked. See Mail::MIMEDefang::Unit::include_mimedefang.
+# ------------------------------------------------------------------
+{
+    no warnings 'redefine';
+    local *CORE::GLOBAL::exit = sub { };
+    local @ARGV = ();
+    local $SIG{__WARN__} = sub {
+        my $w = shift;
+        warn $w unless $w =~ /unlikely to be reached|Maybe you meant system/;
+    };
+    do $mimedefang_pl;
+    die "Failed to load $mimedefang_pl: $@\n" if $@;
+}
+
+{
+    no warnings 'redefine';
+
+    # Redirect filter logging to stderr instead of syslog.
+    *main::md_syslog = sub {
+        my ($facility, $msg) = @_;
+        my $tag = (defined($main::MsgID) && $main::MsgID ne 'NOQUEUE') ? "$main::MsgID: " : '';
+        print STDERR "[$facility] $tag$msg\n";
+        return 1;
+    };
+
+    # Never actually relay/deliver mail -- just report what would happen.
+    *main::send_mail = sub {
+        my ($fromAddr, $fromFull, $recipient, $body, $deliverymode) = @_;
+        print STDERR "[would send mail] From=$fromAddr To=$recipient\n";
+        return;
+    };
+    *main::send_admin_mail = sub {
+        my ($subject, $body) = @_;
+        print STDERR "[would send admin mail] Subject=$subject\n";
+        return;
+    };
+}
+
+# ------------------------------------------------------------------
+# Figure out envelope sender/recipients/relay/HELO if not given explicitly.
+# Real values are derived from the message's own Received:, X-Relay-Addr,
+# Authentication-Results and Sender: headers so the Received: header
+# synthesized for SpamAssassin (see synthesize_received_header() in
+# Mail::MIMEDefang::Utils) reflects the message's real sending
+# infrastructure instead of placeholder values.
+# ------------------------------------------------------------------
+my $derived = derive_envelope_from_eml($eml);
+
+$opt{relay_ip}   //= $derived->{reladdr}  // '127.0.0.1';
+$opt{relay_host} //= $derived->{hostname} // 'localhost';
+$opt{helo}       //= $derived->{helo}     // $opt{relay_host};
+
+my $from = $opt{from} // $derived->{sender} // header_from_eml($eml, 'From');
+my @to   = @{ $opt{to} };
+@to = (header_from_eml($eml, 'To')) unless @to;
+
+die "Could not determine envelope sender; pass --from\n" unless defined $from && length $from;
+die "Could not determine envelope recipient; pass --to\n" unless @to;
+
+# ------------------------------------------------------------------
+# Build the one-shot work directory: INPUTMSG + COMMANDS.
+# ------------------------------------------------------------------
+my $workdir = tempdir('mimedefang-test-mail-XXXXXX', TMPDIR => 1, CLEANUP => !$opt{'keep-workdir'});
+
+# ------------------------------------------------------------------
+# If -o/--output was given, snapshot the pristine header/body split of
+# $eml *before* it gets copied into the workdir, so later header edits
+# recorded in RESULTS can be replayed against the untouched original.
+# ------------------------------------------------------------------
+my ($orig_head, $orig_body);
+if (defined $opt{output}) {
+    open(my $efh, '<', $eml) or die "Cannot open $eml: $!\n";
+    $orig_head = MIME::Head->new($efh, Modify => 0);
+    local $/;
+    $orig_body = <$efh>;
+    $orig_body = '' unless defined $orig_body;
+    close($efh);
+}
+
+copy($eml, "$workdir/INPUTMSG") or die "Cannot copy $eml to $workdir/INPUTMSG: $!\n";
+
+open(my $cmdfh, '>', "$workdir/COMMANDS") or die "Cannot write $workdir/COMMANDS: $!\n";
+print $cmdfh 'I' . main::percent_encode($opt{relay_ip}) . "\n";
+print $cmdfh 'H' . main::percent_encode($opt{relay_host}) . "\n";
+print $cmdfh 'E' . main::percent_encode($opt{helo}) . "\n";
+print $cmdfh 'S' . main::percent_encode($from) . "\n";
+for my $recip (@to) {
+    print $cmdfh 'R' . main::percent_encode($recip) . " ? ? ?\n";
+}
+for my $name (keys %macros) {
+    print $cmdfh '=' . main::percent_encode($name) . ' ' . main::percent_encode($macros{$name}) . "\n";
+}
+print $cmdfh "F\n";
+close($cmdfh);
+
+# ------------------------------------------------------------------
+# Load the filter, exactly like main() does.
+# ------------------------------------------------------------------
+main::init_globals();
+unless ($opt{filter} eq '/dev/null') {
+    die "Cannot read filter $opt{filter}: $!\n" unless -r $opt{filter};
+    do {
+        no warnings 'redefine';
+        require $opt{filter};
+    };
+    die "Error loading filter $opt{filter}: $@\n" if $@;
+}
+main::filter_initialize() if defined(&main::filter_initialize);
+
+# Detect optional Perl modules
+main::detect_and_load_perl_modules();
+
+# Same defaults main() sets up after loading the filter (mimedefang.pl.in).
+$main::AdminName    = 'MIMEDefang Administrator' unless defined $main::AdminName;
+$main::AdminAddress = 'postmaster@localhost'     unless defined $main::AdminAddress;
+$main::DaemonName   = 'MIMEDefang'               unless defined $main::DaemonName;
+$main::DaemonAddress = 'mailer-daemon@localhost' unless defined $main::DaemonAddress;
+$main::NotifySenderSubject = 'MIMEDefang Notification' unless defined $main::NotifySenderSubject;
+$main::NotifyAdministratorSubject = 'MIMEDefang Notification' unless defined $main::NotifyAdministratorSubject;
+$main::QuarantineSubject = 'MIMEDefang Quarantine Report' unless defined $main::QuarantineSubject;
+$main::NotifyNoPreamble = 0 unless defined $main::NotifyNoPreamble;
+unless (defined $main::GeneralWarning) {
+    $main::GeneralWarning =
+        "WARNING: This e-mail has been altered by MIMEDefang.  Following this\n" .
+        "paragraph are indications of the actual changes made.  For more\n" .
+        "information about your site's MIMEDefang policy, contact\n" .
+        "$main::AdminName <$main::AdminAddress>.  For more information about MIMEDefang, see:\n\n" .
+        "            $main::URL\n\n";
+}
+
+chdir($workdir) or die "Cannot chdir($workdir): $!\n";
+$main::CWD = $workdir;
+
+my $worst = 0; # 0 = ok, 1 = reject/bounce/discard, 2 = tempfail
+
+%main::SendmailMacros = %macros;
+$main::SendmailMacros{if_name} = $opt{helo} unless defined $main::SendmailMacros{if_name};
+
+print "== Envelope phases ==\n";
+
+run_phase('filter_relay', sub {
+    $main::RelayAddr     = $opt{relay_ip};
+    $main::RelayHostname = $opt{relay_host};
+    $main::QueueID       = 'NOQUEUE';
+    $main::MsgID         = 'NOQUEUE';
+    return main::filter_relay($opt{relay_ip}, $opt{relay_host}, 0, $opt{relay_ip}, 0, 'NOQUEUE');
+});
+
+run_phase('filter_helo', sub {
+    $main::Helo = $opt{helo};
+    return main::filter_helo($opt{relay_ip}, $opt{relay_host}, $opt{helo}, 0, $opt{relay_ip}, 0, 'NOQUEUE');
+});
+
+run_phase('filter_sender', sub {
+    $main::Sender = $from;
+    return main::filter_sender($from, $opt{relay_ip}, $opt{relay_host}, $opt{helo});
+});
+
+for my $recip (@to) {
+    run_phase("filter_recipient ($recip)", sub {
+        @main::Recipients = ($recip);
+        $main::RecipientMailers{$recip} = [ '?', '?', '?' ];
+        return main::filter_recipient($recip, $from, $opt{relay_ip}, $opt{relay_host}, $to[0], $opt{helo}, '?', '?', '?');
+    });
+}
+
+print "\n== Content filter ==\n";
+main::do_scan($workdir);
+
+my %actions = %main::Actions;
+if (%actions) {
+    print "Actions taken: " . join(', ', map { "$_=$actions{$_}" } sort keys %actions) . "\n";
+} else {
+    print "Actions taken: none\n";
+}
+
+if (@main::Warnings) {
+    print "Warnings:\n";
+    print "  - $_\n" for @main::Warnings;
+}
+
+print "Message was rebuilt: " . ($main::Changed || $main::Rebuild ? "yes" : "no") . "\n";
+
+for my $key (qw(bounce discard)) {
+    $worst = 1 if $actions{$key};
+}
+$worst = 2 if $actions{tempfail};
+
+if (-r "$workdir/RESULTS") {
+    print "\n--- raw RESULTS ---\n";
+    open(my $fh, '<', "$workdir/RESULTS") or die $!;
+    while (<$fh>) {
+        chomp;
+        print main::percent_decode($_), "\n";
+    }
+    close($fh);
+}
+
+if (defined $opt{output}) {
+    apply_results_to_head($orig_head, "$workdir/RESULTS") if -r "$workdir/RESULTS";
+
+    my $body;
+    if ($main::Changed || $main::Rebuild) {
+        open(my $bfh, '<', "$workdir/NEWBODY") or die "Cannot open $workdir/NEWBODY: $!\n";
+        local $/;
+        $body = <$bfh>;
+        close($bfh);
+    } else {
+        $body = $orig_body;
+    }
+    $body = '' unless defined $body;
+
+    open(my $ofh, '>', $opt{output}) or die "Cannot write $opt{output}: $!\n";
+    print $ofh $orig_head->as_string;
+    print $ofh "\n";
+    print $ofh $body;
+    close($ofh);
+
+    print "\nWrote resulting message to $opt{output}\n";
+}
+
+if ($opt{'keep-workdir'} || $worst) {
+    print "\nWork directory: $workdir\n";
+}
+
+exit $worst;
+
+# ------------------------------------------------------------------
+sub run_phase {
+    my ($name, $code) = @_;
+    my $subname = (split(/\s/, $name))[0];
+    if (!defined(&{"main::$subname"})) {
+        print "$name: (not defined in filter, skipping)\n";
+        return;
+    }
+    my ($ok, $msg) = $code->();
+    $msg = '' unless defined $msg;
+    print "$name: $ok" . ($msg ne '' ? " ($msg)" : '') . "\n";
+    if ($ok eq 'TEMPFAIL' || (defined($ok) && $ok =~ /^-?\d+$/ && $ok < 0)) {
+        $worst = 2 if $worst < 2;
+    } elsif ($ok ne 'CONTINUE' && $ok ne 'ACCEPT_AND_NO_MORE_FILTERING' && $ok ne '1') {
+        $worst = 1 if $worst < 1;
+    }
+}
+
+sub apply_results_to_head {
+    my ($head, $results_file) = @_;
+    open(my $fh, '<', $results_file) or return;
+    while (my $line = <$fh>) {
+        chomp $line;
+        next unless length $line;
+        my $cmd = substr($line, 0, 1, '');
+        my @f = map { main::percent_decode($_) } split(/ /, $line, -1);
+
+        if ($cmd eq 'H') {
+            next unless @f == 2;
+            my ($hdr, $val) = @f;
+            $head->add($hdr, $val);
+        } elsif ($cmd eq 'N') {
+            next unless @f == 3;
+            my ($hdr, $pos, $val) = @f;
+            $pos = 0 unless $pos =~ /^\d+$/;
+            $head->add($hdr, $val, $pos);
+        } elsif ($cmd eq 'I') {
+            next unless @f == 3;
+            my ($hdr, $idx, $val) = @f;
+            $idx = 1 unless $idx =~ /^\d+$/ && $idx >= 1;
+            $head->replace($hdr, $val, $idx - 1);
+        } elsif ($cmd eq 'J') {
+            next unless @f == 2;
+            my ($hdr, $idx) = @f;
+            $idx = 1 unless $idx =~ /^\d+$/ && $idx >= 1;
+            $head->delete($hdr, $idx - 1);
+        } elsif ($cmd eq 'M') {
+            next unless @f == 1;
+            my ($ct) = @f;
+            if (length $ct) {
+                $head->replace('Content-Type', $ct, 0);
+            }
+            $head->add('Mime-Version', '1.0') unless $head->count('Mime-Version');
+        }
+    }
+    close($fh);
+}
+
+sub header_from_eml {
+    my ($file, $header) = @_;
+    open(my $fh, '<', $file) or die "Cannot open $file: $!\n";
+    my $head = MIME::Head->new;
+    $head->read($fh);
+    close($fh);
+    my $value = $head->get($header, 0);
+    return unless defined $value;
+    chomp $value;
+    # Extract a bare address out of "Display Name <addr>" if present.
+    if ($value =~ /<([^<>\s]+)>/) {
+        return $1;
+    }
+    $value =~ s/^\s+|\s+$//g;
+    return $value;
+}
+
+# Derive real relay/HELO/sender/hostname info out of a message's own
+# headers.
+sub derive_envelope_from_eml {
+    my ($file) = @_;
+    open(my $fh, '<', $file) or die "Cannot open $file: $!\n";
+    my $head = MIME::Head->new;
+    $head->read($fh);
+    close($fh);
+
+    my ($helo, $reladdr, $sender, $hostname);
+
+    my $rec = $head->get('Received', 0);
+    if (defined $rec and $rec =~ /helo=(.*)\)/) {
+        $helo = $1;
+    }
+
+    $reladdr = $head->get('X-Relay-Addr', 0);
+    chomp($reladdr) if defined $reladdr;
+
+    my $authres = $head->get('Authentication-Results', 0);
+    if (defined $authres and $authres =~
+        /^([a-z0-9\.\-_]+);.*designates? (.*) as.*smtp\.mailfrom=(.*);.*smtp\.helo=(.*);/ms) {
+        $hostname = $1;
+        $reladdr //= $2;
+        $sender  //= $3;
+        $helo    //= $4;
+    }
+
+    unless (defined $sender) {
+        $sender = $head->get('Sender', 0);
+    }
+    if (defined $sender and $sender =~ /<(.*)>/) {
+        $sender = $1;
+    }
+
+    chomp($hostname) if defined $hostname;
+    chomp($sender)   if defined $sender;
+    chomp($helo)     if defined $helo;
+
+    return { reladdr => $reladdr, helo => $helo, sender => $sender, hostname => $hostname };
+}
+
+=head1 NAME
+
+mimedefang-test-mail -- run mimedefang-filter against a single .eml file
+
+=head1 SYNOPSIS
+
+    mimedefang-test-mail [options] message.eml
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-f>, B<--filter> FILE
+
+Path to the mimedefang-filter file to load (default: /etc/mail/mimedefang-filter).
+
+=item B<--from> ADDR
+
+Envelope sender address. Defaults to the address derived from the message's
+own C<Authentication-Results>/C<Sender> headers if present, else the address
+parsed out of the message's C<From:> header.
+
+=item B<--to> ADDR
+
+Envelope recipient address. May be repeated for multiple recipients.
+Defaults to the address parsed out of the message's C<To:> header.
+
+=item B<--relay-ip> IP
+
+Simulated connecting relay IP address. Defaults to the address derived from
+the message's own C<X-Relay-Addr>/C<Authentication-Results> headers if
+present, else 127.0.0.1.
+
+=item B<--relay-host> NAME
+
+Simulated connecting relay hostname. Defaults to the hostname derived from
+the message's own C<Authentication-Results> header if present, else
+localhost.
+
+=item B<--helo> NAME
+
+Simulated SMTP HELO/EHLO argument. Defaults to the HELO derived from the
+message's own C<Received:>/C<Authentication-Results> headers if present,
+else the same as --relay-host.
+
+=item B<--macro> NAME=VALUE
+
+Simulate a Sendmail/Postfix milter macro, e.g. C<--macro auth_authen=someuser>
+or C<--macro tls_version=TLSv1.3>. May be repeated for multiple macros.
+Populates C<%Mail::MIMEDefang::SendmailMacros> for all filter phases.
+
+=item B<--keep-workdir>
+
+Do not delete the temporary work directory afterwards; print its path so
+C<Work/>, C<COMMANDS> and C<RESULTS> can be inspected.
+
+=item B<-o>, B<--output> FILE
+
+Write the resulting message -- the original message with any header and
+body changes made by the filter applied -- to FILE.
+
+=back
+
+=head1 DESCRIPTION
+
+This tool drives the real mimedefang-filter callbacks (C<filter_relay>,
+C<filter_helo>, C<filter_sender>, C<filter_recipient>, C<filter_begin>,
+C<filter>, C<filter_end>) in-process against a single C<.eml> file, the
+same way C<mimedefang.pl> itself does in its one-shot mode -- without
+needing a running MTA, milter socket, or multiplexor.
+
+It never relays or delivers mail: any sender/administrator notifications
+the filter would have sent are printed to stderr instead of being handed
+to a real C<sendmail> binary.
+
+=cut

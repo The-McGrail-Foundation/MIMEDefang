@@ -28,6 +28,7 @@ redhat/mimedefang-sysconfig
 redhat/mimedefang.spec
 script/mimedefang-util
 script/mimedefang-util.1
+script/mimedefang-test-mail.1
 watch-mimedefang
 xs_init.c
 autom4te.cache
