@@ -184,6 +184,9 @@ unless ($opt{filter} eq '/dev/null') {
 }
 main::filter_initialize() if defined(&main::filter_initialize);
 
+# Detect optional Perl modules
+main::detect_and_load_perl_modules();
+
 # Same defaults main() sets up after loading the filter (mimedefang.pl.in).
 $main::AdminName    = 'MIMEDefang Administrator' unless defined $main::AdminName;
 $main::AdminAddress = 'postmaster@localhost'     unless defined $main::AdminAddress;
