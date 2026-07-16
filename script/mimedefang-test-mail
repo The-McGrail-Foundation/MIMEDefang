@@ -25,6 +25,7 @@ use File::Copy qw( copy );
 use File::Spec;
 use Getopt::Long;
 use Pod::Usage;
+use MIME::Head;
 
 my %opt = (
     filter     => '/etc/mail/mimedefang-filter',
@@ -42,6 +43,7 @@ GetOptions(
     'relay-host=s' => \$opt{relay_host},
     'helo=s',
     'keep-workdir',
+    'output|o=s',
     'help|h',
 ) or pod2usage(2);
 
@@ -119,6 +121,22 @@ die "Could not determine envelope recipient; pass --to\n" unless @to;
 # Build the one-shot work directory: INPUTMSG + COMMANDS.
 # ------------------------------------------------------------------
 my $workdir = tempdir('mimedefang-test-eml-XXXXXX', TMPDIR => 1, CLEANUP => !$opt{'keep-workdir'});
+
+# ------------------------------------------------------------------
+# If -o/--output was given, snapshot the pristine header/body split of
+# $eml *before* it gets copied into the workdir, so later header edits
+# recorded in RESULTS can be replayed against the untouched original.
+# ------------------------------------------------------------------
+my ($orig_head, $orig_body);
+if (defined $opt{output}) {
+    open(my $efh, '<', $eml) or die "Cannot open $eml: $!\n";
+    $orig_head = MIME::Head->new($efh, Modify => 0);
+    local $/;
+    $orig_body = <$efh>;
+    $orig_body = '' unless defined $orig_body;
+    close($efh);
+}
+
 copy($eml, "$workdir/INPUTMSG") or die "Cannot copy $eml to $workdir/INPUTMSG: $!\n";
 
 open(my $cmdfh, '>', "$workdir/COMMANDS") or die "Cannot write $workdir/COMMANDS: $!\n";
@@ -230,6 +248,29 @@ if (-r "$workdir/RESULTS") {
     close($fh);
 }
 
+if (defined $opt{output}) {
+    apply_results_to_head($orig_head, "$workdir/RESULTS") if -r "$workdir/RESULTS";
+
+    my $body;
+    if ($main::Changed || $main::Rebuild) {
+        open(my $bfh, '<', "$workdir/NEWBODY") or die "Cannot open $workdir/NEWBODY: $!\n";
+        local $/;
+        $body = <$bfh>;
+        close($bfh);
+    } else {
+        $body = $orig_body;
+    }
+    $body = '' unless defined $body;
+
+    open(my $ofh, '>', $opt{output}) or die "Cannot write $opt{output}: $!\n";
+    print $ofh $orig_head->as_string;
+    print $ofh "\n";
+    print $ofh $body;
+    close($ofh);
+
+    print "\nWrote resulting message to $opt{output}\n";
+}
+
 if ($opt{'keep-workdir'} || $worst) {
     print "\nWork directory: $workdir\n";
 }
@@ -252,6 +293,46 @@ sub run_phase {
     } elsif ($ok ne 'CONTINUE' && $ok ne 'ACCEPT_AND_NO_MORE_FILTERING' && $ok ne '1') {
         $worst = 1 if $worst < 1;
     }
+}
+
+sub apply_results_to_head {
+    my ($head, $results_file) = @_;
+    open(my $fh, '<', $results_file) or return;
+    while (my $line = <$fh>) {
+        chomp $line;
+        next unless length $line;
+        my $cmd = substr($line, 0, 1, '');
+        my @f = map { main::percent_decode($_) } split(/ /, $line, -1);
+
+        if ($cmd eq 'H') {
+            next unless @f == 2;
+            my ($hdr, $val) = @f;
+            $head->add($hdr, $val);
+        } elsif ($cmd eq 'N') {
+            next unless @f == 3;
+            my ($hdr, $pos, $val) = @f;
+            $pos = 0 unless $pos =~ /^\d+$/;
+            $head->add($hdr, $val, $pos);
+        } elsif ($cmd eq 'I') {
+            next unless @f == 3;
+            my ($hdr, $idx, $val) = @f;
+            $idx = 1 unless $idx =~ /^\d+$/ && $idx >= 1;
+            $head->replace($hdr, $val, $idx - 1);
+        } elsif ($cmd eq 'J') {
+            next unless @f == 2;
+            my ($hdr, $idx) = @f;
+            $idx = 1 unless $idx =~ /^\d+$/ && $idx >= 1;
+            $head->delete($hdr, $idx - 1);
+        } elsif ($cmd eq 'M') {
+            next unless @f == 1;
+            my ($ct) = @f;
+            if (length $ct) {
+                $head->replace('Content-Type', $ct, 0);
+            }
+            $head->add('Mime-Version', '1.0') unless $head->count('Mime-Version');
+        }
+    }
+    close($fh);
 }
 
 sub header_from_eml {
@@ -324,6 +405,11 @@ Simulated SMTP HELO/EHLO argument (default: same as --relay-host).
 
 Do not delete the temporary work directory afterwards; print its path so
 C<Work/>, C<COMMANDS> and C<RESULTS> can be inspected.
+
+=item B<-o>, B<--output> FILE
+
+Write the resulting message -- the original message with any header and
+body changes made by the filter applied -- to FILE.
 
 =back
 
