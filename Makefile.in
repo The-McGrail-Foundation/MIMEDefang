@@ -122,7 +122,7 @@ gen_id.o: gen_id.c mimedefang.h
 clean:: FORCE
 	rm -f *~ *.o mimedefang mimedefang-multiplexor md-mx-ctrl xs_init.c INPUTMSG
 
-pod2man:: script/mimedefang-util.1 lib/manpages
+pod2man:: script/mimedefang-util.1 script/mimedefang-test-mail.1 lib/manpages
 
 
 script/mimedefang-util.1: script/mimedefang-util
@@ -130,6 +130,12 @@ script/mimedefang-util.1: script/mimedefang-util
 		--center="MIMEDefang Documentation" \
 		--release=$(VERSION) \
 		script/mimedefang-util script/mimedefang-util.1
+
+script/mimedefang-test-mail.1: script/mimedefang-test-mail
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=1 --perm_rw=644 \
+		--center="MIMEDefang Documentation" \
+		--release=$(VERSION) \
+		script/mimedefang-test-mail script/mimedefang-test-mail.1
 
 lib/manpages:
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=8 --perm_rw=644 \
@@ -242,7 +248,7 @@ distclean:: clean
 	mimedefang-notify.7 \
 	mimedefang.8 mimedefang.pl.8 mimedefang-release.8 md-mx-ctrl.8 watch-mimedefang \
 	redhat/mimedefang-init redhat/mimedefang.spec redhat/mimedefang-sysconfig \
-	script/mimedefang-util.1 modules/man/*.3
+	script/mimedefang-util.1 script/mimedefang-test-mail.1 modules/man/*.3
 	rm -rf autom4te.cache
 	rm -f Mail-MIMEDefang-*.tar.gz Mail-MIMEDefang-*.tar.gz.sig
 
@@ -333,6 +339,8 @@ install: all
 	$(INSTALL) -m 755 mimedefang-release.pl            $(DESTDIR)$(prefix)/bin/mimedefang-release
 	$(INSTALL) -m 755 script/mimedefang-util   $(DESTDIR)$(prefix)/bin/mimedefang-util
 	$(INSTALL) -m 644 script/mimedefang-util.1 $(DESTDIR)$(MANDIR)/man1/mimedefang-util.1
+	$(INSTALL) -m 755 script/mimedefang-test-mail   $(DESTDIR)$(prefix)/bin/mimedefang-test-mail
+	$(INSTALL) -m 644 script/mimedefang-test-mail.1 $(DESTDIR)$(MANDIR)/man1/mimedefang-test-mail.1
 	$(INSTALL) -m 644 modules/man/Mail::MIMEDefang*.3 $(DESTDIR)$(MANDIR)/man3/
 	$(INSTALL) -m 644 mimedefang.8             $(DESTDIR)$(MANDIR)/man8/mimedefang.8
 	$(INSTALL) -m 644 mimedefang-release.8     $(DESTDIR)$(MANDIR)/man8/mimedefang-release.8

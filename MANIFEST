@@ -109,6 +109,7 @@ redhat/mimedefang-init.in
 redhat/mimedefang-sysconfig.in
 redhat/mimedefang-spec.in
 rm_r.c
+script/mimedefang-test-mail
 script/mimedefang-util.in
 SpamAssassin/spamassassin.cf
 syslog-fac.c
