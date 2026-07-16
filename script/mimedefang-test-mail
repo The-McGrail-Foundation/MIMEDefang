@@ -33,6 +33,7 @@ my %opt = (
     relay_ip   => '127.0.0.1',
     relay_host => 'localhost',
     to         => [],
+    macro      => [],
 );
 
 GetOptions(
@@ -43,6 +44,7 @@ GetOptions(
     'relay-ip=s'   => \$opt{relay_ip},
     'relay-host=s' => \$opt{relay_host},
     'helo=s',
+    'macro=s@',
     'keep-workdir',
     'output|o=s',
     'help|h',
@@ -56,6 +58,13 @@ $eml = File::Spec->rel2abs($eml);
 $opt{filter} = File::Spec->rel2abs($opt{filter}) unless $opt{filter} eq '/dev/null';
 
 $opt{helo} = $opt{relay_host} unless defined $opt{helo};
+
+my %macros;
+for my $kv (@{ $opt{macro} }) {
+    my ($name, $value) = split(/=/, $kv, 2);
+    pod2usage("Invalid --macro '$kv', expected NAME=VALUE") unless defined $value;
+    $macros{$name} = $value;
+}
 
 # ------------------------------------------------------------------
 # Locate a *built* mimedefang.pl (template placeholders like @SPOOLDIR@
@@ -148,6 +157,9 @@ print $cmdfh 'S' . main::percent_encode($from) . "\n";
 for my $recip (@to) {
     print $cmdfh 'R' . main::percent_encode($recip) . " ? ? ?\n";
 }
+for my $name (keys %macros) {
+    print $cmdfh '=' . main::percent_encode($name) . ' ' . main::percent_encode($macros{$name}) . "\n";
+}
 print $cmdfh "F\n";
 close($cmdfh);
 
@@ -188,6 +200,8 @@ chdir($workdir) or die "Cannot chdir($workdir): $!\n";
 $main::CWD = $workdir;
 
 my $worst = 0; # 0 = ok, 1 = reject/bounce/discard, 2 = tempfail
+
+%main::SendmailMacros = %macros;
 
 print "== Envelope phases ==\n";
 
@@ -390,6 +404,12 @@ Simulated connecting relay hostname (default: localhost).
 =item B<--helo> NAME
 
 Simulated SMTP HELO/EHLO argument (default: same as --relay-host).
+
+=item B<--macro> NAME=VALUE
+
+Simulate a Sendmail/Postfix milter macro, e.g. C<--macro auth_authen=someuser>
+or C<--macro tls_version=TLSv1.3>. May be repeated for multiple macros.
+Populates C<%Mail::MIMEDefang::SendmailMacros> for all filter phases.
 
 =item B<--keep-workdir>
 
