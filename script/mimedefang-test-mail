@@ -30,8 +30,6 @@ use MIME::Head;
 
 my %opt = (
     filter     => '/etc/mail/mimedefang-filter',
-    relay_ip   => '127.0.0.1',
-    relay_host => 'localhost',
     to         => [],
     macro      => [],
 );
@@ -56,8 +54,6 @@ my $eml = shift @ARGV or pod2usage("Missing .eml file argument");
 pod2usage("No such file: $eml") unless -r $eml;
 $eml = File::Spec->rel2abs($eml);
 $opt{filter} = File::Spec->rel2abs($opt{filter}) unless $opt{filter} eq '/dev/null';
-
-$opt{helo} = $opt{relay_host} unless defined $opt{helo};
 
 my %macros;
 for my $kv (@{ $opt{macro} }) {
@@ -118,9 +114,20 @@ unless (-r $mimedefang_pl) {
 }
 
 # ------------------------------------------------------------------
-# Figure out envelope sender/recipients if not given explicitly.
+# Figure out envelope sender/recipients/relay/HELO if not given explicitly.
+# Real values are derived from the message's own Received:, X-Relay-Addr,
+# Authentication-Results and Sender: headers so the Received: header
+# synthesized for SpamAssassin (see synthesize_received_header() in
+# Mail::MIMEDefang::Utils) reflects the message's real sending
+# infrastructure instead of placeholder values.
 # ------------------------------------------------------------------
-my $from = $opt{from} // header_from_eml($eml, 'From');
+my $derived = derive_envelope_from_eml($eml);
+
+$opt{relay_ip}   //= $derived->{reladdr}  // '127.0.0.1';
+$opt{relay_host} //= $derived->{hostname} // 'localhost';
+$opt{helo}       //= $derived->{helo}     // $opt{relay_host};
+
+my $from = $opt{from} // $derived->{sender} // header_from_eml($eml, 'From');
 my @to   = @{ $opt{to} };
 @to = (header_from_eml($eml, 'To')) unless @to;
 
@@ -182,7 +189,6 @@ $main::AdminName    = 'MIMEDefang Administrator' unless defined $main::AdminName
 $main::AdminAddress = 'postmaster@localhost'     unless defined $main::AdminAddress;
 $main::DaemonName   = 'MIMEDefang'               unless defined $main::DaemonName;
 $main::DaemonAddress = 'mailer-daemon@localhost' unless defined $main::DaemonAddress;
-$main::SALocalTestsOnly = 1 unless defined $main::SALocalTestsOnly;
 $main::NotifySenderSubject = 'MIMEDefang Notification' unless defined $main::NotifySenderSubject;
 $main::NotifyAdministratorSubject = 'MIMEDefang Notification' unless defined $main::NotifyAdministratorSubject;
 $main::QuarantineSubject = 'MIMEDefang Quarantine Report' unless defined $main::QuarantineSubject;
@@ -202,6 +208,7 @@ $main::CWD = $workdir;
 my $worst = 0; # 0 = ok, 1 = reject/bounce/discard, 2 = tempfail
 
 %main::SendmailMacros = %macros;
+$main::SendmailMacros{if_name} = $opt{helo} unless defined $main::SendmailMacros{if_name};
 
 print "== Envelope phases ==\n";
 
@@ -367,6 +374,48 @@ sub header_from_eml {
     return $value;
 }
 
+# Derive real relay/HELO/sender/hostname info out of a message's own
+# headers.
+sub derive_envelope_from_eml {
+    my ($file) = @_;
+    open(my $fh, '<', $file) or die "Cannot open $file: $!\n";
+    my $head = MIME::Head->new;
+    $head->read($fh);
+    close($fh);
+
+    my ($helo, $reladdr, $sender, $hostname);
+
+    my $rec = $head->get('Received', 0);
+    if (defined $rec and $rec =~ /helo=(.*)\)/) {
+        $helo = $1;
+    }
+
+    $reladdr = $head->get('X-Relay-Addr', 0);
+    chomp($reladdr) if defined $reladdr;
+
+    my $authres = $head->get('Authentication-Results', 0);
+    if (defined $authres and $authres =~
+        /^([a-z0-9\.\-_]+);.*designates? (.*) as.*smtp\.mailfrom=(.*);.*smtp\.helo=(.*);/ms) {
+        $hostname = $1;
+        $reladdr //= $2;
+        $sender  //= $3;
+        $helo    //= $4;
+    }
+
+    unless (defined $sender) {
+        $sender = $head->get('Sender', 0);
+    }
+    if (defined $sender and $sender =~ /<(.*)>/) {
+        $sender = $1;
+    }
+
+    chomp($hostname) if defined $hostname;
+    chomp($sender)   if defined $sender;
+    chomp($helo)     if defined $helo;
+
+    return { reladdr => $reladdr, helo => $helo, sender => $sender, hostname => $hostname };
+}
+
 =head1 NAME
 
 mimedefang-test-eml -- run mimedefang-filter against a single .eml file
@@ -385,8 +434,9 @@ Path to the mimedefang-filter file to load (default: /etc/mail/mimedefang-filter
 
 =item B<--from> ADDR
 
-Envelope sender address. Defaults to the address parsed out of the
-message's C<From:> header.
+Envelope sender address. Defaults to the address derived from the message's
+own C<Authentication-Results>/C<Sender> headers if present, else the address
+parsed out of the message's C<From:> header.
 
 =item B<--to> ADDR
 
@@ -395,15 +445,21 @@ Defaults to the address parsed out of the message's C<To:> header.
 
 =item B<--relay-ip> IP
 
-Simulated connecting relay IP address (default: 127.0.0.1).
+Simulated connecting relay IP address. Defaults to the address derived from
+the message's own C<X-Relay-Addr>/C<Authentication-Results> headers if
+present, else 127.0.0.1.
 
 =item B<--relay-host> NAME
 
-Simulated connecting relay hostname (default: localhost).
+Simulated connecting relay hostname. Defaults to the hostname derived from
+the message's own C<Authentication-Results> header if present, else
+localhost.
 
 =item B<--helo> NAME
 
-Simulated SMTP HELO/EHLO argument (default: same as --relay-host).
+Simulated SMTP HELO/EHLO argument. Defaults to the HELO derived from the
+message's own C<Received:>/C<Authentication-Results> headers if present,
+else the same as --relay-host.
 
 =item B<--macro> NAME=VALUE
 
