@@ -122,7 +122,9 @@ unless ($mimedefang_pl) {
 # Authentication-Results and Sender: headers so the Received: header
 # synthesized for SpamAssassin (see synthesize_received_header() in
 # Mail::MIMEDefang::Utils) reflects the message's real sending
-# infrastructure instead of placeholder values.
+# infrastructure instead of placeholder values. The same derivation also
+# recovers the auth_authen/tls_version/cipher/cipher_bits Sendmail macros
+# that synthesize_received_header() consults directly.
 # ------------------------------------------------------------------
 my $derived = derive_envelope_from_eml($eml);
 
@@ -215,6 +217,10 @@ my $worst = 0; # 0 = ok, 1 = reject/bounce/discard, 2 = tempfail
 
 %main::SendmailMacros = %macros;
 $main::SendmailMacros{if_name} = $opt{helo} unless defined $main::SendmailMacros{if_name};
+for my $key (qw(auth_authen tls_version cipher cipher_bits)) {
+    $main::SendmailMacros{$key} = $derived->{$key}
+        if defined $derived->{$key} && !defined $main::SendmailMacros{$key};
+}
 
 print "== Envelope phases ==\n";
 
@@ -380,7 +386,8 @@ sub header_from_eml {
     return $value;
 }
 
-# Derive real relay/HELO/sender/hostname info out of a message's own
+# Derive real relay/HELO/sender/hostname info, plus the auth_authen/
+# tls_version/cipher/cipher_bits Sendmail macros, out of a message's own
 # headers.
 sub derive_envelope_from_eml {
     my ($file) = @_;
@@ -390,10 +397,19 @@ sub derive_envelope_from_eml {
     close($fh);
 
     my ($helo, $reladdr, $sender, $hostname);
+    my ($auth_authen, $tls_version, $cipher, $cipher_bits);
 
     my $rec = $head->get('Received', 0);
     if (defined $rec and $rec =~ /helo=(.*)\)/) {
         $helo = $1;
+    }
+    if (defined $rec and $rec =~ /\(Authenticated sender:\s*([^\)]+)\)/) {
+        $auth_authen = $1;
+    }
+    if (defined $rec and $rec =~ /version=(\S+)\s+cipher=(\S+)(?:\s+bits=(\d+))?/) {
+        ($tls_version, $cipher, $cipher_bits) = ($1, $2, $3);
+    } elsif (defined $rec and $rec =~ /using (\S+) with cipher (\S+)(?:\s*\((\d+)\/\d+ bits\))?/) {
+        ($tls_version, $cipher, $cipher_bits) = ($1, $2, $3);
     }
 
     $reladdr = $head->get('X-Relay-Addr', 0);
@@ -407,6 +423,9 @@ sub derive_envelope_from_eml {
         $sender  //= $3;
         $helo    //= $4;
     }
+    if (defined $authres and $authres =~ /smtp\.auth=(\S+)/) {
+        $auth_authen //= $1;
+    }
 
     unless (defined $sender) {
         $sender = $head->get('Sender', 0);
@@ -418,8 +437,20 @@ sub derive_envelope_from_eml {
     chomp($hostname) if defined $hostname;
     chomp($sender)   if defined $sender;
     chomp($helo)     if defined $helo;
+    chomp($auth_authen) if defined $auth_authen;
+    chomp($tls_version) if defined $tls_version;
+    chomp($cipher)       if defined $cipher;
 
-    return { reladdr => $reladdr, helo => $helo, sender => $sender, hostname => $hostname };
+    return {
+        reladdr     => $reladdr,
+        helo        => $helo,
+        sender      => $sender,
+        hostname    => $hostname,
+        auth_authen => $auth_authen,
+        tls_version => $tls_version,
+        cipher      => $cipher,
+        cipher_bits => $cipher_bits,
+    };
 }
 
 =head1 NAME
@@ -472,6 +503,11 @@ else the same as --relay-host.
 Simulate a Sendmail/Postfix milter macro, e.g. C<--macro auth_authen=someuser>
 or C<--macro tls_version=TLSv1.3>. May be repeated for multiple macros.
 Populates C<%Mail::MIMEDefang::SendmailMacros> for all filter phases.
+
+C<auth_authen>, C<tls_version>, C<cipher> and C<cipher_bits> are
+auto-derived from the message's own top C<Received:> (and
+C<Authentication-Results>) header when not passed explicitly via
+C<--macro>.
 
 =item B<--keep-workdir>
 
