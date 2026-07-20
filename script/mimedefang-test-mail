@@ -221,6 +221,12 @@ for my $key (qw(auth_authen tls_version cipher cipher_bits)) {
     $main::SendmailMacros{$key} = $derived->{$key}
         if defined $derived->{$key} && !defined $main::SendmailMacros{$key};
 }
+unless (defined $main::SendmailMacros{'_'}) {
+    my $ptr = Mail::MIMEDefang::Net::get_ptr_record($opt{relay_ip});
+    $main::SendmailMacros{'_'} = defined $ptr
+        ? "$ptr [$opt{relay_ip}]"
+        : "[$opt{relay_ip}]";
+}
 
 print "== Envelope phases ==\n";
 
@@ -520,7 +526,9 @@ Populates C<%Mail::MIMEDefang::SendmailMacros> for all filter phases.
 C<auth_authen>, C<tls_version>, C<cipher> and C<cipher_bits> are
 auto-derived from the message's own top C<Received:> (and
 C<Authentication-Results>) header when not passed explicitly via
-C<--macro>.
+C<--macro>. C<_> is likewise auto-derived from the reverse PTR record of
+C<--relay-ip> (falling back to C<[IP]> when there's no PTR) unless
+overridden.
 
 =item B<--keep-workdir>
 
