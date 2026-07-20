@@ -415,13 +415,26 @@ sub derive_envelope_from_eml {
     $reladdr = $head->get('X-Relay-Addr', 0);
     chomp($reladdr) if defined $reladdr;
 
+    $hostname = $head->get('X-Relay-Host', 0);
+    chomp($hostname) if defined $hostname;
+
+    # Authentication-Results fields are parsed independently rather than as
+    # one big all-or-nothing regex, since real-world SPF/DKIM result
+    # phrasing varies too much (e.g. "spf=none (domain of X doesn't specify
+    # ...)" has neither "designates ... as" nor "smtp.mailfrom=") to reliably
+    # match every field on one line.
     my $authres = $head->get('Authentication-Results', 0);
-    if (defined $authres and $authres =~
-        /^([a-z0-9\.\-_]+);.*designates? (.*) as.*smtp\.mailfrom=(.*);.*smtp\.helo=(.*);/ms) {
-        $hostname = $1;
-        $reladdr //= $2;
-        $sender  //= $3;
-        $helo    //= $4;
+    if (defined $authres and $authres =~ /^([a-z0-9\.\-_]+);/) {
+        $hostname //= $1;
+    }
+    if (defined $authres and $authres =~ /designates? (\S+) as/) {
+        $reladdr //= $1;
+    }
+    if (defined $authres and $authres =~ /smtp\.mailfrom=(\S+?);/) {
+        $sender //= $1;
+    }
+    if (defined $authres and $authres =~ /smtp\.helo=(\S+?);/) {
+        $helo //= $1;
     }
     if (defined $authres and $authres =~ /smtp\.auth=(\S+)/) {
         $auth_authen //= $1;
