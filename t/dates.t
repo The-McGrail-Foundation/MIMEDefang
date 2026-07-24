@@ -29,7 +29,11 @@ sub rfc2822_date_works : Test(1)
 	no warnings 'once';
 	local *time = sub { return $now; };
 
+	my $old_locale = setlocale(LC_TIME);
+	setlocale(LC_TIME, 'C');
 	my $want = strftime('%a, %d %b %Y %H:%M:%S %z', localtime($now));
+	setlocale(LC_TIME, $old_locale);
+
 	is(::main::rfc2822_date(), $want, 'Got correct RFC 2822 date');
 }
 
