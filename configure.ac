@@ -11,8 +11,7 @@ dnl the default to other than ${prefix}/etc
 echo $* | fgrep -e '--sysconfdir' > /dev/null 2>&1 || sysconfdir='/etc'
 
 AC_PROG_CC
-# Enforce C89 standard
-CFLAGS="$CFLAGS -std=c89 -D_BSD_SOURCE -D_DEFAULT_SOURCE"
+AC_USE_SYSTEM_EXTENSIONS
 
 AC_CHECK_PROGS(AR, ar, no)
 AC_CONFIG_HEADERS([config.h])

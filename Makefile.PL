@@ -395,7 +395,7 @@ if ($ENABLE_EMBEDDED_PERL) {
 my $CFLAGS = join(' ',
     '-I.',
     "-I$MILTERINC",
-    "-std=c89 -D_BSD_SOURCE -D_DEFAULT_SOURCE",
+    '-D_DEFAULT_SOURCE',
     ($ENABLE_DEBUGGING         ? '-DENABLE_DEBUGGING'    : ()),
     ($ENABLE_POLL              ? '-DUSE_POLL'             : ()),
     ($ENABLE_PTHREAD_FLAG      ? '-pthread'               : ()),
