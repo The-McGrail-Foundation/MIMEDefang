@@ -13,6 +13,10 @@ echo $* | fgrep -e '--sysconfdir' > /dev/null 2>&1 || sysconfdir='/etc'
 AC_PROG_CC
 AC_USE_SYSTEM_EXTENSIONS
 
+dnl Pin the C standard: must predate C23 (where 'bool' becomes a keyword
+dnl and breaks libmilter's mfapi.h "typedef int bool;").
+CFLAGS="$CFLAGS -std=c17"
+
 AC_CHECK_PROGS(AR, ar, no)
 AC_CONFIG_HEADERS([config.h])
 
