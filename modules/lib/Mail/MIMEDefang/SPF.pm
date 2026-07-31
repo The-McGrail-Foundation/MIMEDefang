@@ -38,7 +38,7 @@ our @EXPORT_OK;
 
 =item md_spf_verify
 
-Returns code and explanation of Sender Policy Framework
+In list context, returns code and explanation of Sender Policy Framework
 check.
 Additional optional return values are code and explanation
 of helo SPF query, 5th and 6th return values are the SPF dns
@@ -46,6 +46,14 @@ records if they are available;
 
 Possible return code values are:
 "pass", "fail", "softfail", "neutral", "none", "error", "permerror", "temperror", "invalid"
+
+In scalar context, returns a hashref instead, with the following keys:
+C<code>, C<local_explanation>, C<helo_code>, C<helo_local_explanation>,
+C<record>, C<helo_record> (same information as the list-context return
+values above), plus C<dns_lookups> and C<helo_dns_lookups>, the number of
+DNS-interactive SPF terms (mechanisms/modifiers) evaluated while resolving
+the mfrom and helo checks respectively (RFC 7208 section 4.6.4 imposes a
+default limit of 10 on this count; this module raises the limit to 20).
 
 The method accepts the following parameters:
 
@@ -81,13 +89,13 @@ sub md_spf_verify {
   # In practice 10 lookups are not enough for some domains.
   my $spf_server  = Mail::SPF::Server->new(max_dns_interactive_terms => 20);
   my ($spfres, $helo_spfres);
+  my ($request, $helo_request);
   $spfmail =~ s/^<//;
   $spfmail =~ s/>$//;
   if(defined $spfmail and $spfmail ne '') {
     if($spfmail =~ /(.*)\+(?:.*)\@(.*)/) {
       $spfmail = $1 . '@' . $2;
     }
-    my $request;
     eval {
       local $SIG{__WARN__} = sub {
         my $warn = $_[0];
@@ -106,7 +114,6 @@ sub md_spf_verify {
     return ('invalid', 'Invalid mail from parameter');
   }
   if(defined $helo) {
-    my $helo_request;
     eval {
       local $SIG{__WARN__} = sub {
         my $warn = $_[0];
@@ -141,6 +148,21 @@ sub md_spf_verify {
     if(defined $helo and not defined $helospf_record) {
       $helospf_record = md_dns_txt($res, $helo, qr/^v=spf1\b/i);
     }
+  }
+  if(not wantarray) {
+    my $spf_dns_lookups = $request->state('dns_interactive_terms_count') // 0;
+    my $helo_dns_lookups;
+    $helo_dns_lookups = $helo_request->state('dns_interactive_terms_count') // 0 if defined $helo;
+    return {
+      code                  => $spfres->code,
+      local_explanation     => $spfres->local_explanation,
+      helo_code             => (defined $helo ? $helo_spfres->code : undef),
+      helo_local_explanation => (defined $helo ? $helo_spfres->local_explanation : undef),
+      record                => $spf_record,
+      helo_record           => $helospf_record,
+      dns_lookups           => $spf_dns_lookups,
+      helo_dns_lookups      => $helo_dns_lookups,
+    };
   }
   if(defined $helo) {
     return ($spfres->code, $spfres->local_explanation, $helo_spfres->code, $helo_spfres->local_explanation, $spf_record, $helospf_record);

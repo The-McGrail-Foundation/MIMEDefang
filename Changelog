@@ -2,6 +2,13 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2026-07-31 Giovanni Bechis <gbechis@pccc.com>
+
+        * md_spf_verify() called in scalar context now returns a hashref
+          with a `dns_lookups` (and `helo_dns_lookups`) field, exposing the
+          number of DNS-interactive SPF terms evaluated during the check.
+          List-context callers are unaffected.
+
 2026-07-16 Giovanni Bechis <g.bechis@snb.it>
 
         * add `action_insert_header_now` in order to add an header to the email
