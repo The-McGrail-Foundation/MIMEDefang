@@ -13,6 +13,7 @@
 
 #include <syslog.h>
 #include <string.h>
+#include <strings.h>
 
 /**********************************************************************
 * %FUNCTION: find_syslog_facility

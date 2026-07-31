@@ -391,10 +391,12 @@ if ($ENABLE_EMBEDDED_PERL) {
     print "Embedded Perl        : disabled\n";
 }
 
-# Base CFLAGS: use the compiler's defaults plus mandatory defines
+# Base CFLAGS: pin the C standard (must predate C23, where 'bool' becomes a
+# keyword and breaks libmilter's mfapi.h "typedef int bool;" plus mandatory defines
 my $CFLAGS = join(' ',
     '-I.',
     "-I$MILTERINC",
+    '-std=c17',
     '-D_DEFAULT_SOURCE',
     ($ENABLE_DEBUGGING         ? '-DENABLE_DEBUGGING'    : ()),
     ($ENABLE_POLL              ? '-DUSE_POLL'             : ()),
