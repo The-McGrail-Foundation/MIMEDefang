@@ -128,7 +128,7 @@ sub gen_msgid_header {
 	my ($ss, $mm, $hh, $mday, $mon, $year, $wday, $yday, $isdst) = localtime(time);
 
 	# Generate a "random" message ID that looks
-	# similiar to sendmail's for SpamAssassin comparing
+	# similar to sendmail's for SpamAssassin comparing
 	# Received / MessageID QueueID
 	return sprintf("Message-ID: <%04d%02d%02d%02d%02d.%s\@%s>\n",
 		$year + 1900,

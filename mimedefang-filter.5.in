@@ -589,7 +589,7 @@ The default value for $AddApparentlyToForSpamAssassin is 0.
 .TP
 .B $SyslogFacility
 This specifies the logging facility used by mimedefang.pl.  By default,
-it is set to "mail", but you can set it to other possibilites.  See the
+it is set to "mail", but you can set it to other possibilities.  See the
 openlog(3) man page for details.  You should name facilities as all-lowercase
 without the leading "LOG_".  That is, use "local3", not "LOG_LOCAL3".
 
@@ -1333,7 +1333,7 @@ Here is an example illustrating how to use the boilerplate functions:
 .B action_add_part($entity, $type, $encoding, $data, $fname, $disposition [, $offset])
 This action should \fIonly\fR be called from the \fBfilter_end\fR
 routine.  It adds a new part to the message, converting the original
-message to mutipart if necessary.  The function returns the part so
+message to multipart if necessary.  The function returns the part so
 that additional mime attributes may be set on it.  Here's an example:
 
 .nf

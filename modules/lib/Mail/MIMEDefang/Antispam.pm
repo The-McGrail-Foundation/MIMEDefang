@@ -10,7 +10,7 @@ Mail::MIMEDefang::Antispam - antispam related methods for email filters
 =head1 DESCRIPTION
 
 Mail::MIMEDefang::Antispam are a set of methods that can be called
-from F<mimedefang-filter> to check email messages with antispam softwares.
+from F<mimedefang-filter> to check email messages with antispam software.
 
 =head1 METHODS
 
@@ -307,7 +307,7 @@ sub md_spamc_init {
 
 =item md_spamc_check
 
-Method that scans the message using SpamAssassin Perl client and returns an array of four elemets:
+Method that scans the message using SpamAssassin Perl client and returns an array of four elements:
 
 =over 4
 
@@ -382,7 +382,7 @@ sub md_spamc_check {
 
 =item rspamd_check
 
-Method that scans the message using Rspamd and returns an array of six elemets:
+Method that scans the message using Rspamd and returns an array of six elements:
 
 =over 4
 

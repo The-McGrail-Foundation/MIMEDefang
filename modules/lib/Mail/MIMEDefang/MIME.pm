@@ -269,7 +269,7 @@ sub html_end {
 
 =item append_to_html_part
 
-Method that appends text to the spicified mime part, but does so by
+Method that appends text to the specified mime part, but does so by
 parsing HTML and adding the text before </body> or </html> tags.
 
 =cut

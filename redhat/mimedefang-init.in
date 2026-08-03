@@ -77,7 +77,7 @@ if [ -f /etc/sysconfig/$prog ] ; then
     . /etc/sysconfig/$prog
 fi
 
-# Make sure reqired vars are set
+# Make sure required vars are set
 SOCKET=${SOCKET:=@SPOOLDIR@/$prog.sock}
 MX_SOCKET=${MX_SOCKET:=@SPOOLDIR@/$prog-multiplexor.sock}
 

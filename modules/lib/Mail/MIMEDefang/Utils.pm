@@ -551,7 +551,7 @@ sub md_copy_orig_msg_to_work_dir_as_mbox_file {
 
 =item gen_mx_id
 
-Method that generates a random indentifier used by MIMEDefang
+Method that generates a random identifier used by MIMEDefang
 to create temporary files.
 
 =cut
@@ -561,7 +561,7 @@ to create temporary files.
 # %ARGUMENTS:
 #  None
 # %DESCRIPTION:
-#  Generates a random indentifier
+#  Generates a random identifier
 # %RETURNS:
 #  the random string.
 #***********************************************************************

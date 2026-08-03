@@ -115,7 +115,7 @@ $WarningLocation = 0;
 # No limit to complexity of MIME messages
 $MaxMIMEParts = -1;
 
-# Cache the timzone calculation
+# Cache the timezone calculation
 $CachedTimezone = "";
 
 # Syslog facility is "mail"
