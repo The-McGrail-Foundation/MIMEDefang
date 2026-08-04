@@ -505,7 +505,7 @@ affect your filter.
 
 	* Remove dead "connect_to_socket" routine in mimedefang.pl
 
-	* Do not invokve smfi_setsymlist unless "-y" option to
+	* Do not invoke smfi_setsymlist unless "-y" option to
 	mimedefang is given.  smfi_setsymlist leaks memory in versions
 	of Sendmail prior to 8.14.4.
 
@@ -1310,7 +1310,7 @@ affect your filter.
 
 	* Version 2.48 RELEASED
 
-	* Fix dumb bugs introducted in 2.46 and 2.47 related to
+	* Fix dumb bugs introduced in 2.46 and 2.47 related to
 	worker status reports.
 
 	* embperl.c: Detect if user opens file descriptors inside his/her
@@ -1652,7 +1652,7 @@ affect your filter.
 
 	* mimedefang-multiplexor.c (activateWorker): Call closelog() so
 	embedded Perl interpreter doesn't accidentally reuse syslog
-	file decriptor (Josh Kelley)
+	file descriptor (Josh Kelley)
 
 2004-03-16  Dianne Skoll  <dfs@roaringpenguin.com>
 
@@ -3069,7 +3069,7 @@ affect your filter.
 2002-05-15  Dianne Skoll  <dfs@roaringpenguin.com>
 
 	* Move default stats location to /var/log/mimedefang/stats to
-	more easily accomodate -U option.
+	more easily accommodate -U option.
 
 	* mimedefang.c: Added -U option to run as non-root user.
 
@@ -3323,7 +3323,7 @@ affect your filter.
 	filter_multipart to examine the headers of parts with
 	sub-parts.
 
-	(interpret_avp_code): Updated intepretation of AVP return
+	(interpret_avp_code): Updated interpretation of AVP return
 	codes.
 
 2002-04-26  Dianne Skoll  <dfs@roaringpenguin.com>
