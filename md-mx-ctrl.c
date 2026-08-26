@@ -613,6 +613,52 @@ doLoad(char const *rawcmd,
     return EXIT_SUCCESS;
 }
 
+static int
+doJsonLoad(char const *rawcmd,
+       char const *sock)
+{
+    char ans[4096];
+    int msgs_0, msgs_1, msgs_5, msgs_10;
+    double avg_0, avg_1, avg_5, avg_10;
+    double mps_0, mps_1, mps_5, mps_10;
+    double ams_0, ams_1, ams_5, ams_10;
+    time_t ltime;
+    struct tm result;
+    char stime[32];
+    char hostname[1024];
+
+    hostname[1023] = '\0';
+    gethostname(hostname, 1023);
+
+    if (MXCommand(sock, rawcmd, ans, sizeof(ans)) < 0) {
+	return EXIT_FAILURE;
+    }
+
+    sscanf(ans, "%d %d %d %d %lf %lf %lf %lf %lf %lf %lf %lf",
+	   &msgs_0, &msgs_1, &msgs_5, &msgs_10,
+	   &avg_0, &avg_1, &avg_5, &avg_10,
+	   &ams_0, &ams_1, &ams_5, &ams_10);
+
+    mps_0 = (double) msgs_0 / 10.0;
+    mps_1 = (double) msgs_1 / 60.0;
+    mps_5 = (double) msgs_5 / (5*60.0);
+    mps_10 = (double) msgs_10 / (10*60.0);
+
+    ltime = time(NULL);
+    localtime_r(&ltime, &result);
+    asctime_r(&result, stime);
+
+    printf("{");
+    printf("\"timestamp\": \"%.24s\",", stime);
+    printf("\"hostname\": \"%s\",", hostname);
+    printf("\"msgs_0\":%d, \"msgs_1\":%d, \"msgs_5\":%d, \"msgs_10\":%d,", msgs_0, msgs_1, msgs_5, msgs_10);
+    printf("\"mps_0\":%.2f, \"mps_1\":%.2f, \"mps_5\":%.2f, \"mps_10\":%.2f,", mps_0, mps_1, mps_5, mps_10);
+    printf("\"ams_0\":%.1f, \"ams_1\":%.1f, \"ams_5\":%.1f, \"ams_10\":%.1f,", ams_0, ams_1, ams_5, ams_10);
+    printf("\"avg_0\":%.2f, \"avg_1\":%.2f, \"avg_5\":%.2f, \"avg_10\":%.2f", avg_0, avg_1, avg_5, avg_10);
+    printf("}\n");
+    return EXIT_SUCCESS;
+}
+
 static void
 usage(char const *sock)
 {
@@ -726,6 +772,14 @@ process(char const *sock, char const *cmd) {
 	return doLoad(cmd, "MAIL", "MAIL", sock);
     } else if (!strcmp(cmd, "load-recipok\n")) {
 	return doLoad(cmd, "RCPT", "RCPT", sock);
+    } else if (!strcmp(cmd, "jsonload\n")) {
+	return doJsonLoad(cmd+4, sock);
+    } else if (!strcmp(cmd, "jsonload-relayok\n")) {
+	return doJsonLoad(cmd+4, sock);
+    } else if (!strcmp(cmd, "jsonload-senderok\n")) {
+	return doJsonLoad(cmd+4, sock);
+    } else if (!strcmp(cmd, "jsonload-recipok\n")) {
+	return doJsonLoad(cmd+4, sock);
     } else if (!strcmp(cmd, "hload\n")) {
 	return doHLoad(cmd, "Msgs", "Scan", sock);
     } else if (!strcmp(cmd, "hload-relayok\n")) {
