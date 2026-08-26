@@ -144,6 +144,10 @@ fancy equivalent:
 .fi
 
 .TP
+.B jsonload
+Returns the \fBload\fR data in JSON format.
+
+.TP
 .B rawload
 
 Prints the load averages in computer-readable format.  The format
@@ -185,6 +189,18 @@ Similar to \fBload\fR, but shows timings for \fBfilter_sender\fR calls.
 .TP
 .B load-recipok
 Similar to \fBload\fR, but shows timings for \fBfilter_recipient\fR calls.
+
+.TP
+.B jsonload-relayok
+Similar to \fBjsonload\fR, but shows timings for \fBfilter_relay\fR calls.
+
+.TP
+.B jsonload-senderok
+Similar to \fBjsonload\fR, but shows timings for \fBfilter_sender\fR calls.
+
+.TP
+.B jsonload-recipok
+Similar to \fBjsonload\fR, but shows timings for \fBfilter_recipient\fR calls.
 
 .TP
 .B rawload-relayok
