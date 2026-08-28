@@ -430,48 +430,57 @@ Returns the DMARC record of a domain.
 
 sub md_get_dmarc_record {
         my ($domain) = @_;
-        my $res;
 
         unless ($Features{"Net::DNS"}) {
                 md_syslog('err', "Attempted to call md_get_dmarc_record, but Perl module Net::DNS is not installed");
                 return;
         }
-        if (!defined($res)) {
-                $res = Net::DNS::Resolver->new;
-                $res->defnames(0);
-        }
-	      return if not defined $domain;
+        return if not defined $domain;
+
+        my @records = _md_get_dmarc_txt_records($domain);
+        return wantarray ? @records : $records[0];
+}
+
+sub _md_get_dmarc_txt_records {
+        my ($domain) = @_;
+
+        my $res = Net::DNS::Resolver->new;
+        $res->defnames(0);
 
         my $packet = $res->query('_dmarc.' . $domain, 'TXT');
         if (!defined($packet) ||
             $packet->header->rcode eq 'NXDOMAIN') {
 	          my @dots = $domain =~ /\./g;
-	          return if (scalar @dots eq 1);
+	          return () if (scalar @dots eq 1);
             $domain =~ s/(.*?)\.//;
-	          return md_get_dmarc_record($domain);
+	          return _md_get_dmarc_txt_records($domain);
         } elsif ($packet->header->rcode eq 'SERVFAIL' ||
             !defined($packet->answer)) {
-	          return;
+	          return ();
 	      }
-        my $answer = ($packet->answer)[0];
-        if (defined $answer && $answer->type eq 'CNAME') {
-                my $cname_target = $answer->cname;
+
+        my @answer = $packet->answer;
+        if (scalar(@answer) == 1 && $answer[0]->type eq 'CNAME') {
+                my $cname_target = $answer[0]->cname;
                 my $cname_packet = $res->query($cname_target, 'TXT');
                 if (!defined($cname_packet) ||
                     $cname_packet->header->rcode eq 'NXDOMAIN' ||
                     $cname_packet->header->rcode eq 'SERVFAIL' ||
                     !defined($cname_packet->answer)) {
-                        return;
+                        return ();
                 }
-                $answer = ($cname_packet->answer)[0];
+                @answer = $cname_packet->answer;
         }
-        if (defined $answer) {
-                my $res = $answer->rdstring;
-                chomp $res;
-                $res =~ s/^"|"$//g;
-                return $res;
+
+        my @records;
+        foreach my $ans (@answer) {
+                next unless $ans->type eq 'TXT';
+                my $txt = $ans->rdstring;
+                chomp $txt;
+                $txt =~ s/^"|"$//g;
+                push(@records, $txt);
         }
-        return;
+        return @records;
 }
 
 =item relay_is_blacklisted_multi
