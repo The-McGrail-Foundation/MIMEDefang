@@ -56,6 +56,14 @@ sub t_mimedefang_version : Test(1)
   like(md_version(), qr/[0-9]\.[0-9]{1,2}/);
 }
 
+sub t_md_get_processing_time : Test(2)
+{
+  init_globals();
+  cmp_ok(md_get_processing_time(), '<', 2, 'elapsed time is near 0 right after init_globals()');
+  sleep 1;
+  cmp_ok(md_get_processing_time(), '>=', 1, 'elapsed time reflects time passed since init_globals()');
+}
+
 sub t_read_commands_file : Test(5)
 {
   copy('t/data/COMMANDS', './COMMANDS');

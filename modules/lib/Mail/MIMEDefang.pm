@@ -47,6 +47,10 @@ use MIME::WordDecoder;
 use Socket;
 
 our @ISA = qw(Exporter);
+
+# Timestamp of when processing of the current message began; not exported,
+# only accessible via md_get_processing_time().
+my $MessageStartTime;
 our @EXPORT;
 our @EXPORT_OK;
 
@@ -91,7 +95,7 @@ our $VERSION = '3.7.1';
       write_result_line in_message_context in_filter_context in_filter_wrapup
       in_filter_end percent_decode percent_encode percent_encode_for_graphdefang
       send_mail send_multipart_mail send_quarantine_notifications signal_complete send_admin_mail
-      md_version set_status_tag read_commands_file
+      md_version set_status_tag read_commands_file md_get_processing_time
     };
 
 @EXPORT_OK = qw{
@@ -107,6 +111,17 @@ our $VERSION = '3.7.1';
 #***********************************************************************
 sub md_version {
     return $VERSION;
+}
+
+=item md_get_processing_time
+
+Returns the number of seconds elapsed since processing of the current
+message began (i.e. since the most recent call to init_globals()).
+
+=cut
+
+sub md_get_processing_time {
+    return time() - $MessageStartTime;
 }
 
 =item init_globals
@@ -134,6 +149,7 @@ sub init_globals {
     $MessageID = "NOQUEUE";
     $Helo = "";
     $QueueID = "NOQUEUE";
+    $MessageStartTime = time();
     $QuarantineCount = 0;
     $Rebuild = 0;
     $EntireMessageQuarantined = 0;
