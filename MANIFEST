@@ -159,7 +159,6 @@ t/dkim.t
 t/graphdefang.t
 t/headers.t
 t/helo.t
-t/Makefile
 t/mime.t
 t/net.t
 t/relay.t
