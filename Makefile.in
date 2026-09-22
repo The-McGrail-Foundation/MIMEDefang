@@ -339,6 +339,7 @@ install: all
 	$(INSTALL) -m 755 mimedefang-release.pl            $(DESTDIR)$(prefix)/bin/mimedefang-release
 	$(INSTALL) -m 755 script/mimedefang-util   $(DESTDIR)$(prefix)/bin/mimedefang-util
 	$(INSTALL) -m 644 script/mimedefang-util.1 $(DESTDIR)$(MANDIR)/man1/mimedefang-util.1
+	$(INSTALL) -m 755 script/mimedefang-laya-server $(DESTDIR)$(prefix)/bin/mimedefang-laya-server
 	$(INSTALL) -m 755 script/mimedefang-test-mail   $(DESTDIR)$(prefix)/bin/mimedefang-test-mail
 	$(INSTALL) -m 644 script/mimedefang-test-mail.1 $(DESTDIR)$(MANDIR)/man1/mimedefang-test-mail.1
 	$(INSTALL) -m 644 modules/man/Mail::MIMEDefang*.3 $(DESTDIR)$(MANDIR)/man3/

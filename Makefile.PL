@@ -897,6 +897,8 @@ install_scripts:
 \t    \$(MD_INSTALL_PROGRAM) script/mimedefang-util \$(DESTDIR)\$(BINDIR)/mimedefang-util || true
 \ttest -f script/mimedefang-test-mail && \\
 \t    \$(MD_INSTALL_PROGRAM) script/mimedefang-test-mail \$(DESTDIR)\$(BINDIR)/mimedefang-test-mail || true
+\ttest -f script/mimedefang-laya-server && \\
+\t    \$(MD_INSTALL_PROGRAM) script/mimedefang-laya-server \$(DESTDIR)\$(BINDIR)/mimedefang-laya-server || true
 
 install_man: pod2man
 \t\$(MKPATH) \$(DESTDIR)\$(INSTALLMAN1DIR) \$(DESTDIR)\$(INSTALLMAN3DIR) \\

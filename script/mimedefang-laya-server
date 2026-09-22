@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""
+laya_server.py -- resident Laya inference server for Mail::MIMEDefang::Laya.
+
+The Router auto-detects each message's script/language dispatches
+to whichever stock checkpoint fits best (English content
+goes to the English checkpoint, everything else goes to the 
+multilingual checkpoint).
+
+Endpoints:
+    POST /predict   {"state": {...}, "questions": {...}}  -> typed answers
+    GET  /health     -> 200 if the router is loaded and ready
+
+Run as a systemd service bound to 127.0.0.1 only, this is a trusted
+local-only endpoint with no auth, not meant to be exposed off-host. When
+not running under systemd (or another supervisor), pass --daemon to fork
+into the background; in that mode logging goes to syslog instead of
+stderr, since there's no terminal/journal capturing stderr any more.
+
+Concurrency: MIMEDefang's multiplexor can run many worker processes in
+parallel, each calling /predict synchronously for its own message, so
+this server needs real concurrency headroom rather than the waitress
+default of 4 threads. Size --threads to roughly the number of concurrent
+MIMEDefang workers expected to hit this server. Torch's CPU inference
+uses intra-op parallelism across all cores per forward pass by default;
+running many concurrent threads each spinning up full-core parallelism
+causes oversubscription/thrashing rather than scaling, so --torch-threads
+pins each forward pass to a small, fixed thread count instead.
+
+    pip install laya flask waitress
+    python3 laya_server.py --port 8687
+    python3 laya_server.py --preload english,multilingual --port 8687 \\
+        --threads 16 --torch-threads 2
+    python3 laya_server.py --checkpoint /path/to/custom/checkpoint \\
+        --attach-language english --port 8687
+    python3 laya_server.py --daemon --port 8687
+"""
+
+import argparse
+import logging
+import logging.handlers
+import os
+import sys
+import threading
+
+import torch
+
+from flask import Flask, jsonify, request
+
+import laya
+from laya import Router
+
+log = logging.getLogger("laya_server")
+
+app = Flask(__name__)
+
+# Default confidence gate for logging a decided verdict. Must be kept in
+# sync with $Mail::MIMEDefang::LLM::Laya::Config{min_confidence} in
+# modules/lib/Mail/MIMEDefang/LLM/Laya.pm, that's the value actually used
+# to decide whether MIMEDefang acts on a verdict, so this server's log
+# would otherwise claim "spam"/"phishing" for answers Laya.pm treats as no
+# opinion. Sites that override the Perl config should pass the same value
+# here via --min-confidence.
+DEFAULT_MIN_CONFIDENCE = 0.55
+MIN_CONFIDENCE = DEFAULT_MIN_CONFIDENCE
+
+_lock = threading.Lock()
+_router = None
+
+
+def setup_logging(daemon):
+    handler = logging.handlers.SysLogHandler(address="/dev/log") if daemon \
+        else logging.StreamHandler()
+    fmt = "mimedefang-laya-server[%(process)d]: %(levelname)s %(message)s" if daemon \
+        else "%(asctime)s %(levelname)s %(message)s"
+    handler.setFormatter(logging.Formatter(fmt))
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.addHandler(handler)
+
+
+def daemonize():
+    """Standard double-fork: detach from the controlling terminal and
+    session, so the process survives the shell that launched it exiting.
+    """
+    if os.fork() > 0:
+        os._exit(0)
+    os.setsid()
+    if os.fork() > 0:
+        os._exit(0)
+
+    os.chdir("/")
+    os.umask(0)
+
+    sys.stdout.flush()
+    sys.stderr.flush()
+    devnull_fd = os.open(os.devnull, os.O_RDWR)
+    os.dup2(devnull_fd, sys.stdin.fileno())
+    os.dup2(devnull_fd, sys.stdout.fileno())
+    os.dup2(devnull_fd, sys.stderr.fileno())
+    os.close(devnull_fd)
+
+
+def build_router(preload_languages, checkpoint_path, attach_language):
+    global _router
+    # preload=False here: we call .preload() ourselves below so a custom
+    # checkpoint can be attach()ed first when --checkpoint names the same
+    # key preload() would otherwise build a stock copy for.
+    router = Router(preload=False)
+
+    if checkpoint_path:
+        log.info("loading custom checkpoint: %s (attach as %r)",
+                  checkpoint_path, attach_language)
+        custom_agent = laya.load(checkpoint_path)
+        router.attach(attach_language, custom_agent)
+
+    log.info("preloading Laya Router checkpoints: %s", preload_languages or "all")
+    router.preload(preload_languages)  # None -> every stock checkpoint
+
+    with _lock:
+        _router = router
+    log.info("Laya Router ready, loaded=%s", router.loaded)
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    with _lock:
+        router = _router
+    ready = router is not None
+    loaded = router.loaded if ready else []
+    return jsonify({"ready": ready, "router": True, "loaded": loaded}), (200 if ready else 503)
+
+
+@app.route("/predict", methods=["POST"])
+def predict():
+    body = request.get_json(force=True, silent=True)
+    if not body or "state" not in body or "questions" not in body:
+        return jsonify({"error": "expected {state, questions}"}), 400
+
+    with _lock:
+        router = _router
+    if router is None:
+        return jsonify({"error": "router not loaded"}), 503
+
+    try:
+        result = router.predict(body["state"], body["questions"])
+    except Exception as exc:  # noqa: BLE001 -- report, don't crash the server
+        log.exception("predict failed")
+        return jsonify({"error": str(exc)}), 500
+
+    # laya's result already carries {"answers": {...}} per its own schema;
+    # pass it through as-is so the Perl side and this server stay in sync
+    # with whatever Laya's library version returns.
+    answers = result.get("answers", {}) or {}
+    spam = answers.get("is_spam") or {}
+    phish = answers.get("is_phishing") or {}
+    spam_p, spam_c = spam.get("noul"), spam.get("confidence")
+    phish_p, phish_c = phish.get("noul"), phish.get("confidence")
+    routing = result.get("routing")
+
+    # Mirrors Mail::MIMEDefang::LLM::Laya::laya_classify(): an answer only
+    # counts once its confidence clears the threshold; otherwise Laya.pm
+    # treats it as "no opinion" no matter how high the yes-probability is.
+    def decide(p, c):
+        if p is None or c is None:
+            return "unknown"
+        if c < MIN_CONFIDENCE:
+            return "undecided"
+        return "yes" if p >= 0.5 else "no"
+
+    spam_verdict = decide(spam_p, spam_c)
+    phish_verdict = decide(phish_p, phish_c)
+
+    log.info(
+        "Checked email result: spam=%s (p=%s c=%s) phishing=%s (p=%s c=%s) routing=%s",
+        spam_verdict, spam_p, spam_c, phish_verdict, phish_p, phish_c, routing,
+    )
+    return jsonify(result), 200
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--preload", default=None,
+                         help="Comma-separated checkpoint names to eagerly "
+                              "load (e.g. 'english,multilingual'). Default: "
+                              "preload everything the Router knows about.")
+    parser.add_argument("--checkpoint", default=None,
+                         help="Path/name of a custom (e.g. fine-tuned) "
+                              "checkpoint to attach to the Router in "
+                              "addition to its stock checkpoints.")
+    parser.add_argument("--attach-language", default="english",
+                         help="Router key to attach --checkpoint under "
+                              "(default: english).")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8687)
+    parser.add_argument("--threads", type=int, default=8,
+                         help="waitress worker threads, i.e. how many "
+                              "/predict requests this server handles at "
+                              "once. Size to roughly the number of "
+                              "concurrent MIMEDefang workers expected to "
+                              "call this server (default: 8).")
+    parser.add_argument("--torch-threads", type=int, default=2,
+                         help="Threads torch uses per forward pass. Torch "
+                              "defaults to using every CPU core per call; "
+                              "with --threads > 1 that oversubscribes the "
+                              "machine, so this pins each forward pass to "
+                              "a small fixed count instead (default: 2).")
+    parser.add_argument("--min-confidence", type=float,
+                         default=DEFAULT_MIN_CONFIDENCE,
+                         help="Confidence threshold below which an answer is "
+                              "logged as 'undecided' rather than a yes/no "
+                              "verdict. Must match "
+                              "$Mail::MIMEDefang::LLM::Laya::Config{min_confidence} "
+                              "(default: %(default)s) -- this only affects "
+                              "logging, not the JSON response returned to "
+                              "the Perl caller.")
+    parser.add_argument("--daemon", action="store_true",
+                         help="Fork into the background and detach from "
+                              "the controlling terminal, for running "
+                              "without systemd or another supervisor. "
+                              "Logs to syslog instead of stderr in this "
+                              "mode.")
+    args = parser.parse_args()
+
+    global MIN_CONFIDENCE
+    MIN_CONFIDENCE = args.min_confidence
+
+    if args.daemon:
+        daemonize()
+    setup_logging(args.daemon)
+
+    torch.set_num_threads(args.torch_threads)
+
+    preload_languages = args.preload.split(",") if args.preload else None
+    build_router(preload_languages, args.checkpoint, args.attach_language)
+
+    # waitress rather than Flask's dev server: this runs as a long-lived
+    # local service, not a public-facing app.
+    from waitress import serve
+    serve(app, host=args.host, port=args.port, threads=args.threads)
+
+
+if __name__ == "__main__":
+    main()

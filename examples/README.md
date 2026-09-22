@@ -26,6 +26,32 @@ Requires: `AnyEvent`, `AnyEvent::DNS`, `AnyEvent::Socket`, `AnyEvent::Handle`
 - `filter_end` - runs a non-blocking SpamAssassin (or optionally Rspamd)
   spam check.
 
+## `example-filter-with-laya-llm`
+
+An example filter using `Mail::MIMEDefang::LLM::Laya` to get ham/spam/phishing
+verdicts from a resident Laya decision model, in addition to the usual SPF,
+DKIM, DMARC, and SpamAssassin checks.
+
+Requires: `Mail::MIMEDefang::LLM::Laya`, and a running `laya_server.py`
+instance.
+
+- `filter_sender` - verifies SPF for the envelope sender.
+- `filter_begin` - runs DKIM verification and DMARC lookup, and publishes
+  an `Authentication-Results` header.
+- `filter_end` - runs SpamAssassin, then feeds its score/rules together
+  with the SPF/DKIM/DMARC results to Laya for a second opinion. Laya only
+  acts (subject tagging, quarantine) on confident verdicts; any failure to
+  reach the Laya server, or a low-confidence verdict, falls back to
+  SpamAssassin's own scoring.
+
+`mimedefang-laya-server` is called synchronously, once per message, by
+every MIMEDefang worker that reaches `filter_end`, so under a mail burst
+it can see as many concurrent `/predict` requests as your multiplexor's
+worker count (its `-x`/`MX_MAXIMUM` setting). Size `--threads` to roughly
+that number of concurrent workers, and keep `--torch-threads` low (1-2):
+torch otherwise uses every CPU core per forward pass, which with several
+`--threads` oversubscribes the machine instead of scaling.
+
 ## `redhat-logrotate-file`
 
 If you log statistics to `/var/log/mimedefang/stats`, you want to rotate

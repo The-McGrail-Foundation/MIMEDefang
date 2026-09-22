@@ -1,0 +1,29 @@
+[Unit]
+Description=Resident Laya inference server for Mail::MIMEDefang::LLM::Laya
+Documentation=man:mimedefang-laya-server(8)
+After=network.target
+PartOf=mimedefang.service
+
+[Service]
+Type=simple
+Restart=on-failure
+TimeoutStopSec=30s
+# LAYA_THREADS: waitress worker threads, i.e. how many /predict requests
+#   this server handles at once. Size to roughly the number of concurrent
+#   MIMEDefang workers expected to call it (see the multiplexor's -x /
+#   MX_MAXIMUM setting in mimedefang-multiplexor.service).
+# LAYA_TORCH_THREADS: threads torch uses per forward pass. Keep this low
+#   (1-2); torch otherwise uses every CPU core per call, which with
+#   LAYA_THREADS > 1 oversubscribes the machine instead of scaling.
+# LAYA_PRELOAD: comma-separated checkpoints to load at startup, e.g.
+#   "english,multilingual". Only preload what the filter actually uses --
+#   each resident checkpoint costs real memory.
+Environment=LAYA_HOST=127.0.0.1 LAYA_PORT=8687 LAYA_THREADS=8 LAYA_TORCH_THREADS=2
+EnvironmentFile=-/etc/default/mimedefang-laya-server
+EnvironmentFile=-/etc/sysconfig/mimedefang-laya-server
+ExecStart=/bin/sh -c 'exec /usr/bin/mimedefang-laya-server \
+    --host $LAYA_HOST --port $LAYA_PORT \
+    --threads $LAYA_THREADS --torch-threads $LAYA_TORCH_THREADS \
+    `[ -n "$LAYA_PRELOAD" ] && echo "--preload $LAYA_PRELOAD"` \
+    `[ -n "$LAYA_CHECKPOINT" ] && echo "--checkpoint $LAYA_CHECKPOINT"` \
+    `[ -n "$LAYA_ATTACH_LANGUAGE" ] && echo "--attach-language $LAYA_ATTACH_LANGUAGE"`'

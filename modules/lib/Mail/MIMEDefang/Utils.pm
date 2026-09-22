@@ -24,9 +24,11 @@ use strict;
 use warnings;
 
 use Carp;
+use Encode qw(decode);
 use MIME::Words qw(:all);
 
 use Mail::MIMEDefang;
+use Mail::MIMEDefang::MIME;
 use Mail::MIMEDefang::RFC2822;
 
 require Exporter;
@@ -34,7 +36,8 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(time_str date_str hour_str
                  synthesize_received_header copy_or_link
                  re_match re_match_ext re_match_in_rar_directory re_match_in_zip_directory
-                 re_match_in_7zip_directory re_match_in_tgz_directory md_copy_orig_msg_to_work_dir_as_mbox_file read_results);
+                 re_match_in_7zip_directory re_match_in_tgz_directory md_copy_orig_msg_to_work_dir_as_mbox_file
+		 md_get_plain_text_body read_results);
 our @EXPORT_OK = qw(md_init gen_mx_id);
 
 =item time_str
@@ -467,6 +470,13 @@ sub dummy_zip_error_handler {} ;
 
 sub md_init {
   local $@;
+  # Detect optional modules needed to convert text/html parts to plain text.
+  $Features{"HTML::FormatText"} = eval {
+    require HTML::TreeBuilder;
+    require HTML::FormatText;
+    1;
+  } ? 1 : 0;
+
   my ($tar_bin) = map { "$_/tar" } grep { -x "$_/tar" } split(/:/, $ENV{PATH} // '');
   $Features{"tar"} = $tar_bin // '';
   my ($zip_bin) = map { "$_/7za" } grep { -x "$_/7za" } split(/:/, $ENV{PATH} // '');
@@ -590,6 +600,83 @@ sub gen_mx_id {
   }
   $out[MX_ID_LEN - 1] = 0;
   return join('', @out);
+}
+
+=item md_get_plain_text_body
+
+Method that walks a parsed MIME::Entity and returns a single plain-text
+string suitable for use by other methods or by F<mimedefang-filter>.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: md_get_plain_text_body
+# %ARGUMENTS:
+#  entity -- a MIME entity
+# %RETURNS:
+#  A plain-text string extracted from the entity's text/plain part, or
+#  (if none exists and HTML::TreeBuilder/HTML::FormatText are installed)
+#  its text/html part converted to plain text.  Returns '' if neither is
+#  available.
+# %DESCRIPTION:
+#  A helper function for filter.
+#***********************************************************************
+sub md_get_plain_text_body {
+  # Bytes of body text this sub will return before truncating.
+  use constant MAX_PLAIN_TEXT_BODY_BYTES => 65536;
+
+  my ($entity) = @_;
+  return '' unless $entity;
+
+  my $part = Mail::MIMEDefang::MIME::find_part($entity, "text/plain", 1);
+  if (!$part && $Features{"HTML::FormatText"}) {
+    $part = Mail::MIMEDefang::MIME::find_part($entity, "text/html", 1);
+  }
+  return '' unless $part;
+
+  my $text = _md_part_to_text($part);
+  return '' unless defined $text;
+
+  if (length($text) > MAX_PLAIN_TEXT_BODY_BYTES) {
+    $text = substr($text, 0, MAX_PLAIN_TEXT_BODY_BYTES);
+  }
+  return $text;
+}
+
+sub _md_part_to_text {
+  my ($entity) = @_;
+  return unless $entity;
+
+  my $body = $entity->bodyhandle;
+  return unless $body;
+
+  my $raw = do {
+    local $/;
+    my $io = $body->open('r') or return;
+    my $data = $io->getline // '';
+    $data .= $_ // '' while defined($_ = $io->getline);
+    $io->close;
+    $data;
+  };
+  return unless length $raw;
+
+  my $charset = lc($entity->head->mime_attr('content-type.charset') || 'us-ascii');
+  my $decoded = eval { decode($charset, $raw, Encode::FB_DEFAULT) };
+  $decoded = $raw if $@ || !defined $decoded;
+
+  my $type = lc($entity->mime_type || '');
+  if ($type eq 'text/html') {
+    return unless $Features{"HTML::FormatText"};
+    my $tree = HTML::TreeBuilder->new;
+    $tree->parse($decoded);
+    $tree->eof;
+    my $formatter = HTML::FormatText->new(leftmargin => 0, rightmargin => 9999);
+    my $plain = $formatter->format($tree);
+    $tree->delete;
+    return $plain;
+  }
+
+  return $decoded;
 }
 
 =back
