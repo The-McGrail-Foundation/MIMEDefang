@@ -26,6 +26,7 @@ modules/man/*.3p
 redhat/mimedefang-init
 redhat/mimedefang-sysconfig
 redhat/mimedefang.spec
+script/__pycache__
 script/mimedefang-util
 script/mimedefang-util.1
 script/mimedefang-test-mail.1
