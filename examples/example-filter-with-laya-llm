@@ -183,12 +183,13 @@ sub filter_end {
     #*******************************************************************
     my $subject = join('', map { $_->[0] // '' } decode_mimewords($Subject // ''));
 
+    # do not pass SpamAssassin info to Laya, otherwise it would amplify SpamAssassin FPs
     my $state = laya_build_state(
         From    => $Sender,
         Subject => $subject,
         Body    => md_get_plain_text_body($entity),
-        SAScore => $hits,
-        SARules => [ defined $names ? split(/,/, $names) : () ],
+        SAScore => undef, #$hits,
+        SARules => undef, #[ defined $names ? split(/,/, $names) : () ],
         SPF     => $SPFResult,
         DKIM    => $DKIMResult,
         DMARC   => $DMARCResult,
