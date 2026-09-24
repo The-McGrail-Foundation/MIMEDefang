@@ -95,6 +95,7 @@ sub message_contains_virus {
   foreach my $scanner (@VirusScannerMessageRoutines) {
 	  ($scode, $scat, $sact) = &$scanner();
 	  if ($scat eq "virus") {
+	    pop_status_tag();
 	    return (wantarray ? ($scode, $scat, $sact) : $scode);
 	  }
 	  if ($scat ne "ok") {
@@ -139,6 +140,7 @@ sub entity_contains_virus {
   foreach my $scanner (@VirusScannerEntityRoutines) {
 	  ($scode, $scat, $sact) = &$scanner($e);
 	  if ($scat eq "virus") {
+	    pop_status_tag();
 	    return (wantarray ? ($scode, $scat, $sact) : $scode);
 	  }
 	  if ($scat ne "ok") {
