@@ -2,6 +2,11 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2026-09-24 Giovanni Bechis <gbechis@pccc.com>
+
+        * detect base64 parts made of concatenated streams and ambiguous MIME structures;
+          add `md_concatenated_base64` and `md_mime_suspicious`.
+
 2026-08-26 Giovanni Bechis <g.bechis@snb.it>
 
         * add `jsonload`, `jsonload-relayok`, `jsonload-senderok` and

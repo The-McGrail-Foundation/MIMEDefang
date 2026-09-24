@@ -92,6 +92,7 @@ modules/lib/Mail/MIMEDefang/DKIM/ARC.pm
 modules/lib/Mail/MIMEDefang/DKIM.pm
 modules/lib/Mail/MIMEDefang/Mail.pm
 modules/lib/Mail/MIMEDefang/MIME.pm
+modules/lib/Mail/MIMEDefang/MIME/Base64.pm
 modules/lib/Mail/MIMEDefang/Net.pm
 modules/lib/Mail/MIMEDefang.pm
 modules/lib/Mail/MIMEDefang/RFC2822.pm

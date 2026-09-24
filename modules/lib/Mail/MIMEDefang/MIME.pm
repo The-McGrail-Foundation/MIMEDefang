@@ -29,6 +29,7 @@ use MIME::Parser;
 use MIME::Words qw(:all);
 
 use Mail::MIMEDefang;
+use Mail::MIMEDefang::MIME::Base64;
 
 our @ISA = qw(Exporter);
 our @EXPORT;
@@ -36,7 +37,8 @@ our @EXPORT_OK;
 
 @EXPORT = qw(builtin_create_parser find_part append_to_part takeStabAtFilename
              remove_redundant_html_parts append_to_html_part append_html_boilerplate
-             append_text_boilerplate collect_parts anonymize_uri);
+             append_text_boilerplate collect_parts anonymize_uri
+             md_concatenated_base64 md_mime_suspicious);
 
 sub builtin_create_parser {
     my $parser = MIME::Parser->new();
@@ -569,8 +571,74 @@ sub anonymize_uri {
   return $ok;
 }
 
+# State for the message most recently parsed; see md_mime_prepare().
+my $AmbiguousMime = 0;
+
+=item md_concatenated_base64
+
+Returns 1 if the message being filtered has at least one base64-encoded
+part made of several base64 streams glued together (data follows a padding
+character), and 0 otherwise.  RFC 2045 does not allow this; some mail clients decode
+each stream separately and join the results, others decode the part as a
+single stream.  MIMEDefang logs a warning when it sees such a part.
+
+Legitimate mail from buggy software can trigger this, so consider tagging or
+quarantining rather than rejecting.  For example:
+
+    sub filter_begin {
+        my ($entity) = @_;
+        if (md_concatenated_base64()) {
+            action_quarantine_entire_message('Base64 part with concatenated streams');
+        }
+    }
+
+=cut
+
+sub md_concatenated_base64 {
+    return Mail::MIMEDefang::MIME::Base64::count() ? 1 : 0;
+}
+
+=item md_mime_suspicious
+
+Returns 1 if MIME-tools reported the message being filtered as ambiguous
+(for example, repeated Content-Type or Content-Transfer-Encoding headers,
+or repeated or empty parameters), so that mail clients may interpret it
+differently, and 0 otherwise.  Always returns 0 if the installed MIME-tools
+cannot report this.  MIMEDefang logs a warning for such messages.
+
+=cut
+
+sub md_mime_suspicious {
+    return $AmbiguousMime ? 1 : 0;
+}
+
 =back
 
 =cut
+
+# The functions below are called by mimedefang.pl, not by filters.
+
+# Called before each message is parsed.
+sub md_mime_prepare {
+    Mail::MIMEDefang::MIME::Base64::reset_count();
+    $AmbiguousMime = 0;
+    Mail::MIMEDefang::MIME::Base64::activate();
+    return;
+}
+
+# Called right after each message is parsed.
+sub md_mime_note_parse {
+    my ($parser) = @_;
+
+    if ($parser && $parser->can('ambiguous_content') && $parser->ambiguous_content) {
+        $AmbiguousMime = 1;
+        md_syslog('warning', 'Message has an ambiguous MIME structure (repeated headers or parameters)');
+    }
+    my $n = Mail::MIMEDefang::MIME::Base64::count();
+    if ($n) {
+        md_syslog('warning', "Message has $n base64 part(s) made of concatenated streams");
+    }
+    return;
+}
 
 1;

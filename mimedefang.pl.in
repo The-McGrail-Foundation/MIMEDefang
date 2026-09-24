@@ -851,8 +851,10 @@ sub do_scan {
 	$parser->max_parts($MaxMIMEParts);
     }
     push_status_tag("Parsing Message");
+    Mail::MIMEDefang::MIME::md_mime_prepare();
     $entity = $parser->parse_open($file);
     pop_status_tag();
+    Mail::MIMEDefang::MIME::md_mime_note_parse($parser);
 
     if (!defined($entity) && $MaxMIMEParts > 0) {
 	# Message is too complex; bounce it

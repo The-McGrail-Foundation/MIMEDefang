@@ -1929,6 +1929,36 @@ This is required for some virus scanners (such as Clam AntiVirus) to
 recognize the file as an e-mail message.
 
 .TP
+.B md_concatenated_base64()
+Returns 1 if the message being filtered has at least one base64-encoded
+part made of several base64 streams glued together (data follows a
+padding character), and 0 otherwise.  RFC 2045 does not allow this; some mail
+clients decode each stream separately and join the results, others
+decode the part as a single stream.  MIMEDefang logs a warning when it
+sees such a part.  Legitimate mail from buggy software can trigger this,
+so consider tagging or quarantining the message rather than rejecting
+it.  Call this function from \fBfilter_begin\fR:
+
+.nf
+    sub filter_begin {
+        my ($entity) = @_;
+        if (md_concatenated_base64()) {
+            action_quarantine_entire_message('Concatenated base64');
+        }
+    }
+.fi
+
+.TP
+.B md_mime_suspicious()
+Returns 1 if MIME-tools reported the message being filtered as ambiguous
+(for example, repeated Content-Type or Content-Transfer-Encoding
+headers, or repeated or empty parameters), so that mail clients may
+interpret it differently, and 0 otherwise.  Always returns 0 if the
+installed MIME-tools cannot report this.  MIMEDefang logs a warning for
+such messages.  Like \fBmd_concatenated_base64\fR, it can be called
+from \fBfilter_begin\fR.
+
+.TP
 .B message_contains_virus()
 This function runs \fIevery\fR installed virus-scanner and returns
 the scanner results.  The function should be called in list context;
