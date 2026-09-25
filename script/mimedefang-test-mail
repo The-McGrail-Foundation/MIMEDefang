@@ -96,12 +96,40 @@ unless ($mimedefang_pl) {
     no warnings 'redefine';
 
     # Redirect filter logging to stderr instead of syslog.
-    *main::md_syslog = sub {
+    my $stderr_syslog = sub {
         my ($facility, $msg) = @_;
         my $tag = (defined($main::MsgID) && $main::MsgID ne 'NOQUEUE') ? "$main::MsgID: " : '';
         print STDERR "[$facility] $tag$msg\n";
         return 1;
     };
+
+    # Exporter copies the md_syslog code ref into every importing package
+    # (Mail::MIMEDefang::Actions, ::Mail, ::Net, ...), so replacing
+    # main::md_syslog alone is not enough: walk the symbol table and swap
+    # every alias of the original sub.
+    my $orig_syslog = \&Mail::MIMEDefang::md_syslog;
+    my %seen;
+    my $walk;
+    $walk = sub {
+        my ($pkg) = @_;
+        no strict 'refs';
+        my $stash = \%{"${pkg}::"};
+        return if $seen{$stash}++;
+        if (my $glob = $stash->{md_syslog}) {
+            my $code = ref(\$glob) eq 'GLOB' ? *{$glob}{CODE} : undef;
+            *{"${pkg}::md_syslog"} = $stderr_syslog
+                if $code && $code == $orig_syslog;
+        }
+        for my $name (keys %$stash) {
+            next unless $name =~ /::$/;
+            $name =~ s/::$//;
+            $walk->($pkg eq 'main' ? $name : "${pkg}::$name");
+        }
+    };
+    $walk->('main');
+    undef $walk;
+    *main::md_syslog             = $stderr_syslog;
+    *Mail::MIMEDefang::md_syslog = $stderr_syslog;
 
     # Never actually relay/deliver mail -- just report what would happen.
     *main::send_mail = sub {

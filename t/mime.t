@@ -6,6 +6,7 @@ use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
 use HTML::Parser;
+use MIME::Base64 qw(encode_base64);
 use MIME::Parser;
 use MIME::Entity;
 
@@ -239,6 +240,74 @@ sub t_append_html_boilerplate : Test(2)
   like($html->bodyhandle->as_string(), qr/<p>-- sig<\/p>/, 'append_html_boilerplate appended HTML before </body>');
 
   system('rm', '-rf', 't/tmp');
+}
+
+sub concatenated_base64_detected : Test(3)
+{
+  Mail::MIMEDefang::MIME::md_mime_prepare();
+  my ($parser, $entity) =
+    Mail::MIMEDefang::Unit::parse_string(Mail::MIMEDefang::Unit::base64_message(encode_base64("Hello, ") . encode_base64("world!")));
+  Mail::MIMEDefang::MIME::md_mime_note_parse($parser);
+  is(md_concatenated_base64(), 1, 'base64 part made of two streams is noticed');
+
+ SKIP: {
+    skip 'MIME-tools older than 5.519 does not join concatenated streams', 1
+      unless MIME::Tools->VERSION >= 5.519;
+    is($entity->parts(1)->bodyhandle->as_string(), 'Hello, world!',
+       'concatenated streams decode as one payload');
+  }
+
+  Mail::MIMEDefang::MIME::md_mime_prepare();
+  is(md_concatenated_base64(), 0, 'flag is reset before the next message');
+}
+
+sub single_base64_stream_not_flagged : Test(2)
+{
+  Mail::MIMEDefang::MIME::md_mime_prepare();
+  my ($parser, $entity) = Mail::MIMEDefang::Unit::parse_string(Mail::MIMEDefang::Unit::base64_message(encode_base64("Hello, world!")));
+  Mail::MIMEDefang::MIME::md_mime_note_parse($parser);
+  is(md_concatenated_base64(), 0, 'single padded stream is not flagged');
+
+  Mail::MIMEDefang::MIME::md_mime_prepare();
+  ($parser, $entity) = Mail::MIMEDefang::Unit::parse_string(Mail::MIMEDefang::Unit::base64_message(encode_base64("x" x 5000)));
+  Mail::MIMEDefang::MIME::md_mime_note_parse($parser);
+  is(md_concatenated_base64(), 0, 'long multi-line stream is not flagged');
+}
+
+sub base64_tap_chunk_boundaries : Test(3)
+{
+  ok(Mail::MIMEDefang::Unit::tap_found('QUJDQQ==', 'QUJD'), 'data after padding in the next chunk is noticed');
+  ok(!Mail::MIMEDefang::Unit::tap_found('QUJDQQ=', "=\n"), 'padding split across chunks is not flagged');
+  ok(Mail::MIMEDefang::Unit::tap_found("QUJDQQ==\n", "\n\n", 'QUJD'),
+     'data after padding is noticed across a whitespace-only chunk');
+}
+
+sub mime_suspicious : Test(4)
+{
+  Mail::MIMEDefang::MIME::md_mime_prepare();
+  my ($parser, $entity) = Mail::MIMEDefang::Unit::parse_string(Mail::MIMEDefang::Unit::base64_message(encode_base64("Hello, world!")));
+  Mail::MIMEDefang::MIME::md_mime_note_parse($parser);
+  is(md_mime_suspicious(), 0, 'ordinary message is not suspicious');
+
+  Mail::MIMEDefang::MIME::md_mime_prepare();
+  ($parser, $entity) =
+    Mail::MIMEDefang::Unit::parse_string(Mail::MIMEDefang::Unit::base64_message(encode_base64("Hello, ") . encode_base64("world!")));
+  Mail::MIMEDefang::MIME::md_mime_note_parse($parser);
+  is(md_mime_suspicious(), 0, 'concatenated base64 alone is not reported as ambiguous MIME');
+
+ SKIP: {
+    skip 'MIME::Parser has no ambiguous_content', 2
+      unless MIME::Parser->can('ambiguous_content');
+
+    Mail::MIMEDefang::MIME::md_mime_prepare();
+    ($parser, $entity) = Mail::MIMEDefang::Unit::parse_string("From: a\@example.com\nTo: b\@example.com\n" .
+      "Subject: test\nContent-Type: text/plain\nContent-Type: text/html\n\nbody\n");
+    Mail::MIMEDefang::MIME::md_mime_note_parse($parser);
+    is(md_mime_suspicious(), 1, 'repeated Content-Type header is reported');
+
+    Mail::MIMEDefang::MIME::md_mime_prepare();
+    is(md_mime_suspicious(), 0, 'flag is reset before the next message');
+  }
 }
 
 __PACKAGE__->runtests();

@@ -13,6 +13,22 @@ Mail::MIMEDefang::Antivirus are a set of methods that can be called
 from F<mimedefang-filter> to scan with installed antivirus
 software the email message.
 
+The C<message_contains_virus*> methods scan the F<Work> directory, which
+normally contains only the unpacked, decoded parts of the message.
+To have the original, undecoded message scanned as well, call
+C<md_copy_orig_msg_to_work_dir_as_mbox_file> (see L<Mail::MIMEDefang::Utils>)
+B<before> calling C<message_contains_virus> or any
+C<message_contains_virus_*> method. It copies the message into the
+F<Work> directory as a UNIX-style mbox file, which some scanners
+(such as ClamAV) need in order to recognise it as an e-mail message.
+
+    sub filter_end {
+      my ($entity) = @_;
+      md_copy_orig_msg_to_work_dir_as_mbox_file();
+      my ($code, $category, $action) = message_contains_virus();
+      ...
+    }
+
 =head1 METHODS
 
 =over 4
@@ -67,6 +83,8 @@ our @EXPORT_OK;
 =item message_contains_virus
 
 Method that scans a message using every installed virus scanner.
+C<md_copy_orig_msg_to_work_dir_as_mbox_file> should be called before this
+method so that the original message is scanned too (see L</DESCRIPTION>).
 
 =cut
 
@@ -95,6 +113,7 @@ sub message_contains_virus {
   foreach my $scanner (@VirusScannerMessageRoutines) {
 	  ($scode, $scat, $sact) = &$scanner();
 	  if ($scat eq "virus") {
+	    pop_status_tag();
 	    return (wantarray ? ($scode, $scat, $sact) : $scode);
 	  }
 	  if ($scat ne "ok") {
@@ -139,6 +158,7 @@ sub entity_contains_virus {
   foreach my $scanner (@VirusScannerEntityRoutines) {
 	  ($scode, $scat, $sact) = &$scanner($e);
 	  if ($scat eq "virus") {
+	    pop_status_tag();
 	    return (wantarray ? ($scode, $scat, $sact) : $scode);
 	  }
 	  if ($scat ne "ok") {

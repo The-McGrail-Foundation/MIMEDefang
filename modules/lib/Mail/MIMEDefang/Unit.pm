@@ -25,6 +25,7 @@ use warnings;
 use Test::Class;
 use base qw( Test::Class );
 
+use MIME::Parser;
 use Net::SMTP;
 use Test::Most;
 
@@ -106,6 +107,71 @@ sub get_abs_path {
     }
   }
   return;
+}
+
+# Minimal input handle that hands out predefined chunks, to drive
+# Mail::MIMEDefang::MIME::Base64::Tap across read() boundaries.
+{
+  package Mail::MIMEDefang::Unit::ChunkedIn;
+  sub new { my ($class, @chunks) = @_; return bless { chunks => [@chunks] }, $class; }
+  sub read {
+    my $self = shift;
+    my $chunk = shift @{$self->{chunks}};
+    return 0 unless defined($chunk);
+    $_[0] = $chunk;
+    return length($chunk);
+  }
+}
+
+=item tap_found
+
+Method which feeds the given chunks through a
+C<Mail::MIMEDefang::MIME::Base64::Tap> and returns whether data after
+base64 padding was found.
+
+=cut
+
+sub tap_found
+{
+  my (@chunks) = @_;
+  my $in = Mail::MIMEDefang::Unit::ChunkedIn->new(@chunks);
+  my $tap = Mail::MIMEDefang::MIME::Base64::Tap->new($in);
+  my $buf = '';
+  while ($tap->read($buf, 32768)) { }
+  return $tap->found;
+}
+
+=item parse_string
+
+Method which parses a message held in a string and returns the
+C<MIME::Parser> and the resulting C<MIME::Entity>.
+
+=cut
+
+sub parse_string
+{
+  my ($msg) = @_;
+  my $parser = MIME::Parser->new();
+  $parser->output_to_core(1);
+  my $entity = $parser->parse_data($msg);
+  return ($parser, $entity);
+}
+
+=item base64_message
+
+Method which returns a multipart test message with an attachment
+whose base64 body is the given string.
+
+=cut
+
+sub base64_message
+{
+  my ($encoded) = @_;
+  return "From: a\@example.com\nTo: b\@example.com\nSubject: test\nMIME-Version: 1.0\n" .
+    "Content-Type: multipart/mixed; boundary=\"XX\"\n\n" .
+    "--XX\nContent-Type: text/plain\n\nhi\n" .
+    "--XX\nContent-Type: application/octet-stream; name=f.bin\n" .
+    "Content-Transfer-Encoding: base64\n\n$encoded\n--XX--\n";
 }
 
 =back
