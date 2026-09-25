@@ -164,23 +164,31 @@ sub md_bimi_lookup {
     return;
   }
 
+  my ($record) = _bimi_dns_lookup($domain, $selector);
+  return $record;
+}
+
+# Query the BIMI TXT record with Net::DNS.
+# Returns ($record_hashref, 'ok'), (undef, 'none') when no BIMI record
+# exists, or (undef, 'temperror') on DNS errors.
+sub _bimi_dns_lookup {
+  my ($domain, $selector) = @_;
+
   unless ($Features{"Net::DNS"}) {
     md_syslog('err', 'md_bimi_lookup: Net::DNS is not available');
-    return;
+    return (undef, 'temperror');
   }
 
   my $res = Net::DNS::Resolver->new;
   $res->defnames(0);
 
   my $lookup = $selector . '._bimi.' . $domain;
-  my $packet = $res->query($lookup, 'TXT');
+  my $packet = $res->send($lookup, 'TXT');
 
-  if (!defined($packet) ||
-      $packet->header->rcode eq 'NXDOMAIN' ||
-      $packet->header->rcode eq 'SERVFAIL' ||
-      !defined($packet->answer)) {
-    return;
-  }
+  return (undef, 'temperror') unless defined $packet;
+  my $rcode = $packet->header->rcode;
+  return (undef, 'none') if $rcode eq 'NXDOMAIN';
+  return (undef, 'temperror') unless $rcode eq 'NOERROR';
 
   for my $rr ($packet->answer) {
     next unless $rr->type eq 'TXT';
@@ -192,17 +200,17 @@ sub md_bimi_lookup {
 
     my %record = (raw => $txt, version => 'BIMI1');
 
-    if ($txt =~ /\bl=([^;]+)/) {
+    if ($txt =~ /\bl=([^;]*)/) {
       ($record{l} = $1) =~ s/\s+$//;
     }
     if ($txt =~ /\ba=([^;]+)/) {
       ($record{a} = $1) =~ s/\s+$//;
     }
 
-    return \%record;
+    return (\%record, 'ok');
   }
 
-  return;
+  return (undef, 'none');
 }
 
 =item md_bimi_verify($domain, $dmarc_result, $dmarc_policy [, $selector])
@@ -231,7 +239,35 @@ The BIMI record contains a non-empty C<l=> (logo URL) tag.
 
 =back
 
-Returns C<"pass"> on success, C<"fail"> otherwise.
+Returns one of the BIMI C<Authentication-Results> result values:
+
+=over 4
+
+=item C<pass>
+
+A valid BIMI record was found.
+
+=item C<none>
+
+The domain does not publish a BIMI record.
+
+=item C<declined>
+
+The domain publishes a BIMI record with an empty C<l=> tag.
+
+=item C<skipped>
+
+The message does not pass DMARC, or the DMARC policy is not at enforcement.
+
+=item C<temperror>
+
+A temporary error (e.g. DNS failure) prevented the lookup.
+
+=item C<fail>
+
+The BIMI record, logo or certificate is invalid.
+
+=back
 
 The method accepts the following parameters:
 
@@ -264,29 +300,32 @@ sub md_bimi_verify {
   $selector = _validate_selector($selector);
 
   return 'fail' unless defined $domain && $domain ne '';
-  return 'fail' unless defined $dmarc_result && lc($dmarc_result) eq 'pass';
-  return 'fail' unless defined $dmarc_policy &&
-                       (lc($dmarc_policy) eq 'quarantine' ||
-                        lc($dmarc_policy) eq 'reject');
+  return 'skipped' unless defined $dmarc_result && lc($dmarc_result) eq 'pass';
+  return 'skipped' unless defined $dmarc_policy &&
+                          (lc($dmarc_policy) eq 'quarantine' ||
+                           lc($dmarc_policy) eq 'reject');
 
   if ($Features{"Mail::BIMI"}) {
     local $@;
-    my $valid = eval {
+    my $result = eval {
       my $bimi_obj = Mail::BIMI->new(domain => $domain, selector => $selector);
       my $record   = $bimi_obj->record;
-      return 0 unless $record;
-      return $record->is_valid ? 1 : 0;
+      return 'fail' unless $record;
+      return 'pass' if $record->is_valid;
+      my ($err) = @{ $record->errors // [] };
+      return defined $err ? $err->result : 'fail';
     };
     if ($@) {
       md_syslog('err', "md_bimi_verify: Mail::BIMI error: $@");
       return 'fail';
     }
-    return $valid ? 'pass' : 'fail';
+    return $result;
   }
 
-  my $bimi = md_bimi_lookup($domain, $selector);
-  return 'fail' unless defined $bimi;
-  return 'fail' unless defined $bimi->{l} && $bimi->{l} ne '';
+  my ($bimi, $status) = _bimi_dns_lookup($domain, $selector);
+  return $status unless defined $bimi;
+  return 'fail' unless defined $bimi->{l};
+  return 'declined' if $bimi->{l} eq '';
 
   return 'pass';
 }
