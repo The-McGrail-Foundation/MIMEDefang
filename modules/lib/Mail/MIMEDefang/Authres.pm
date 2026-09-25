@@ -62,9 +62,10 @@ The MTA helo server name
 
 =item C<$bimi_domain> (optional)
 
-The From: header domain to use for BIMI lookup.  When provided and when DMARC
-passes at enforcement level, a C<bimi=pass> (or C<bimi=fail>) result is
-appended to the Authentication-Results header.
+The From: header domain to use for BIMI lookup.  When provided, a C<bimi=>
+result (C<pass>, C<none>, C<declined>, C<skipped>, C<temperror> or C<fail>,
+see C<md_bimi_verify> in L<Mail::MIMEDefang::BIMI>) is appended to the
+Authentication-Results header.
 
 =back
 

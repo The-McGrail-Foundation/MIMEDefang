@@ -43,7 +43,7 @@ sub t_md_authres_bimi : Test(1)
       'test@sa-test.spamassassin.org', '1.2.3.4',
       'sa-test.spamassassin.org', undef, 'google.com'
     );
-    like($header, qr{\bbimi=(?:pass|fail)\b.*header\.d=google\.com},
+    like($header, qr{\bbimi=(?:pass|fail|none|declined|skipped|temperror)\b.*header\.d=google\.com},
          'md_authres appends bimi= token when bimi_domain is supplied');
     unlink('./INPUTMSG');
   };

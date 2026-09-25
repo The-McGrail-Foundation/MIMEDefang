@@ -15,23 +15,23 @@ $Features{"Net::DNS"} = 1;
 
 sub t_bimi_verify_no_dmarc : Test(1)
 {
-  # DMARC policy "none" must cause BIMI to fail
+  # DMARC policy "none" must cause BIMI to be skipped
   my $res = md_bimi_verify('example.com', 'pass', 'none');
-  is($res, 'fail', 'BIMI fails when DMARC policy is none');
+  is($res, 'skipped', 'BIMI is skipped when DMARC policy is none');
 }
 
 sub t_bimi_verify_fail_dmarc : Test(1)
 {
-  # DMARC result "fail" must cause BIMI to fail regardless of policy
+  # DMARC result "fail" must cause BIMI to be skipped regardless of policy
   my $res = md_bimi_verify('example.com', 'fail', 'reject');
-  is($res, 'fail', 'BIMI fails when DMARC result is fail');
+  is($res, 'skipped', 'BIMI is skipped when DMARC result is fail');
 }
 
 sub t_bimi_verify_missing_params : Test(3)
 {
   is(md_bimi_verify(undef, 'pass', 'reject'), 'fail', 'BIMI fails with undefined domain');
-  is(md_bimi_verify('example.com', undef, 'reject'), 'fail', 'BIMI fails with undefined dmarc_result');
-  is(md_bimi_verify('example.com', 'pass', undef), 'fail', 'BIMI fails with undefined dmarc_policy');
+  is(md_bimi_verify('example.com', undef, 'reject'), 'skipped', 'BIMI is skipped with undefined dmarc_result');
+  is(md_bimi_verify('example.com', 'pass', undef), 'skipped', 'BIMI is skipped with undefined dmarc_policy');
 }
 
 sub t_bimi_lookup_invalid : Test(1)
@@ -43,6 +43,18 @@ sub t_bimi_lookup_invalid : Test(1)
     }
     my $rec = md_bimi_lookup('invalid-domain-that-cannot-have-bimi.example');
     is($rec, undef, 'md_bimi_lookup returns undef for unknown domain');
+  };
+}
+
+sub t_bimi_verify_no_record : Test(1)
+{
+  # A domain without a BIMI record must return "none"
+  SKIP: {
+    if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
+      skip "Net test disabled", 1;
+    }
+    is(md_bimi_verify('invalid-domain-that-cannot-have-bimi.example', 'pass', 'reject'), 'none',
+       'BIMI result is none when the domain has no BIMI record');
   };
 }
 
@@ -101,7 +113,7 @@ sub t_bimi_mail_bimi_module : Test(1)
     skip "Mail::BIMI not installed", 1 unless $Features{"Mail::BIMI"};
     # DMARC pre-condition check fires before Mail::BIMI is consulted
     my $res = md_bimi_verify('example.com', 'pass', 'none');
-    is($res, 'fail', 'Mail::BIMI path: BIMI fails when DMARC policy is none');
+    is($res, 'skipped', 'Mail::BIMI path: BIMI is skipped when DMARC policy is none');
   };
 }
 
