@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-laya_server.py -- resident Laya inference server for Mail::MIMEDefang::Laya.
+mimedefang-laya-server -- resident Laya inference server for
+Mail::MIMEDefang::ML::Laya.
 
 The Router auto-detects each message's script/language dispatches
 to whichever stock checkpoint fits best (English content
@@ -12,9 +13,14 @@ Endpoints:
     GET  /health     -> 200 if the router is loaded and ready
 
 Run as a systemd service bound to 127.0.0.1 only, this is a trusted
-local-only endpoint with no auth, not meant to be exposed off-host. When
-not running under systemd (or another supervisor), pass --daemon to fork
-into the background; in that mode logging goes to syslog instead of
+local-only endpoint with no auth, not meant to be exposed off-host.
+If it has to serve MIMEDefang hosts over the network (--host), keep it
+secure by limiting access to its port with a firewall so that only those
+hosts can reach it; never expose it to the Internet, since every request
+carries message content.
+
+When not running under systemd (or another supervisor), pass --daemon
+to fork into the background; in that mode logging goes to syslog instead of
 stderr, since there's no terminal/journal capturing stderr any more.
 
 Concurrency: MIMEDefang's multiplexor can run many worker processes in
@@ -27,13 +33,15 @@ running many concurrent threads each spinning up full-core parallelism
 causes oversubscription/thrashing rather than scaling, so --torch-threads
 pins each forward pass to a small, fixed thread count instead.
 
-    pip install laya flask waitress
-    python3 laya_server.py --port 8687
-    python3 laya_server.py --preload english,multilingual --port 8687 \\
+Installation (Python modules, virtualenv, model download, systemd unit):
+see script/ml-servers/README.md in the MIMEDefang sources.
+
+    mimedefang-laya-server --port 8687
+    mimedefang-laya-server --preload english,multilingual --port 8687 \\
         --threads 16 --torch-threads 2
-    python3 laya_server.py --checkpoint /path/to/custom/checkpoint \\
+    mimedefang-laya-server --checkpoint /path/to/custom/checkpoint \\
         --attach-language english --port 8687
-    python3 laya_server.py --daemon --port 8687
+    mimedefang-laya-server --daemon --port 8687
 """
 
 import argparse
@@ -50,15 +58,15 @@ from flask import Flask, jsonify, request
 import laya
 from laya import Router
 
-log = logging.getLogger("laya_server")
+log = logging.getLogger("mimedefang-laya-server")
 
 app = Flask(__name__)
 
 # Default confidence gate for logging a decided verdict. Must be kept in
-# sync with $Mail::MIMEDefang::LLM::Laya::Config{min_confidence} in
-# modules/lib/Mail/MIMEDefang/LLM/Laya.pm, that's the value actually used
+# sync with $Mail::MIMEDefang::ML::Config{min_confidence} in
+# modules/lib/Mail/MIMEDefang/ML.pm, that's the value actually used
 # to decide whether MIMEDefang acts on a verdict, so this server's log
-# would otherwise claim "spam"/"phishing" for answers Laya.pm treats as no
+# would otherwise claim "spam"/"phishing" for answers ML.pm treats as no
 # opinion. Sites that override the Perl config should pass the same value
 # here via --min-confidence.
 DEFAULT_MIN_CONFIDENCE = 0.55
@@ -158,8 +166,8 @@ def predict():
     phish_p, phish_c = phish.get("noul"), phish.get("confidence")
     routing = result.get("routing")
 
-    # Mirrors Mail::MIMEDefang::LLM::Laya::laya_classify(): an answer only
-    # counts once its confidence clears the threshold; otherwise Laya.pm
+    # Mirrors Mail::MIMEDefang::ML::ml_classify(): an answer only
+    # counts once its confidence clears the threshold; otherwise ML.pm
     # treats it as "no opinion" no matter how high the yes-probability is.
     def decide(p, c):
         if p is None or c is None:
@@ -191,7 +199,12 @@ def main():
     parser.add_argument("--attach-language", default="english",
                          help="Router key to attach --checkpoint under "
                               "(default: english).")
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default="127.0.0.1",
+                         help="Address to listen on (default: %(default)s). "
+                              "This server has no authentication: if you "
+                              "listen on a non-loopback address, firewall "
+                              "the port so only MIMEDefang hosts can reach "
+                              "it.")
     parser.add_argument("--port", type=int, default=8687)
     parser.add_argument("--threads", type=int, default=8,
                          help="waitress worker threads, i.e. how many "
@@ -210,7 +223,7 @@ def main():
                          help="Confidence threshold below which an answer is "
                               "logged as 'undecided' rather than a yes/no "
                               "verdict. Must match "
-                              "$Mail::MIMEDefang::LLM::Laya::Config{min_confidence} "
+                              "$Mail::MIMEDefang::ML::Config{min_confidence} "
                               "(default: %(default)s) -- this only affects "
                               "logging, not the JSON response returned to "
                               "the Perl caller.")

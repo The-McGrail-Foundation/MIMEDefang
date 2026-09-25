@@ -3,18 +3,29 @@
 #
 # mimedefang-filter
 #
-# Example filter using Mail::MIMEDefang::LLM::Laya to get ham/spam/
-# phishing verdicts from a resident Laya decision model
-# (https://github.com/NandhaKishorM/laya), in addition to the usual
-# SPF/DKIM/DMARC and SpamAssassin checks.
+# Example filter using Mail::MIMEDefang::ML to get ham/spam/phishing
+# verdicts from a machine-learning model, in addition to the usual SPF/DKIM/DMARC
+# and SpamAssassin checks.  The backend is selected by configuration
+# only, the filter code is the same for all of them:
 #
-# Laya is additive here, not a replacement for SpamAssassin: its
-# verdict only takes extra action (subject tagging, quarantine) on
-# confident answers, and any failure to reach the Laya server is
-# treated as "no opinion", falling back to SpamAssassin alone.
+#   laya     - Laya decision model (https://github.com/NandhaKishorM/laya),
+#              served by mimedefang-laya-server
+#   gliclass - GLiClass zero-shot encoder
+#              (https://github.com/Knowledgator/GLiClass), served by
+#              mimedefang-gliclass-server
+#   openai   - a self-hosted generative model served through the
+#              OpenAI-compatible API by Ollama / llama.cpp / vLLM
 #
-# Requires: Mail::MIMEDefang::LLM::Laya, and a running laya_server.py
-# instance (see that module's SEE ALSO section).
+# The model servers have no authentication and receive message content:
+# keep them secure by limiting access to their ports with a firewall, so
+# only the MIMEDefang host(s) can reach them.
+#
+# The model is additive here, not a replacement for SpamAssassin: its
+# verdict only takes extra action (subject tagging) on confident answers,
+# and any failure to reach the backend is treated as "no opinion",
+# falling back to SpamAssassin alone.
+#
+# Requires: Mail::MIMEDefang::ML, and a running backend server.
 #
 # Copyright (C) 2026 The McGrail Foundation
 #
@@ -25,7 +36,7 @@
 
 use Mail::MIMEDefang::Authres;
 use Mail::MIMEDefang::DKIM;
-use Mail::MIMEDefang::LLM::Laya;
+use Mail::MIMEDefang::ML;
 use Mail::MIMEDefang::Net qw(get_host_name);
 use Mail::MIMEDefang::SPF;
 use MIME::Words qw(decode_mimewords);
@@ -44,12 +55,24 @@ $DaemonAddress = 'mimedefang@localhost';
 $AddWarningsInline = 0;
 
 #***********************************************************************
-# Point this at your resident Laya server if it isn't on the default
-# 127.0.0.1:8687, or tune the confidence threshold below which a
-# verdict is treated as "no opinion".
+# Pick the ML backend and point it at its server, and tune the
+# confidence threshold below which a verdict is treated as "no opinion".
 #***********************************************************************
-# $Mail::MIMEDefang::LLM::Laya::Config{server_url}     = 'http://127.0.0.1:8687';
-# $Mail::MIMEDefang::LLM::Laya::Config{min_confidence} = 0.55;
+# $Mail::MIMEDefang::ML::Config{min_confidence} = 0.55;
+# $Mail::MIMEDefang::ML::Config{timeout}        = 10;
+
+# Laya (mimedefang-laya-server):
+# $Mail::MIMEDefang::ML::Config{backend} = 'Laya';
+# $Mail::MIMEDefang::ML::Config{laya}{server_url} = 'http://127.0.0.1:8687';
+
+# GLiClass (mimedefang-gliclass-server):
+$Mail::MIMEDefang::ML::Config{backend}              = 'GLiClass';
+# $Mail::MIMEDefang::ML::Config{gliclass}{server_url} = 'http://127.0.0.1:8688';
+
+# Local model via Ollama:
+# $Mail::MIMEDefang::ML::Config{backend}          = 'OpenAI';
+# $Mail::MIMEDefang::ML::Config{openai}{base_url} = 'http://127.0.0.1:11434/v1';
+# $Mail::MIMEDefang::ML::Config{openai}{model}    = 'qwen3:1.7b';
 
 md_graphdefang_log_enable('mail', 1);
 
@@ -91,7 +114,7 @@ sub filter_sender {
 #
 # Runs DKIM verification, DMARC lookup, and publishes an
 # Authentication-Results header, so SPF/DKIM/DMARC results are all
-# available for Laya's state by the time filter_end() runs.
+# available for the model's state by the time filter_end() runs.
 #***********************************************************************
 sub filter_begin {
     my($entity) = @_;
@@ -135,7 +158,7 @@ sub filter_begin {
 
 #***********************************************************************
 # filter -- called once per MIME part.  No attachment policy here --
-# this example is only about the Laya integration in filter_end().
+# this example is only about the ML integration in filter_end().
 #***********************************************************************
 sub filter {
     my($entity, $fname, $ext, $type) = @_;
@@ -150,8 +173,8 @@ sub filter {
 #
 # Runs the usual SpamAssassin scoring, then feeds its result -- along
 # with the message headers/body and the SPF/DKIM/DMARC results
-# gathered above -- to Laya for a second, independent spam/phishing
-# opinion.  Laya only acts on confident verdicts; anything else is
+# gathered above -- to the model for a second, independent spam/phishing
+# opinion.  The model only acts on confident verdicts; anything else is
 # left to SpamAssassin's own scoring.
 #***********************************************************************
 sub filter_end {
@@ -176,36 +199,40 @@ sub filter_end {
     }
 
     #*******************************************************************
-    # Ask Laya for a second opinion, using the SpamAssassin score/rules
-    # and auth results gathered above.  $Subject comes straight off the
+    # Ask the model for a second opinion, using the auth results gathered
+    # above.  $Subject comes straight off the
     # wire and may still be RFC 2047 encoded (e.g. "=?utf-8?Q?...?=");
-    # decode it first so Laya sees readable text, not encoded-word noise.
+    # decode it first so the model sees readable text, not encoded-word noise.
     #*******************************************************************
     my $subject = join('', map { $_->[0] // '' } decode_mimewords($Subject // ''));
 
-    # do not pass SpamAssassin info to Laya, otherwise it would amplify SpamAssassin FPs
-    my $state = laya_build_state(
+    # The SpamAssassin score and rules are not sent to the model: a model
+    # that sees them tends to follow them, amplifying SpamAssassin's false
+    # positives instead of giving an independent opinion.  Uncomment
+    # SAScore/SARules to send them anyway; with Rspamd, pass RspamdScore
+    # and RspamdSymbols from rspamd_check() the same way.
+    my $state = ml_build_state(
         From    => $Sender,
         Subject => $subject,
         Body    => md_get_plain_text_body($entity),
-        SAScore => undef, #$hits,
-        SARules => undef, #[ defined $names ? split(/,/, $names) : () ],
+        # SAScore => $hits,
+        # SARules => $names,
         SPF     => $SPFResult,
         DKIM    => $DKIMResult,
         DMARC   => $DMARCResult,
     );
 
-    my $verdict = laya_classify($state);
+    my $verdict = ml_classify($state);
 
     if ($verdict->{error}) {
-        md_syslog('info', "laya: no verdict ($verdict->{error}), falling back to SpamAssassin only");
+        md_syslog('info', "ml: no verdict ($verdict->{error}), falling back to SpamAssassin only");
         md_graphdefang_log('mail_in');
         return;
     }
 
     #*******************************************************************
     # The is_phishing threshold is set higher (0.90) than is_spam's
-    # (0.80): with the multilingual checkpoint, legitimate bulk/ESP
+    # (0.80): with e.g. Laya's multilingual checkpoint, legitimate bulk/ESP
     # marketing mail (tracking links, hidden preview-text padding,
     # occasional blacklisted redirect URLs) can trip is_phishing at
     # confidence >= 0.80, even at SpamAssassin scores well under its
@@ -217,40 +244,54 @@ sub filter_end {
         && $verdict->{is_spam}{confidence} >= 0.80;
 
     if ($is_phishing_verdict) {
-        md_syslog('info', sprintf('laya: phishing, confidence %.2f',
+        md_syslog('info', sprintf("ml($verdict->{backend}): phishing, confidence %.2f",
             $verdict->{is_phishing}{confidence}));
-        md_graphdefang_log('laya_phishing', $verdict->{is_phishing}{confidence});
+        md_graphdefang_log('ml_phishing', $verdict->{is_phishing}{confidence});
     }
 
     if ($is_spam_verdict) {
-        md_syslog('info', sprintf('laya: spam, confidence %.2f -- tagging subject',
+        md_syslog('info', sprintf("ml($verdict->{backend}): spam, confidence %.2f -- tagging subject",
             $verdict->{is_spam}{confidence}));
-        md_graphdefang_log('laya_spam', $verdict->{is_spam}{confidence});
+        md_graphdefang_log('ml_spam', $verdict->{is_spam}{confidence});
         action_change_header('Subject', "[SPAM] $Subject");
     }
 
     #*******************************************************************
-    # Expose Laya's opinion as a signed header, positive leans spam,
+    # Expose the model's opinion as a signed header, positive leans spam,
     # negative leans ham.
     #*******************************************************************
     if (defined $verdict->{is_spam}{answer}) {
         my $sign  = $verdict->{is_spam}{answer} ? 1 : -1;
         my $score = $sign * $verdict->{is_spam}{confidence};
-        action_change_header('X-MIMEDefang-Laya-Score', sprintf('%.2f', $score));
+        action_change_header('X-MIMEDefang-ML-Score', sprintf('%.2f', $score));
     }
 
     #*******************************************************************
-    # Spell out Laya's verdict in words too.
+    # Spell out the model's verdict in words too:
+    #   phishing / spam - confident enough to act on (thresholds above)
+    #   ham             - the model is confident the message is not spam,
+    #                     and doesn't lean towards phishing
+    #   unsure          - anything else: the model leans spam/phishing
+    #                     but below the action thresholds, or has no
+    #                     opinion (confidence under min_confidence)
     #*******************************************************************
-    my $laya_answer = 'undecided';
+    my $ml_answer = 'unsure';
     if ($is_phishing_verdict) {
-        $laya_answer = 'phishing';
+        $ml_answer = 'phishing';
     } elsif ($is_spam_verdict) {
-        $laya_answer = 'spam';
-    } elsif (defined $verdict->{is_spam}{answer} || defined $verdict->{is_phishing}{answer}) {
-        $laya_answer = 'ham';
+        $ml_answer = 'spam';
+    } elsif (defined $verdict->{is_spam}{answer} && !$verdict->{is_spam}{answer}
+             && !$verdict->{is_phishing}{answer}) {
+        $ml_answer = 'ham';
     }
-    action_change_header('X-MIMEDefang-Laya-Answer', $laya_answer);
+    if ($ml_answer eq 'unsure') {
+        md_syslog('info', sprintf("ml($verdict->{backend}): unsure, spam %s/%.2f phishing %s/%.2f",
+            $verdict->{is_spam}{answer} // 'undef', $verdict->{is_spam}{confidence},
+            $verdict->{is_phishing}{answer} // 'undef', $verdict->{is_phishing}{confidence}));
+        md_graphdefang_log('ml_unsure');
+    }
+    action_change_header('X-MIMEDefang-ML-Answer', $ml_answer);
+    action_change_header('X-MIMEDefang-ML-Backend', $verdict->{backend});
 
     md_graphdefang_log('mail_in');
 }

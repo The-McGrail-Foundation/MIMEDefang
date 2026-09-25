@@ -1,0 +1,41 @@
+[Unit]
+Description=Resident GLiClass inference server for Mail::MIMEDefang::ML::GLiClass
+Documentation=https://github.com/Knowledgator/GLiClass
+After=network.target
+PartOf=mimedefang.service
+Before=mimedefang-multiplexor.service
+
+[Service]
+Type=simple
+Restart=on-failure
+TimeoutStopSec=30s
+User=defang
+StateDirectory=MIMEDefang/ml
+Environment=ML_PYTHON=/opt/mimedefang-ml/venv/bin/python3 HF_HOME=/var/lib/MIMEDefang/ml/huggingface
+# ML_PYTHON: Python interpreter that has the server's modules installed,
+#   see script/ml-servers/README.md in the MIMEDefang sources (default:
+#   the venv at /opt/mimedefang-ml/venv; set it to /usr/bin/python3 if the
+#   modules come from distribution packages).
+# HF_HOME: Hugging Face cache, where downloaded models are kept. Set
+#   HF_HUB_OFFLINE=1 once the model has been downloaded to never contact
+#   huggingface.co at startup.
+# GLICLASS_THREADS: waitress worker threads, i.e. how many /predict
+#   requests this server handles at once. Size to roughly the number of
+#   concurrent MIMEDefang workers expected to call it (see the
+#   multiplexor's -x / MX_MAXIMUM setting in mimedefang-multiplexor.service).
+# GLICLASS_TORCH_THREADS: threads torch uses per forward pass. Keep this
+#   low (1-2); torch otherwise uses every CPU core per call, which with
+#   GLICLASS_THREADS > 1 oversubscribes the machine instead of scaling.
+# GLICLASS_MODEL: Hugging Face name or local path of the checkpoint.
+# GLICLASS_DEVICE: torch device, "cpu" or e.g. "cuda:0".
+Environment=GLICLASS_HOST=127.0.0.1 GLICLASS_PORT=8688 GLICLASS_THREADS=8 GLICLASS_TORCH_THREADS=2
+Environment=GLICLASS_MODEL=knowledgator/gliclass-modern-base-v2.0 GLICLASS_DEVICE=cpu
+EnvironmentFile=-/etc/default/mimedefang-gliclass-server
+EnvironmentFile=-/etc/sysconfig/mimedefang-gliclass-server
+ExecStart=/bin/sh -c 'exec $ML_PYTHON /usr/bin/mimedefang-gliclass-server \
+    --host $GLICLASS_HOST --port $GLICLASS_PORT \
+    --threads $GLICLASS_THREADS --torch-threads $GLICLASS_TORCH_THREADS \
+    --model $GLICLASS_MODEL --device $GLICLASS_DEVICE'
+
+[Install]
+WantedBy=multi-user.target

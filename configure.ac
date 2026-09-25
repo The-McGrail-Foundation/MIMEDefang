@@ -168,6 +168,14 @@ AC_ARG_WITH(ipheader,
 
 AC_SUBST(IP_HEADER)
 
+ML_SERVERS=no
+AC_ARG_ENABLE(ml-servers,
+[  --enable-ml-servers     Install the Python ML model servers used by
+                          Mail::MIMEDefang::ML (see script/ml-servers)],
+   ML_SERVERS=$enableval, ML_SERVERS=no)
+
+AC_SUBST(ML_SERVERS)
+
 dnl Allow user to tell us where milter includes are
 MILTERINC=
 AC_ARG_WITH(milterinc,

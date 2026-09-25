@@ -1,0 +1,239 @@
+#!/usr/bin/env python3
+"""
+mimedefang-gliclass-server -- resident GLiClass inference server for
+Mail::MIMEDefang::ML::GLiClass.
+
+GLiClass (https://github.com/Knowledgator/GLiClass) is a zero-shot
+sequence classifier built on a bidirectional encoder: it scores a text
+against every label in a single forward pass, so it is about as fast as
+Laya and needs no fine-tuning, the labels are plain text.
+
+Endpoints:
+    POST /predict   {"text": "...", "labels": {"key": "label text", ...}}
+                    -> {"scores": {"key": p, ...}}
+    GET  /health     -> 200 if the model is loaded and ready
+
+Run as a systemd service bound to 127.0.0.1 only, this is a trusted
+local-only endpoint with no auth, not meant to be exposed off-host.
+If it has to serve MIMEDefang hosts over the network (--host), keep it
+secure by limiting access to its port with a firewall so that only those
+hosts can reach it; never expose it to the Internet, since every request
+carries message content.
+
+When not running under systemd (or another supervisor), pass --daemon
+to fork into the background; in that mode logging goes to syslog instead of
+stderr, since there's no terminal/journal capturing stderr any more.
+
+Concurrency: MIMEDefang's multiplexor can run many worker processes in
+parallel, each calling /predict synchronously for its own message. Size
+--threads to roughly the number of concurrent MIMEDefang workers expected
+to hit this server, and keep --torch-threads low (1-2) so concurrent
+forward passes don't oversubscribe the CPU.
+
+Installation (Python modules, virtualenv, model download, systemd unit):
+see script/ml-servers/README.md in the MIMEDefang sources.
+
+    mimedefang-gliclass-server --port 8688
+    mimedefang-gliclass-server --model knowledgator/gliclass-modern-large-v2.0 \\
+        --threads 16 --torch-threads 2
+    mimedefang-gliclass-server --device cuda:0 --port 8688
+    mimedefang-gliclass-server --daemon --port 8688
+"""
+
+import argparse
+import logging
+import logging.handlers
+import os
+import sys
+import threading
+
+import torch
+
+from flask import Flask, jsonify, request
+
+from gliclass import GLiClassModel, ZeroShotClassificationPipeline
+from transformers import AutoTokenizer
+
+log = logging.getLogger("mimedefang-gliclass-server")
+
+app = Flask(__name__)
+
+DEFAULT_MODEL = "knowledgator/gliclass-modern-base-v2.0"
+
+# Default confidence gate for logging a decided verdict. Must be kept in
+# sync with $Mail::MIMEDefang::ML::Config{min_confidence}, that's the
+# value actually used to decide whether MIMEDefang acts on a verdict.
+# Sites that override the Perl config should pass the same value here via
+# --min-confidence.
+DEFAULT_MIN_CONFIDENCE = 0.55
+MIN_CONFIDENCE = DEFAULT_MIN_CONFIDENCE
+
+_lock = threading.Lock()
+_pipeline = None
+_model_name = None
+
+
+def setup_logging(daemon):
+    handler = logging.handlers.SysLogHandler(address="/dev/log") if daemon \
+        else logging.StreamHandler()
+    fmt = "mimedefang-gliclass-server[%(process)d]: %(levelname)s %(message)s" if daemon \
+        else "%(asctime)s %(levelname)s %(message)s"
+    handler.setFormatter(logging.Formatter(fmt))
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.addHandler(handler)
+
+
+def daemonize():
+    """Standard double-fork: detach from the controlling terminal and
+    session, so the process survives the shell that launched it exiting.
+    """
+    if os.fork() > 0:
+        os._exit(0)
+    os.setsid()
+    if os.fork() > 0:
+        os._exit(0)
+
+    os.chdir("/")
+    os.umask(0)
+
+    sys.stdout.flush()
+    sys.stderr.flush()
+    devnull_fd = os.open(os.devnull, os.O_RDWR)
+    os.dup2(devnull_fd, sys.stdin.fileno())
+    os.dup2(devnull_fd, sys.stdout.fileno())
+    os.dup2(devnull_fd, sys.stderr.fileno())
+    os.close(devnull_fd)
+
+
+def build_pipeline(model_name, device):
+    global _pipeline, _model_name
+    log.info("loading GLiClass model %s on %s", model_name, device)
+    model = GLiClassModel.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    # multi-label: spam and phishing are scored independently, a message
+    # can be both (or neither).
+    pipeline = ZeroShotClassificationPipeline(
+        model, tokenizer, classification_type="multi-label", device=device)
+
+    # Warm up so the first real message doesn't pay for lazy init.
+    pipeline("warm up", ["spam"], threshold=0.0)
+
+    with _lock:
+        _pipeline = pipeline
+        _model_name = model_name
+    log.info("GLiClass model ready")
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    with _lock:
+        ready = _pipeline is not None
+        model_name = _model_name
+    return jsonify({"ready": ready, "model": model_name}), (200 if ready else 503)
+
+
+@app.route("/predict", methods=["POST"])
+def predict():
+    body = request.get_json(force=True, silent=True)
+    if not body or not isinstance(body.get("text"), str) \
+            or not isinstance(body.get("labels"), dict) or not body["labels"]:
+        return jsonify({"error": "expected {text, labels}"}), 400
+
+    with _lock:
+        pipeline = _pipeline
+    if pipeline is None:
+        return jsonify({"error": "model not loaded"}), 503
+
+    keys = list(body["labels"].keys())
+    texts = [str(body["labels"][k]) for k in keys]
+
+    try:
+        # threshold=0: return a score for every label, the Perl side
+        # decides what counts as a verdict.
+        results = pipeline(body["text"], texts, threshold=0.0)[0]
+    except Exception as exc:  # noqa: BLE001 -- report, don't crash the server
+        log.exception("predict failed")
+        return jsonify({"error": str(exc)}), 500
+
+    by_label = {r["label"]: float(r["score"]) for r in results}
+    scores = {k: by_label.get(t) for k, t in zip(keys, texts)}
+
+    # Mirrors Mail::MIMEDefang::ML::GLiClass: confidence is p for a yes,
+    # 1-p for a no, and only counts once it clears the threshold.
+    def decide(p):
+        if p is None:
+            return "unknown"
+        yes = p >= 0.5
+        if (p if yes else 1 - p) < MIN_CONFIDENCE:
+            return "undecided"
+        return "yes" if yes else "no"
+
+    log.info("Checked email result: %s",
+             " ".join("%s=%s (p=%s)" % (k, decide(p), p) for k, p in scores.items()))
+    return jsonify({"scores": scores}), 200
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", default=DEFAULT_MODEL,
+                         help="Hugging Face name or local path of the "
+                              "GLiClass checkpoint (default: %(default)s).")
+    parser.add_argument("--device", default="cpu",
+                         help="torch device, e.g. 'cpu' or 'cuda:0' "
+                              "(default: %(default)s).")
+    parser.add_argument("--host", default="127.0.0.1",
+                         help="Address to listen on (default: %(default)s). "
+                              "This server has no authentication: if you "
+                              "listen on a non-loopback address, firewall "
+                              "the port so only MIMEDefang hosts can reach "
+                              "it.")
+    parser.add_argument("--port", type=int, default=8688)
+    parser.add_argument("--threads", type=int, default=8,
+                         help="waitress worker threads, i.e. how many "
+                              "/predict requests this server handles at "
+                              "once. Size to roughly the number of "
+                              "concurrent MIMEDefang workers expected to "
+                              "call this server (default: 8).")
+    parser.add_argument("--torch-threads", type=int, default=2,
+                         help="Threads torch uses per forward pass. Torch "
+                              "defaults to using every CPU core per call; "
+                              "with --threads > 1 that oversubscribes the "
+                              "machine, so this pins each forward pass to "
+                              "a small fixed count instead (default: 2).")
+    parser.add_argument("--min-confidence", type=float,
+                         default=DEFAULT_MIN_CONFIDENCE,
+                         help="Confidence threshold below which an answer is "
+                              "logged as 'undecided' rather than a yes/no "
+                              "verdict. Must match "
+                              "$Mail::MIMEDefang::ML::Config{min_confidence} "
+                              "(default: %(default)s) -- this only affects "
+                              "logging, not the JSON response returned to "
+                              "the Perl caller.")
+    parser.add_argument("--daemon", action="store_true",
+                         help="Fork into the background and detach from "
+                              "the controlling terminal, for running "
+                              "without systemd or another supervisor. "
+                              "Logs to syslog instead of stderr in this "
+                              "mode.")
+    args = parser.parse_args()
+
+    global MIN_CONFIDENCE
+    MIN_CONFIDENCE = args.min_confidence
+
+    if args.daemon:
+        daemonize()
+    setup_logging(args.daemon)
+
+    torch.set_num_threads(args.torch_threads)
+
+    build_pipeline(args.model, args.device)
+
+    # waitress rather than Flask's dev server: this runs as a long-lived
+    # local service, not a public-facing app.
+    from waitress import serve
+    serve(app, host=args.host, port=args.port, threads=args.threads)
+
+
+if __name__ == "__main__":
+    main()

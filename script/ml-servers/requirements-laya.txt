@@ -1,0 +1,10 @@
+# Python modules needed by mimedefang-laya-server.
+#
+# laya pulls in torch, transformers and huggingface_hub.  To avoid the
+# multi-GB CUDA build of torch on a CPU-only host, install torch from the
+# CPU wheel index first (see README.md), then:
+#
+#   pip install -r requirements-laya.txt
+laya
+flask
+waitress

@@ -19,6 +19,7 @@
 #   ENABLE_CHECK_PERL_MODULES=1|0     Verify Perl deps at build time   [1]
 #   ENABLE_PTHREAD_FLAG=0|1           Pass -pthread to the C compiler  [0]
 #   IPHEADER=0|1                      Install IP-header config file    [0]
+#   ML_SERVERS=0|1                    Install Python ML model servers  [0]
 # =============================================================================
 
 use strict;
@@ -172,12 +173,14 @@ my $CONFDIR       = $CONFSUBDIR ne ''
                     ? File::Spec->catdir($SYSCONFDIR, $CONFSUBDIR)
                     : $SYSCONFDIR;
 my $IPHEADER      = opt('IPHEADER', 0) ? 'yes' : 'no';
+my $ML_SERVERS    = opt('ML_SERVERS', 0) ? 'yes' : 'no';
 
 printf "Run-as user          : %s\n",  $DEFANGUSER;
 printf "Spool directory      : %s\n",  $SPOOLDIR;
 printf "Quarantine directory : %s\n",  $QUARANTINEDIR;
 printf "Config directory     : %s\n",  $CONFDIR;
 printf "Filter file          : %s\n",  $MIMEDEFANG_PL;
+printf "ML model servers     : %s\n",  $ML_SERVERS;
 
 # --- Sendmail binary -------------------------------------------------------
 my $SENDMAILPROG = do {
@@ -569,6 +572,7 @@ WriteMakefile(
         MD_SYSCONFDIR      => $SYSCONFDIR,
         MD_CONFSUBDIR      => $CONFSUBDIR,
         MD_IPHEADER        => $IPHEADER,
+        MD_ML_SERVERS      => $ML_SERVERS,
         MD_SENDMAILPROG    => $SENDMAILPROG,
         MD_VERSION         => $BASE_VERSION,
         MD_BASE_VERSION    => $BASE_VERSION,
@@ -864,6 +868,26 @@ md_module_manpages:
 \t\t--name="Mail::MIMEDefang::Async::Results" \\
 \t\t--release=\$(MD_VERSION) \\
 \t\tmodules/lib/Mail/MIMEDefang/Async/Results.pm "modules/man/Mail::MIMEDefang::Async::Results.$MAN3EXT"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::ML Documentation" \\
+\t\t--name="Mail::MIMEDefang::ML" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/ML.pm "modules/man/Mail::MIMEDefang::ML.$MAN3EXT"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::ML::Laya Documentation" \\
+\t\t--name="Mail::MIMEDefang::ML::Laya" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/ML/Laya.pm "modules/man/Mail::MIMEDefang::ML::Laya.$MAN3EXT"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::ML::GLiClass Documentation" \\
+\t\t--name="Mail::MIMEDefang::ML::GLiClass" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/ML/GLiClass.pm "modules/man/Mail::MIMEDefang::ML::GLiClass.$MAN3EXT"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::ML::OpenAI Documentation" \\
+\t\t--name="Mail::MIMEDefang::ML::OpenAI" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/ML/OpenAI.pm "modules/man/Mail::MIMEDefang::ML::OpenAI.$MAN3EXT"
 
 # ============================================================
 # Extra install targets (run after the standard EUMM install)
@@ -897,8 +921,11 @@ install_scripts:
 \t    \$(MD_INSTALL_PROGRAM) script/mimedefang-util \$(DESTDIR)\$(BINDIR)/mimedefang-util || true
 \ttest -f script/mimedefang-test-mail && \\
 \t    \$(MD_INSTALL_PROGRAM) script/mimedefang-test-mail \$(DESTDIR)\$(BINDIR)/mimedefang-test-mail || true
-\ttest -f script/mimedefang-laya-server && \\
-\t    \$(MD_INSTALL_PROGRAM) script/mimedefang-laya-server \$(DESTDIR)\$(BINDIR)/mimedefang-laya-server || true
+\tif test "\$(MD_ML_SERVERS)" = "yes"; then \\
+\t    for s in mimedefang-laya-server mimedefang-gliclass-server; do \\
+\t        \$(MD_INSTALL_PROGRAM) script/ml-servers/\$\$s \$(DESTDIR)\$(BINDIR)/\$\$s; \\
+\t    done; \\
+\tfi
 
 install_man: pod2man
 \t\$(MKPATH) \$(DESTDIR)\$(INSTALLMAN1DIR) \$(DESTDIR)\$(INSTALLMAN3DIR) \\
@@ -926,7 +953,11 @@ install_man: pod2man
 \t    Mail::MIMEDefang::Utils.$MAN3EXT \\
 \t    Mail::MIMEDefang::Async.$MAN3EXT \\
 \t    Mail::MIMEDefang::Async::Checks.$MAN3EXT \\
-\t    Mail::MIMEDefang::Async::Results.$MAN3EXT; do \\
+\t    Mail::MIMEDefang::Async::Results.$MAN3EXT \\
+\t    Mail::MIMEDefang::ML.$MAN3EXT \\
+\t    Mail::MIMEDefang::ML::Laya.$MAN3EXT \\
+\t    Mail::MIMEDefang::ML::GLiClass.$MAN3EXT \\
+\t    Mail::MIMEDefang::ML::OpenAI.$MAN3EXT; do \\
 \t    test -f "modules/man/\$\$m" && \$(MD_INSTALL_DATA) "modules/man/\$\$m" \$(DESTDIR)\$(INSTALLMAN3DIR)/\$\$m || true; \\
 \tdone
 \tfor m in mimedefang-filter.5; do \\

@@ -701,6 +701,7 @@ EMBPERLLDFLAGS
 EMBPERLCFLAGS
 HAVE_SPAM_ASSASSIN
 CONFSUBDIR
+ML_SERVERS
 IP_HEADER
 DEFANGUSER
 NM
@@ -763,6 +764,7 @@ enable_poll
 with_sendmail
 with_user
 with_ipheader
+enable_ml_servers
 with_milterinc
 with_milterlib
 with_confsubdir
@@ -1420,6 +1422,8 @@ Optional Features:
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
   --disable-embedded-perl Disable embedded Perl interpreter
   --enable-poll           Use poll(2) instead of select(2) in multiplexor
+  --enable-ml-servers     Install the Python ML model servers used by
+                          Mail::MIMEDefang::ML (see script/ml-servers)
   --enable-pthread-flag   Supply the -pthread flag to the C compiler
   --disable-check-perl-modules
 			  Disable compile-time checks for Perl modules
@@ -4423,6 +4427,19 @@ then :
   withval=$with_ipheader; IP_HEADER=$with_ipheader
 else case e in #(
   e) IP_HEADER=no ;;
+esac
+fi
+
+
+
+
+ML_SERVERS=no
+# Check whether --enable-ml-servers was given.
+if test ${enable_ml_servers+y}
+then :
+  enableval=$enable_ml_servers; ML_SERVERS=$enableval
+else case e in #(
+  e) ML_SERVERS=no ;;
 esac
 fi
 

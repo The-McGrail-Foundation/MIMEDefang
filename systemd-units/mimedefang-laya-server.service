@@ -1,13 +1,24 @@
 [Unit]
-Description=Resident Laya inference server for Mail::MIMEDefang::LLM::Laya
-Documentation=man:mimedefang-laya-server(8)
+Description=Resident Laya inference server for Mail::MIMEDefang::ML::Laya
+Documentation=https://github.com/NandhaKishorM/laya
 After=network.target
 PartOf=mimedefang.service
+Before=mimedefang-multiplexor.service
 
 [Service]
 Type=simple
 Restart=on-failure
 TimeoutStopSec=30s
+User=defang
+StateDirectory=MIMEDefang/ml
+Environment=ML_PYTHON=/opt/mimedefang-ml/venv/bin/python3 HF_HOME=/var/lib/MIMEDefang/ml/huggingface
+# ML_PYTHON: Python interpreter that has the server's modules installed,
+#   see script/ml-servers/README.md in the MIMEDefang sources (default:
+#   the venv at /opt/mimedefang-ml/venv; set it to /usr/bin/python3 if the
+#   modules come from distribution packages).
+# HF_HOME: Hugging Face cache, where downloaded models are kept. Set
+#   HF_HUB_OFFLINE=1 once the model has been downloaded to never contact
+#   huggingface.co at startup.
 # LAYA_THREADS: waitress worker threads, i.e. how many /predict requests
 #   this server handles at once. Size to roughly the number of concurrent
 #   MIMEDefang workers expected to call it (see the multiplexor's -x /
@@ -21,9 +32,12 @@ TimeoutStopSec=30s
 Environment=LAYA_HOST=127.0.0.1 LAYA_PORT=8687 LAYA_THREADS=8 LAYA_TORCH_THREADS=2
 EnvironmentFile=-/etc/default/mimedefang-laya-server
 EnvironmentFile=-/etc/sysconfig/mimedefang-laya-server
-ExecStart=/bin/sh -c 'exec /usr/bin/mimedefang-laya-server \
+ExecStart=/bin/sh -c 'exec $ML_PYTHON /usr/bin/mimedefang-laya-server \
     --host $LAYA_HOST --port $LAYA_PORT \
     --threads $LAYA_THREADS --torch-threads $LAYA_TORCH_THREADS \
     `[ -n "$LAYA_PRELOAD" ] && echo "--preload $LAYA_PRELOAD"` \
     `[ -n "$LAYA_CHECKPOINT" ] && echo "--checkpoint $LAYA_CHECKPOINT"` \
     `[ -n "$LAYA_ATTACH_LANGUAGE" ] && echo "--attach-language $LAYA_ATTACH_LANGUAGE"`'
+
+[Install]
+WantedBy=multi-user.target
