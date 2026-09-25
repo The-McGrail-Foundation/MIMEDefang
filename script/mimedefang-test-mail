@@ -200,6 +200,22 @@ for my $recip (@to) {
 for my $name (keys %macros) {
     print $cmdfh '=' . main::percent_encode($name) . ' ' . main::percent_encode($macros{$name}) . "\n";
 }
+# mimedefang.c writes a U line per Subject: and an X line per Message-ID:
+# header, which read_commands_file() turns into $Subject and $MessageID.
+{
+    open(my $hfh, '<', $eml) or die "Cannot open $eml: $!\n";
+    my $head = MIME::Head->new;
+    $head->read($hfh);
+    close($hfh);
+    for my $h (['Subject', 'U'], ['Message-ID', 'X']) {
+        my ($name, $cmd) = @$h;
+        for my $value ($head->get_all($name)) {
+            $value =~ s/\r?\n\z//;
+            $value =~ s/^\s+//;
+            print $cmdfh $cmd . main::percent_encode($value) . "\n";
+        }
+    }
+}
 print $cmdfh "F\n";
 close($cmdfh);
 
