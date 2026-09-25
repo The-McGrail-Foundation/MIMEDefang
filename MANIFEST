@@ -110,12 +110,10 @@ redhat/mimedefang-init.in
 redhat/mimedefang-spec.in
 redhat/mimedefang-sysconfig.in
 rm_r.c
-script/mimedefang-laya-server
 script/mimedefang-test-mail
 script/mimedefang-util.in
 SpamAssassin/spamassassin.cf
 syslog-fac.c
-systemd-units/mimedefang-laya-server.service
 systemd-units/mimedefang-multiplexor.service
 systemd-units/mimedefang.service
 t/actions.t
