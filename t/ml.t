@@ -60,6 +60,36 @@ sub t_build_state_spam_results : Test(7)
   ok(!exists $state->{sa_score} && !exists $state->{sa_rules}, 'rules without a score are dropped');
 }
 
+sub t_build_state_entity : Test(9)
+{
+  require MIME::Entity;
+  my $entity = MIME::Entity->build(
+    From          => '=?UTF-8?Q?Jane_D=C3=B6e?= <admin@example.org>',
+    'Reply-To'    => 'sales@example.com',
+    To            => 'a@example.com',
+    Subject       => '=?UTF-8?B?Q2FwaXRhbCDigJQgcGxhbm5pbmc=?=',
+    'X-Mailer'    => 'Mass Mailer ' . ('x' x 300),
+    'X-Spam-Flag' => 'YES',
+    Type          => 'text/plain',
+    Charset       => 'utf-8',
+    Data          => ["Hello there\n"],
+  );
+  my $state = ml_build_state(Entity => $entity, MailFrom => 'bounce@example.org', SPF => 'pass');
+  is($state->{from}, "Jane D\x{f6}e <admin\@example.org>", 'From decoded from header');
+  is($state->{reply_to}, 'sales@example.com', 'Reply-To from header');
+  is($state->{subject}, "Capital \x{2014} planning", 'Subject decoded from header');
+  like($state->{body}, qr/^Hello there/, 'body from entity');
+  is($state->{headers}{To}, 'a@example.com', 'configured header read');
+  ok(!exists $state->{headers}{'X-Spam-Flag'} && !exists $state->{headers}{From}, 'unlisted and dedicated headers left out');
+  is(length($state->{headers}{'X-Mailer'}), $Mail::MIMEDefang::ML::Config{header_max_chars} + 3, 'header capped');
+
+  my $text = Mail::MIMEDefang::ML::state_to_text($state);
+  like($text, qr/^Envelope-From: bounce\@example\.org\n.*^To: a\@example\.com\n.*^X-Mailer: Mass/ms, 'headers rendered in order');
+
+  $state = ml_build_state(Entity => $entity, Subject => 'explicit');
+  is($state->{subject}, 'explicit', 'explicit args win over the entity');
+}
+
 sub t_dispatch_errors : Test(3)
 {
   local $Mail::MIMEDefang::ML::Config{backend} = 'nosuch';
@@ -129,7 +159,7 @@ sub t_gliclass : Test(7)
   is(ml_classify(_state())->{error}, 'bad response', 'missing scores');
 }
 
-sub t_openai : Test(8)
+sub t_openai : Test(15)
 {
   local $Mail::MIMEDefang::ML::Config{backend} = 'openai';
   local $Mail::MIMEDefang::ML::Config{openai}{model};
@@ -140,21 +170,43 @@ sub t_openai : Test(8)
 
   _stub({ choices => [ { message => { content =>
     "<think>hmm {not json}</think>```json\n"
-    . '{"is_spam": true, "spam_confidence": 0.95, "is_phishing": false, "phishing_confidence": 0.7}'
+    . '{"is_spam": 0.95, "is_phishing": 0.3}'
     . "\n```" } } ] });
   my $v = ml_classify(_state());
   is($last_url, 'http://127.0.0.1:11434/v1/chat/completions', 'chat completions url');
   is($last_payload->{model}, 'test-model', 'model sent');
+  is($last_payload->{reasoning_effort}, 'none', 'thinking disabled by default');
   is($v->{is_spam}{answer}, 1, 'spam yes');
   is($v->{is_phishing}{answer}, 0, 'phishing no');
-  is($v->{is_phishing}{confidence}, 0.7, 'phishing confidence');
+  cmp_ok(abs($v->{is_phishing}{confidence} - 0.7), '<', 1e-9, 'no-confidence is 1-p');
 
   _stub({ choices => [ { message => { content => 'I think it is spam' } } ] });
   is(ml_classify(_state())->{error}, 'bad json', 'prose reply -> error');
 
   _stub({ choices => [ { message => { content =>
-    '{"is_spam": true, "spam_confidence": 7}' } } ] });
+    '{"is_spam": 7}' } } ] });
   is(ml_classify(_state())->{is_spam}{confidence}, 1, 'confidence clamped');
+
+  _stub({ choices => [ { message => { content =>
+    '{"is_spam": false, "is_phishing": "maybe"}' } } ] });
+  $v = ml_classify(_state());
+  is_deeply([$v->{is_spam}{answer}, $v->{is_spam}{confidence}], [0, 1], 'bare boolean accepted');
+  ok(!defined $v->{is_phishing}{answer}, 'non-numeric -> no opinion');
+
+  _stub({ choices => [ { finish_reason => 'length',
+    message => { content => '', reasoning => 'Okay, let me think about' } } ] });
+  like(ml_classify(_state())->{error}, qr/^empty reply \(max_tokens reached/, 'thinking ran out of tokens');
+
+  _stub({ choices => [ { message => { content => '' } } ] });
+  is(ml_classify(_state())->{error}, 'empty reply', 'empty reply');
+
+  _stub({ choices => [ { message => { content => '', reasoning =>
+    'Spammy. {"is_spam": 0.9, "is_phishing": 0.2}' } } ] });
+  is(ml_classify(_state())->{is_spam}{confidence}, 0.9, 'verdict taken from reasoning field');
+
+  local $Mail::MIMEDefang::ML::Config{openai}{reasoning_effort} = '';
+  ml_classify(_state());
+  ok(!exists $last_payload->{reasoning_effort}, 'reasoning_effort can be omitted');
 }
 
 sub t_live : Test(1)

@@ -65,7 +65,10 @@ pass, so it is fast enough to run on every message.
 
 L<Mail::MIMEDefang::ML::OpenAI>, a self-hosted generative model served through
 the OpenAI-compatible chat completions API by Ollama, llama.cpp, vLLM or
-LM Studio.
+LM Studio.  Use a model with at least 7-8 billion parameters, smaller ones
+miss all but blatant spam (see L<Mail::MIMEDefang::ML::OpenAI/CHOOSING A MODEL>).
+Generative models take seconds per message on CPU: raise C<timeout>, see
+L<Mail::MIMEDefang::ML::OpenAI/TIMEOUT>.
 
 =back
 
@@ -89,7 +92,8 @@ F<mimedefang-filter>.  The keys, with their defaults:
   # Common settings
   $Mail::MIMEDefang::ML::Config{enabled}         = 1;       # 0 turns ml_classify() into a no-op
   $Mail::MIMEDefang::ML::Config{backend}         = 'laya';  # 'laya', 'gliclass' or 'openai'
-  $Mail::MIMEDefang::ML::Config{timeout}         = 10;      # seconds per HTTP request
+  $Mail::MIMEDefang::ML::Config{timeout}         = 10;      # seconds per HTTP request,
+                                                            # raise it for 'openai' (e.g. 60)
   $Mail::MIMEDefang::ML::Config{connect_retries} = 1;
   $Mail::MIMEDefang::ML::Config{min_confidence}  = 0.55;    # below this -> no opinion
 
@@ -110,7 +114,7 @@ F<mimedefang-filter>.  The keys, with their defaults:
 
   # Self-hosted generative model (Ollama, llama.cpp, vLLM, LM Studio)
   $Mail::MIMEDefang::ML::Config{openai}{base_url}     = 'http://127.0.0.1:11434/v1';
-  $Mail::MIMEDefang::ML::Config{openai}{model}        = undef;   # required, e.g. 'qwen3:1.7b'
+  $Mail::MIMEDefang::ML::Config{openai}{model}        = undef;   # required, e.g. 'qwen3:8b' (>= 7-8B parameters)
   $Mail::MIMEDefang::ML::Config{openai}{max_tokens}   = 100;
 
 See each backend's documentation for its remaining keys.
@@ -126,7 +130,6 @@ C<filter_sender> and C<filter_begin>; see F<examples/example-filter-with-ml>
 in the MIMEDefang sources for the complete filter.
 
   use Mail::MIMEDefang::ML;
-  use MIME::Words qw(decode_mimewords);
 
   $Mail::MIMEDefang::ML::Config{backend} = 'gliclass';
 
@@ -138,20 +141,16 @@ in the MIMEDefang sources for the complete filter.
       ($hits, $req, $names, $report) = spam_assassin_check()
           if $Features{"SpamAssassin"};
 
-      # $Subject may still be RFC 2047 encoded.
-      my $subject = join('', map { $_->[0] // '' } decode_mimewords($Subject // ''));
-
       # The SpamAssassin results are not sent here, so the verdict stays
       # independent: a model that sees them tends to follow them and
       # amplify their false positives.  Uncomment SAScore/SARules to send
       # them anyway (or pass RspamdScore/RspamdSymbols from rspamd_check()).
       my $verdict = ml_classify(ml_build_state(
-          From    => $Sender,
-          Subject => $subject,
-          Body    => md_get_plain_text_body($entity),
-          SPF     => $SPFResult,
-          DKIM    => $DKIMResult,
-          DMARC   => $DMARCResult,
+          Entity   => $entity,     # headers, subject and body
+          MailFrom => $Sender,
+          SPF      => $SPFResult,
+          DKIM     => $DKIMResult,
+          DMARC    => $DMARCResult,
           # SAScore => $hits,
           # SARules => $names,
       ));
@@ -219,8 +218,10 @@ our @EXPORT = @EXPORT_OK;
 use LWP::UserAgent ();
 use HTTP::Request  ();
 use JSON::PP        qw(encode_json decode_json);
+use Encode          ();
 
 use Mail::MIMEDefang qw(md_syslog);
+use Mail::MIMEDefang::Utils qw(md_get_plain_text_body);
 
 our %Config = (
     enabled            => 1,
@@ -233,6 +234,17 @@ our %Config = (
     body_head_chars    => 1500,
     body_tail_chars    => 500,
     spam_top_rules     => 8,
+
+    # Headers read from the entity passed to ml_build_state(), in the order
+    # they are shown to the model.  From, Reply-To and Subject have their
+    # own state fields and are always read.  Upstream X-Spam-* and
+    # Authentication-Results headers are deliberately left out: they can be
+    # forged by the sender, and would make the verdict follow earlier
+    # filters instead of being independent.
+    headers            => [qw(To Cc Date Message-ID Return-Path Sender
+                              List-Id List-Unsubscribe Precedence
+                              X-Mailer User-Agent)],
+    header_max_chars   => 200,
 
     # Verdicts below this confidence are treated as "no opinion".
     min_confidence     => 0.55,
@@ -251,7 +263,7 @@ our %Config = (
     },
     openai => {
         base_url     => 'http://127.0.0.1:11434/v1',
-        model        => undef,    # required, e.g. 'qwen3:1.7b'
+        model        => undef,    # required, e.g. 'qwen3:8b' (>= 7-8B parameters)
         max_tokens   => 100,
     },
 );
@@ -294,8 +306,15 @@ Assembles the truncated, structured state hash the backends are given.
 Callers supply already-decoded/HTML-stripped text; this function does not
 touch MIME parsing or auth-result computation.
 
-Required args: C<From>, C<Subject>, C<Body>.
-Optional: C<SPF>, C<DKIM>, C<DMARC>, C<ReplyTo>.
+Pass the message as C<Entity> (the C<MIME::Entity> given to C<filter_end>)
+and the state is filled from it: C<From>, C<ReplyTo> and C<Subject> from
+their headers, C<Body> from C<md_get_plain_text_body>, plus the headers
+listed in C<$Config{headers}> (decoded, unfolded and capped at
+C<header_max_chars> each) under C<headers>.  Arguments passed explicitly
+override the values read from the entity.
+
+Args: C<Entity>, C<From>, C<ReplyTo>, C<Subject>, C<Body>, C<MailFrom> (the
+envelope sender, C<$Sender>), C<SPF>, C<DKIM>, C<DMARC>.
 
 Optional spam-filter results: C<SAScore>, C<SARules>, C<RspamdScore>,
 C<RspamdSymbols>.  Rules/symbols may be an arrayref or the comma- or
@@ -313,6 +332,27 @@ otherwise lack context, at the cost of repeating their mistakes.
 sub ml_build_state {
     my (%args) = @_;
 
+    my %headers;
+    if (my $entity = $args{Entity}) {
+        my $head = $entity->head;
+        my %seen;
+        for my $name ('From', 'Reply-To', 'Subject', @{ $Config{headers} || [] }) {
+            next if $seen{lc $name}++;
+            my @values = map { _header_text($_) } $head->get_all($name);
+            @values = grep { length } @values;
+            next unless @values;
+            my $value = join(', ', @values);
+            $value = substr($value, 0, $Config{header_max_chars}) . '...'
+                if length($value) > $Config{header_max_chars};
+            $headers{$name} = $value;
+        }
+        $args{From}    //= delete $headers{From};
+        $args{ReplyTo} //= delete $headers{'Reply-To'};
+        $args{Subject} //= delete $headers{Subject};
+        delete @headers{qw(From Reply-To Subject)};
+        $args{Body}    //= md_get_plain_text_body($entity);
+    }
+
     my $body = defined $args{Body} ? $args{Body} : '';
     if (length($body) > $Config{body_head_chars} + $Config{body_tail_chars}) {
         $body = substr($body, 0, $Config{body_head_chars})
@@ -323,6 +363,7 @@ sub ml_build_state {
     my %state = (
         from         => $args{From}    // '',
         reply_to     => $args{ReplyTo} // '',
+        mail_from    => $args{MailFrom} // '',
         subject      => $args{Subject} // '',
         body         => $body,
         spf          => $args{SPF}   // 'unknown',
@@ -337,7 +378,19 @@ sub ml_build_state {
         $state{"${prefix}_rules"} = _rule_list($args{$rules});
     }
 
+    $state{headers} = \%headers if %headers;
+
     return \%state;
+}
+
+# A raw header value as readable text: RFC 2047 decoded, unfolded, trimmed.
+sub _header_text {
+    my ($value) = @_;
+    return '' unless defined $value;
+    my $text = eval { Encode::decode('MIME-Header', $value) } // $value;
+    $text =~ s/\s+/ /g;
+    $text =~ s/^ | $//g;
+    return $text;
 }
 
 # Rules as an arrayref or a comma/space-separated string -> capped arrayref.
@@ -430,11 +483,18 @@ sub state_to_text {
     my @lines = (
         "From: $state->{from}",
         (length $state->{reply_to} ? "Reply-To: $state->{reply_to}" : ()),
+        (length($state->{mail_from} // '') ? "Envelope-From: $state->{mail_from}" : ()),
         "Subject: $state->{subject}",
         "SPF: $state->{spf}",
         "DKIM: $state->{dkim}",
         "DMARC: $state->{dmarc}",
     );
+    my $headers = $state->{headers} || {};
+    my %order;
+    @order{ @{ $Config{headers} || [] } } = (0 .. $#{ $Config{headers} || [] });
+    for my $name (sort { ($order{$a} // 1e9) <=> ($order{$b} // 1e9) || $a cmp $b } keys %$headers) {
+        push @lines, "$name: $headers->{$name}";
+    }
     for my $f (['sa', 'SpamAssassin'], ['rspamd', 'Rspamd']) {
         my ($prefix, $name) = @$f;
         next unless defined $state->{"${prefix}_score"};
@@ -463,6 +523,14 @@ sub http_post_json {
 
     unless ($resp && $resp->is_success) {
         my $reason = $resp ? $resp->status_line : 'no response';
+        # Servers explain errors in the body, e.g. Ollama's 404 is
+        # {"error":{"message":"model \"x\" not found, try pulling it first"}}.
+        if ($resp && (my $content = $resp->decoded_content)) {
+            my $err = eval { decode_json($content) };
+            $err = $err->{error} if ref($err) eq 'HASH';
+            $err = $err->{message} // $err->{detail} if ref($err) eq 'HASH';
+            $reason .= ": $err" if defined $err && !ref($err) && length $err;
+        }
         md_syslog('info', "ml: request to $url failed: $reason");
         return { error => $reason };
     }

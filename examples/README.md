@@ -38,11 +38,22 @@ every backend:
 |------------|-------------------------------------------|----------------------------------------------|-----------------------|
 | `laya`     | Laya non-autoregressive decision model    | `mimedefang-laya-server` (port 8687)         | tens of ms            |
 | `gliclass` | GLiClass zero-shot encoder (ModernBERT)   | `mimedefang-gliclass-server` (port 8688)     | tens of ms            |
-| `openai`   | self-hosted generative model (e.g. Qwen3)       | Ollama / llama.cpp / vLLM, OpenAI-compatible API | hundreds of ms to seconds |
+| `openai`   | self-hosted generative model, >= 7-8B parameters (e.g. Qwen3 8B) | Ollama / llama.cpp / vLLM, OpenAI-compatible API | hundreds of ms to seconds |
 
 Laya and GLiClass answer in a single forward pass and are fast enough for
 every message. The `openai` backend runs a generative model, so it is
-slower; set `$Mail::MIMEDefang::ML::Config{timeout}` to match.
+slower: the default `$Mail::MIMEDefang::ML::Config{timeout}` of 10 seconds
+is meant for Laya and GLiClass and must be increased for `openai` (e.g. to
+60; an 8B model on CPU takes seconds per message).  Keep
+`timeout * (1 + connect_retries)`, plus the SpamAssassin run time, below
+the multiplexor busy timeout (`mimedefang-multiplexor -b`, default 120
+seconds) and the MTA's milter timeouts, or raise those too.
+
+Use a model with at least 7-8 billion parameters (Qwen3 8B, Llama 3.1 8B,
+Mistral 7B, Gemma 2 9B or larger).  Smaller models (1-4B, e.g. Qwen3 1.7B
+or Phi-3 mini) catch blatant spam and phishing but judge subtler
+unsolicited mail, such as cold sales pitches, as ham, so they add little on
+top of SpamAssassin.
 
 Backend URLs can use any host name or IP address. The model servers have
 no authentication and every request carries message content, so keep them

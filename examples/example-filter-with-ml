@@ -39,7 +39,6 @@ use Mail::MIMEDefang::DKIM;
 use Mail::MIMEDefang::ML;
 use Mail::MIMEDefang::Net qw(get_host_name);
 use Mail::MIMEDefang::SPF;
-use MIME::Words qw(decode_mimewords);
 
 #***********************************************************************
 # Set administrator's e-mail address here.
@@ -59,7 +58,11 @@ $AddWarningsInline = 0;
 # confidence threshold below which a verdict is treated as "no opinion".
 #***********************************************************************
 # $Mail::MIMEDefang::ML::Config{min_confidence} = 0.55;
-# $Mail::MIMEDefang::ML::Config{timeout}        = 10;
+# The default timeout (10s) suits Laya and GLiClass; generative models
+# (OpenAI backend) are much slower, especially on CPU, so raise it.  Keep
+# timeout * (1 + connect_retries), plus SpamAssassin's run time, below the
+# multiplexor busy timeout (mimedefang-multiplexor -b, default 120s).
+$Mail::MIMEDefang::ML::Config{timeout}        = 10;
 
 # Laya (mimedefang-laya-server):
 # $Mail::MIMEDefang::ML::Config{backend} = 'Laya';
@@ -69,10 +72,16 @@ $AddWarningsInline = 0;
 $Mail::MIMEDefang::ML::Config{backend}              = 'GLiClass';
 # $Mail::MIMEDefang::ML::Config{gliclass}{server_url} = 'http://127.0.0.1:8688';
 
-# Local model via Ollama:
+# Local model via Ollama.  Use a model with at least 7-8B parameters
+# (Qwen3 8B, Llama 3.1 8B, Mistral 7B, Gemma 2 9B, ...): smaller ones only
+# catch blatant spam.  On CPU an 8B model needs seconds per message, see
+# the timeout above.
 # $Mail::MIMEDefang::ML::Config{backend}          = 'OpenAI';
 # $Mail::MIMEDefang::ML::Config{openai}{base_url} = 'http://127.0.0.1:11434/v1';
-# $Mail::MIMEDefang::ML::Config{openai}{model}    = 'qwen3:1.7b';
+# $Mail::MIMEDefang::ML::Config{openai}{model}    = 'qwen3:8b';
+# Thinking is disabled by default (reasoning_effort 'none'); for models or
+# servers that keep thinking anyway, give them room to finish:
+# $Mail::MIMEDefang::ML::Config{openai}{max_tokens} = 1024;
 
 md_graphdefang_log_enable('mail', 1);
 
@@ -200,11 +209,10 @@ sub filter_end {
 
     #*******************************************************************
     # Ask the model for a second opinion, using the auth results gathered
-    # above.  $Subject comes straight off the
-    # wire and may still be RFC 2047 encoded (e.g. "=?utf-8?Q?...?=");
-    # decode it first so the model sees readable text, not encoded-word noise.
+    # above.  ml_build_state() reads From/Reply-To/Subject, the other
+    # headers listed in $Mail::MIMEDefang::ML::Config{headers} and the
+    # plain-text body from $entity, RFC 2047 decoded.
     #*******************************************************************
-    my $subject = join('', map { $_->[0] // '' } decode_mimewords($Subject // ''));
 
     # The SpamAssassin score and rules are not sent to the model: a model
     # that sees them tends to follow them, amplifying SpamAssassin's false
@@ -212,14 +220,13 @@ sub filter_end {
     # SAScore/SARules to send them anyway; with Rspamd, pass RspamdScore
     # and RspamdSymbols from rspamd_check() the same way.
     my $state = ml_build_state(
-        From    => $Sender,
-        Subject => $subject,
-        Body    => md_get_plain_text_body($entity),
+        Entity   => $entity,
+        MailFrom => $Sender,
         # SAScore => $hits,
         # SARules => $names,
-        SPF     => $SPFResult,
-        DKIM    => $DKIMResult,
-        DMARC   => $DMARCResult,
+        SPF      => $SPFResult,
+        DKIM     => $DKIMResult,
+        DMARC    => $DMARCResult,
     );
 
     my $verdict = ml_classify($state);
