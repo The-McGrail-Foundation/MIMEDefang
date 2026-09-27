@@ -39,6 +39,8 @@ contrib/linuxorg/filter
 contrib/linuxorg/README
 contrib/linuxorg/spam-deliver
 contrib/linuxorg/spam-trusted-hosts
+contrib/ml-benchmark/mimedefang-filter
+contrib/ml-benchmark/ml-benchmark
 contrib/munin/mimedefang_munin_plugin
 contrib/README.md
 contrib/word-to-html
