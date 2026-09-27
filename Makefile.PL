@@ -373,6 +373,10 @@ print "\nclock_gettime(CLOCK_MONOTONIC): " . ($HAVE_CLOCK_MONOTONIC ? 'yes' : 'n
 my $HAVE_INET_NTOP = probe_inet_ntop();
 print "inet_ntop             : " . ($HAVE_INET_NTOP ? 'yes' : 'no') . "\n";
 
+# --- C dialect probe -------------------------------------------------------
+my $C_STD = probe_c_std();
+print "C dialect             : " . ($C_STD eq '' ? 'compiler default' : $C_STD) . "\n";
+
 # --- socklen probe --------------------------------------------------------
 my $HAVE_SOCKLEN_T = probe_socklen();
 print "socklen_t             : " . ($HAVE_SOCKLEN_T ? 'yes' : 'no') . "\n";
@@ -391,12 +395,11 @@ if ($ENABLE_EMBEDDED_PERL) {
     print "Embedded Perl        : disabled\n";
 }
 
-# Base CFLAGS: pin the C standard (must predate C23, where 'bool' becomes a
-# keyword and breaks libmilter's mfapi.h "typedef int bool;" plus mandatory defines
+# Base CFLAGS: pre-C23 C dialect (see probe_c_std) plus mandatory defines
 my $CFLAGS = join(' ',
     '-I.',
     "-I$MILTERINC",
-    '-std=c17',
+    ($C_STD ne ''              ? $C_STD                   : ()),
     '-D_DEFAULT_SOURCE',
     ($ENABLE_DEBUGGING         ? '-DENABLE_DEBUGGING'    : ()),
     ($ENABLE_POLL              ? '-DUSE_POLL'             : ()),
@@ -1055,6 +1058,37 @@ C
     my $rc = system("$CC -o $exe $src 2>/dev/null") == 0;
     unlink $src, $exe;
     return $rc ? 1 : 0;
+}
+
+# libmilter's mfapi.h does "typedef int bool;", which breaks with C23 where
+# 'bool' is a keyword.  If the compiler defaults to C23, pick a GNU pre-C23
+# dialect: unlike -std=cXX it does not define __STRICT_ANSI__, which would
+# hide POSIX/extension prototypes (e.g. on Solaris).
+# Returns '' when the compiler default is fine.
+sub probe_c_std {
+    my $tmpdir = File::Spec->tmpdir();
+    my $src    = File::Spec->catfile($tmpdir, "conftest_std_$$.c");
+    my $obj    = File::Spec->catfile($tmpdir, "conftest_std_$$.o");
+    open my $fh, '>', $src or die "Cannot write $src: $!\n";
+    print $fh <<'C';
+typedef int bool;
+int main(void) {
+    bool b = 0;
+    return b;
+}
+C
+    close $fh;
+    my $found;
+    foreach my $std ('', '-std=gnu17', '-std=gnu11', '-std=gnu99') {
+        if (system("$CC $std -c -o $obj $src 2>/dev/null") == 0) {
+            $found = $std;
+            last;
+        }
+    }
+    unlink $src, $obj;
+    die "No pre-C23 C dialect found; libmilter headers are not C23 compatible.\n"
+      unless defined $found;
+    return $found;
 }
 
 sub probe_milter {
