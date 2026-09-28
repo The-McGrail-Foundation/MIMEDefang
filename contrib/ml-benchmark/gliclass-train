@@ -1,0 +1,282 @@
+#!/usr/bin/env python3
+"""
+gliclass-train -- fine-tune a GLiClass model for Mail::MIMEDefang::ML::GLiClass
+on a corpus of ham and spam messages, and measure it on a held-out part.
+
+The training text of every message is built by the Mail::MIMEDefang::ML
+Perl code itself (ml_build_state() + state_to_text() with the GLiClass
+body limits), and the label texts are read from
+Mail::MIMEDefang::ML::GLiClass, so the model is trained on exactly what
+the backend sends it at filtering time.
+
+Each message gets these labels:
+    ham                       the ham label if it is bulk mail (it has a
+                              List-Unsubscribe or List-Id header), none
+                              otherwise
+    spam (SPAM_DIR)           the is_spam label
+    phishing (--phishing-dir) the is_spam and is_phishing labels
+
+Usage:
+    gliclass-train [options] HAM_DIR SPAM_DIR
+    gliclass-train --phishing-dir phish/ --output /var/lib/MIMEDefang/ml/gliclass-mail ham/ spam/
+
+Needs the Python modules in script/ml-servers/requirements-gliclass.txt
+(accelerate included) and Perl with the Mail::MIMEDefang modules.  Training wants a GPU; on CPU keep
+--max-length low.
+
+then serve the result with:
+    mimedefang-gliclass-server --model OUTPUT_DIR
+
+Copyright (C) 2026 The McGrail Foundation
+
+This program may be distributed under the terms of the GNU General
+Public License, Version 2.
+"""
+
+import argparse
+import json
+import os
+import random
+import subprocess
+import sys
+
+TOP = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+
+# Renders every file named on stdin as the GLiClass backend would, one
+# JSON object per line: {"file", "text", "list"}; the first line carries
+# the label texts.
+PERL_RENDER = r'''
+use strict;
+use warnings;
+use JSON::PP ();
+use MIME::Parser;
+use Mail::MIMEDefang;
+use Mail::MIMEDefang::Utils ();
+use Mail::MIMEDefang::ML;
+
+Mail::MIMEDefang::Utils::md_init();
+my $json = JSON::PP->new->utf8->canonical;
+print $json->encode({
+    labels => \%Mail::MIMEDefang::ML::GLiClass::LABELS,
+    ham    => \@Mail::MIMEDefang::ML::GLiClass::HAM_LABELS,
+}), "\n";
+
+my $parser = MIME::Parser->new;
+$parser->output_to_core(1);
+while (my $file = <STDIN>) {
+    chomp $file;
+    my $entity = eval { $parser->parse_open($file) };
+    unless ($entity) {
+        print STDERR "gliclass-train: cannot parse $file\n";
+        next;
+    }
+    my $head = $entity->head;
+    my ($mail_from) = ($head->get('Return-Path') // '') =~ /<([^<>]*)>/;
+    my $state = ml_build_state(Entity => $entity, MailFrom => $mail_from);
+    print $json->encode({
+        file => $file,
+        text => Mail::MIMEDefang::ML::state_to_text($state,
+                    $Mail::MIMEDefang::ML::Config{gliclass}),
+        list => ($head->count('List-Unsubscribe') || $head->count('List-Id')) ? 1 : 0,
+    }), "\n";
+    $entity->purge;
+}
+'''
+
+
+def collect(directory):
+    files = []
+    for root, _, names in os.walk(directory):
+        files.extend(os.path.join(root, n) for n in names
+                     if os.path.getsize(os.path.join(root, n)) > 0)
+    return sorted(files)
+
+
+def render(files, lib):
+    """Return (labels, ham_labels, {file: (text, is_list)}) from the Perl code."""
+    cmd = ["perl"] + (["-I", lib] if lib else []) + ["-e", PERL_RENDER]
+    proc = subprocess.run(cmd, input="\n".join(files) + "\n", capture_output=True,
+                          text=True, encoding="utf-8", check=False)
+    if proc.returncode != 0:
+        sys.exit("gliclass-train: rendering failed:\n" + proc.stderr)
+    sys.stderr.write(proc.stderr)
+    lines = proc.stdout.splitlines()
+    head = json.loads(lines[0])
+    msgs = {}
+    for line in lines[1:]:
+        m = json.loads(line)
+        msgs[m["file"]] = (m["text"], bool(m["list"]))
+    return head["labels"], head["ham"], msgs
+
+
+def spam_probability(scores, key, ham_keys):
+    """Mirror Mail::MIMEDefang::ML::GLiClass: s / (s + best ham score)."""
+    s = scores.get(key)
+    hams = [scores[k] for k in ham_keys if scores.get(k) is not None]
+    if s is None:
+        return None
+    if not hams:
+        return s
+    h = max(hams)
+    return s / (s + h) if s + h > 0 else None
+
+
+def evaluate(title, model, tokenizer, device, examples, labels, ham_labels, max_length):
+    from gliclass import ZeroShotClassificationPipeline
+
+    pipeline = ZeroShotClassificationPipeline(
+        model, tokenizer, classification_type="multi-label", device=device,
+        max_length=max_length, progress_bar=False)
+    texts = [labels["is_spam"], labels["is_phishing"]] + ham_labels
+    ham_keys = ["_ham%d" % i for i in range(len(ham_labels))]
+    keys = ["is_spam", "is_phishing"] + ham_keys
+
+    rows = []
+    for ex in examples:
+        result = pipeline(ex["text"], texts, threshold=0.0)[0]
+        by_label = {r["label"]: float(r["score"]) for r in result}
+        scores = {k: by_label.get(t) for k, t in zip(keys, texts)}
+        rows.append((ex["class"], spam_probability(scores, "is_spam", ham_keys)))
+
+    print("\n%s, held-out messages: %d ham, %d spam"
+          % (title, sum(c == "ham" for c, _ in rows), sum(c != "ham" for c, _ in rows)))
+    print("%-10s %8s %8s" % ("is_spam >=", "FP", "FN"))
+    for t in (0.5, 0.55, 0.6, 0.7, 0.8, 0.9):
+        fp = sum(1 for c, p in rows if c == "ham" and p is not None and p >= t)
+        fn = sum(1 for c, p in rows if c != "ham" and (p is None or p < t))
+        print("%-10s %8d %8d" % (t, fp, fn))
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Fine-tune GLiClass on ham/spam mail for Mail::MIMEDefang::ML.")
+    parser.add_argument("ham_dir")
+    parser.add_argument("spam_dir")
+    parser.add_argument("--phishing-dir",
+                        help="Messages that are phishing (trained as spam and phishing).")
+    parser.add_argument("--model", default="knowledgator/gliclass-modern-base-v2.0",
+                        help="Checkpoint to start from (default: %(default)s).")
+    parser.add_argument("--output", default="gliclass-mail",
+                        help="Directory to write the trained model to (default: %(default)s).")
+    parser.add_argument("--lib", default=os.path.join(TOP, "modules", "lib"),
+                        help="Mail::MIMEDefang modules (default: this source tree's).")
+    parser.add_argument("--device", default=None,
+                        help="torch device (default: cuda:0 if available, else cpu).")
+    parser.add_argument("--epochs", type=float, default=2)
+    parser.add_argument("--learning-rate", type=float, default=1e-5)
+    parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument("--max-length", type=int, default=2048,
+                        help="Tokens of labels plus text, keep it equal to the "
+                             "server's --max-length (default: %(default)s).")
+    parser.add_argument("--eval-fraction", type=float, default=0.2,
+                        help="Part of the corpus held out for measuring (default: %(default)s).")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--eval-only", action="store_true",
+                        help="Only measure --model on the held-out part, don't train.")
+    args = parser.parse_args()
+
+    import torch
+    from transformers import AutoTokenizer
+    from gliclass import GLiClassModel
+    from gliclass.data_processing import AugmentationConfig, DataCollatorWithPadding, GLiClassDataset
+    from gliclass.training import Trainer, TrainingArguments
+
+    random.seed(args.seed)
+    device = args.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    corpus = [("ham", f) for f in collect(args.ham_dir)] \
+           + [("spam", f) for f in collect(args.spam_dir)]
+    if args.phishing_dir:
+        corpus += [("phishing", f) for f in collect(args.phishing_dir)]
+    if not corpus:
+        sys.exit("gliclass-train: no messages found")
+
+    labels, ham_labels, msgs = render([f for _, f in corpus], args.lib)
+    all_labels = [labels["is_spam"], labels["is_phishing"]] + ham_labels
+
+    examples = []
+    for cls, f in corpus:
+        if f not in msgs:
+            continue
+        text, is_list = msgs[f]
+        if cls == "ham":
+            true = list(ham_labels) if is_list else []
+        elif cls == "spam":
+            true = [labels["is_spam"]]
+        else:
+            true = [labels["is_spam"], labels["is_phishing"]]
+        # Each example needs its own label list: the dataset shuffles it in place.
+        examples.append({"class": cls, "text": text,
+                         "all_labels": list(all_labels), "true_labels": true})
+
+    # Hold out the same share of every class.
+    train, test = [], []
+    for cls in ("ham", "spam", "phishing"):
+        part = [e for e in examples if e["class"] == cls]
+        random.shuffle(part)
+        n = int(round(len(part) * args.eval_fraction)) if len(part) > 1 else 0
+        test += part[:n]
+        train += part[n:]
+    random.shuffle(train)
+    print("Messages: %d for training, %d held out" % (len(train), len(test)))
+
+    model = GLiClassModel.from_pretrained(args.model).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    # Spam and phishing are scored independently (the server runs the
+    # pipeline multi-label); stock checkpoints come as single-label.
+    model.config.problem_type = "multi_label_classification"
+    # The loss is masked per label and then averaged: it needs the
+    # unreduced focal loss.
+    model.config.focal_loss_reduction = "none"
+
+    if test:
+        model.eval()
+        evaluate("Before training" if not args.eval_only else args.model,
+                 model, tokenizer, device, test, labels, ham_labels, args.max_length)
+        model.train()
+
+    if not args.eval_only:
+        if not train:
+            sys.exit("gliclass-train: nothing to train on")
+        dataset_args = dict(
+            tokenizer=tokenizer,
+            augment_config=AugmentationConfig(enabled=False),
+            max_length=args.max_length,
+            problem_type="multi_label_classification",
+            architecture_type=model.config.architecture_type,
+            prompt_first=model.config.prompt_first,
+        )
+        training_args = TrainingArguments(
+            output_dir=args.output,
+            learning_rate=args.learning_rate,
+            others_lr=args.learning_rate,
+            weight_decay=0.01,
+            per_device_train_batch_size=args.batch_size,
+            num_train_epochs=args.epochs,
+            save_strategy="no",
+            logging_steps=10,
+            dataloader_pin_memory=False,
+            use_cpu=device == "cpu",
+            seed=args.seed,
+            report_to="none",
+        )
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=GLiClassDataset(train, **dataset_args),
+            processing_class=tokenizer,
+            data_collator=DataCollatorWithPadding(device=device, config=model.config),
+        )
+        trainer.train()
+        model.save_pretrained(args.output)
+        tokenizer.save_pretrained(args.output)
+        print("Model written to %s" % args.output)
+
+        if test:
+            model.eval()
+            evaluate("After training", model, tokenizer, device, test, labels,
+                     ham_labels, args.max_length)
+
+
+if __name__ == "__main__":
+    main()

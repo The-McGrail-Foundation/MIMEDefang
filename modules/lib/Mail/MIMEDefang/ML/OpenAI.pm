@@ -49,9 +49,9 @@ and are not recommended.
 
 =head1 TIMEOUT
 
-The default C<$Mail::MIMEDefang::ML::Config{timeout}> of 10 seconds is
-sized for the encoder backends (Laya, GLiClass), which answer in tens of
-milliseconds.  Generative models are much slower: an 8B model takes
+The default C<$Mail::MIMEDefang::ML::Config{timeout}> of 30 seconds is
+sized for the encoder backends (Laya, GLiClass), which answer in well
+under a second on a GPU.  Generative models are much slower: an 8B model takes
 hundreds of milliseconds per message on a GPU and several seconds, up to
 tens of seconds for long messages, on CPU.  B<Increase the timeout when
 using this backend>, e.g.:
@@ -62,20 +62,24 @@ Measure your model's worst case (e.g. with C<mimedefang-test-mail> on a
 few large messages) and leave some headroom: a request that times out is
 treated as "no opinion".
 
-C<ml_classify> can wait up to C<timeout * (1 + connect_retries)> seconds,
-and it runs inside C<filter_end> together with SpamAssassin.  Keep that
-total below the multiplexor's busy timeout (C<mimedefang-multiplexor -b>,
-default 120 seconds), or busy workers get killed and the message is
-tempfailed, and below the MTA's milter timeouts (Postfix
-C<milter_content_timeout>, Sendmail's C<T=E:>).  Raise C<-b> as well if a
-large timeout is needed, or set C<connect_retries> to 0.
+C<ml_classify> can wait up to C<timeout> seconds (requests that time out
+are not retried, C<connect_retries> only applies when the server can't be
+reached), and it runs inside C<filter_end> together with SpamAssassin.
+Keep that total below the multiplexor's busy timeout
+(C<mimedefang-multiplexor -b>, default 120 seconds), or busy workers get
+killed and the message is tempfailed, and below the MTA's milter timeouts
+(Postfix C<milter_content_timeout>, Sendmail's C<T=E:>).  Raise C<-b> as
+well if a large timeout is needed.
 
 =head1 CONFIGURATION
 
 C<$Mail::MIMEDefang::ML::Config{openai}>: C<base_url> (default
 C<http://127.0.0.1:11434/v1>), C<model> (required, no default),
 C<max_tokens> (default 100), C<json_mode> (default 1; set to 0 for servers
-that reject C<response_format>), C<reasoning_effort> (default C<none>).
+that reject C<response_format>), C<reasoning_effort> (default C<none>),
+C<body_head_chars> and C<body_tail_chars> (body kept, default 6000 and 1500
+characters; lower them for models with a small context window or to save
+time on CPU).
 
 Thinking models (Qwen3, DeepSeek-R1, gpt-oss, ...) otherwise spend the
 C<max_tokens> budget on their chain of thought and return an empty answer;
@@ -96,9 +100,17 @@ use Mail::MIMEDefang::ML ();
 sub _system_prompt {
     my $q = \%Mail::MIMEDefang::ML::QUESTIONS;
     return 'You are an email security classifier. You are given an email '
-         . "(authentication results, headers, body) and must answer two questions.\n"
+         . "(headers, links, attachments, body) and must answer two questions.\n"
          . "is_spam: $q->{is_spam}\n"
          . "is_phishing: $q->{is_phishing}\n"
+         . "The \"Signals computed by the mail filter\" lines list the domains the "
+         . "body links to and the attachments, as found in the message.\n"
+         . "Judge the text, the links and the attachment names. Suspicious: "
+         . "links that go to a domain unrelated to the brand or sender the text "
+         . "claims to be, urgent requests about payments, deliveries, accounts "
+         . "or passwords, invoices or receipts that ask you to call a phone "
+         . "number, executable or double-extension attachments. A newsletter "
+         . "or promotion whose links go to the sender's own site is not spam.\n"
          . 'Reply with only a JSON object: {"is_spam": 0.0-1.0, '
          . '"is_phishing": 0.0-1.0}, where each number is the probability '
          . 'that the answer is yes: 0.0 is certainly no, 1.0 is certainly '
@@ -117,7 +129,7 @@ sub classify {
         max_tokens  => $oc->{max_tokens} // 100,
         messages    => [
             { role => 'system', content => _system_prompt() },
-            { role => 'user',   content => Mail::MIMEDefang::ML::state_to_text($state) },
+            { role => 'user',   content => Mail::MIMEDefang::ML::state_to_text($state, $oc) },
         ],
     };
     $payload->{response_format} = { type => 'json_object' }

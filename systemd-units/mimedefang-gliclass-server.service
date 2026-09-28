@@ -28,14 +28,16 @@ Environment=ML_PYTHON=/opt/mimedefang-ml/venv/bin/python3 HF_HOME=/var/lib/MIMED
 #   GLICLASS_THREADS > 1 oversubscribes the machine instead of scaling.
 # GLICLASS_MODEL: Hugging Face name or local path of the checkpoint.
 # GLICLASS_DEVICE: torch device, "cpu" or e.g. "cuda:0".
+# GLICLASS_MAX_LENGTH: tokens of labels plus message text the model reads,
+#   the rest is cut (up to 8192 for the gliclass-modern-* checkpoints).
 Environment=GLICLASS_HOST=127.0.0.1 GLICLASS_PORT=8688 GLICLASS_THREADS=8 GLICLASS_TORCH_THREADS=2
-Environment=GLICLASS_MODEL=knowledgator/gliclass-modern-base-v2.0 GLICLASS_DEVICE=cpu
+Environment=GLICLASS_MODEL=knowledgator/gliclass-modern-base-v2.0 GLICLASS_DEVICE=cpu GLICLASS_MAX_LENGTH=4096
 EnvironmentFile=-/etc/default/mimedefang-gliclass-server
 EnvironmentFile=-/etc/sysconfig/mimedefang-gliclass-server
 ExecStart=/bin/sh -c 'exec $ML_PYTHON /usr/bin/mimedefang-gliclass-server \
     --host $GLICLASS_HOST --port $GLICLASS_PORT \
     --threads $GLICLASS_THREADS --torch-threads $GLICLASS_TORCH_THREADS \
-    --model $GLICLASS_MODEL --device $GLICLASS_DEVICE'
+    --model $GLICLASS_MODEL --device $GLICLASS_DEVICE --max-length $GLICLASS_MAX_LENGTH'
 
 [Install]
 WantedBy=multi-user.target

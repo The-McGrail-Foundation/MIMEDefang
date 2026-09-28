@@ -1,0 +1,187 @@
+# -*- Perl -*-
+#***********************************************************************
+#
+# mimedefang-filter for ml-benchmark
+#
+# Loaded by script/mimedefang-test-mail (driven by contrib/ml-benchmark/
+# ml-benchmark): builds the Mail::MIMEDefang::ML state once per message,
+# asks every configured ML backend for a verdict and appends one JSON line
+# per backend to the file named by $ENV{MD_ML_BENCH_OUT}.
+#
+# Configured through environment variables set by ml-benchmark:
+#
+#   MD_ML_BENCH_OUT          result file (required)
+#   MD_ML_BACKENDS           comma separated backends (laya,gliclass,openai)
+#   MD_ML_TIMEOUT            seconds per HTTP request
+#   MD_ML_MIN_CONFIDENCE     verdicts below this are "no opinion"
+#   MD_ML_LAYA_URL           Laya server URL
+#   MD_ML_GLICLASS_URL       GLiClass server URL
+#   MD_ML_OPENAI_URL         OpenAI-compatible base URL
+#   MD_ML_OPENAI_MODEL       OpenAI-compatible model name
+#   MD_ML_OPENAI_MAX_TOKENS  max_tokens for the OpenAI backend
+#   MD_ML_AUTH               1 to compute SPF/DKIM/DMARC (network lookups)
+#   MD_ML_DUMP_FILE          file to write the text sent to each backend to
+#
+# Copyright (C) 2026 The McGrail Foundation
+#
+# This program may be distributed under the terms of the GNU General
+# Public License, Version 2.
+#
+#***********************************************************************
+
+use Time::HiRes ();
+use JSON::PP ();
+use Mail::MIMEDefang::ML;
+
+$AdminAddress  = 'postmaster@localhost';
+$AdminName     = 'MIMEDefang Administrator';
+$DaemonAddress = 'mimedefang@localhost';
+
+my @MLBackends = grep { length } split(/\s*,\s*/, $ENV{MD_ML_BACKENDS} // 'laya,gliclass,openai');
+
+{
+    my $c = \%Mail::MIMEDefang::ML::Config;
+    $c->{timeout}              = $ENV{MD_ML_TIMEOUT}           if $ENV{MD_ML_TIMEOUT};
+    $c->{min_confidence}       = $ENV{MD_ML_MIN_CONFIDENCE}    if defined $ENV{MD_ML_MIN_CONFIDENCE};
+    $c->{laya}{server_url}     = $ENV{MD_ML_LAYA_URL}          if $ENV{MD_ML_LAYA_URL};
+    $c->{gliclass}{server_url} = $ENV{MD_ML_GLICLASS_URL}      if $ENV{MD_ML_GLICLASS_URL};
+    $c->{openai}{base_url}     = $ENV{MD_ML_OPENAI_URL}        if $ENV{MD_ML_OPENAI_URL};
+    $c->{openai}{model}        = $ENV{MD_ML_OPENAI_MODEL}      if $ENV{MD_ML_OPENAI_MODEL};
+    $c->{openai}{max_tokens}   = $ENV{MD_ML_OPENAI_MAX_TOKENS} if $ENV{MD_ML_OPENAI_MAX_TOKENS};
+}
+
+my $MLAuth = $ENV{MD_ML_AUTH} ? 1 : 0;
+if ($MLAuth) {
+    require Mail::MIMEDefang::Authres;
+    require Mail::MIMEDefang::DKIM;
+    require Mail::MIMEDefang::SPF;
+}
+
+$Stupidity{"NoMultipleInlines"} = 0;
+
+#***********************************************************************
+# filter_sender -- SPF, only with MD_ML_AUTH.
+#***********************************************************************
+sub filter_sender {
+    my($sender, $ip, $hostname, $helo) = @_;
+
+    (my $addr = $sender) =~ s/^<|>$//g;
+    my ($domain) = ($addr =~ /\@([\w.\-]+)/);
+
+    $Helo        = $helo;
+    $SPFDomain   = $domain;
+    $SPFResult   = undef;
+
+    if ($MLAuth && defined $domain && length $domain) {
+        my ($spfcode) = Mail::MIMEDefang::SPF::md_spf_verify($addr, $ip, $helo);
+        $SPFResult = $spfcode if defined $spfcode;
+    }
+
+    return ('CONTINUE', 'ok');
+}
+
+#***********************************************************************
+# filter_begin -- DKIM and DMARC, only with MD_ML_AUTH.
+#***********************************************************************
+sub filter_begin {
+    my($entity) = @_;
+
+    $DKIMResult  = undef;
+    $DMARCResult = undef;
+    return unless $MLAuth;
+
+    my $from_header = $entity->head->get('From');
+    my ($from_domain) = (defined $from_header ? ($from_header =~ /\@([\w.\-]+)/) : ());
+
+    ($DKIMResult, $DKIMDomain) = Mail::MIMEDefang::DKIM::md_dkim_verify();
+
+    $DMARCResult = 'unknown';
+    if (defined $from_domain && length $from_domain) {
+        my $dmarc_record = Mail::MIMEDefang::Net::md_get_dmarc_record($from_domain);
+        if (defined $dmarc_record) {
+            my $policy = 'none';
+            $policy = lc($1) if ($dmarc_record =~ /\bp=(\w+)/);
+
+            my $from_org = Mail::MIMEDefang::Authres::md_org_domain($from_domain);
+            my $aligned  = 0;
+            $aligned = 1 if (defined $DKIMResult && $DKIMResult eq 'pass'
+                              && defined $DKIMDomain && Mail::MIMEDefang::Authres::md_org_domain($DKIMDomain) eq $from_org);
+            $aligned = 1 if (!$aligned && defined $SPFResult && $SPFResult eq 'pass'
+                              && defined $SPFDomain && Mail::MIMEDefang::Authres::md_org_domain($SPFDomain) eq $from_org);
+
+            $DMARCResult = $aligned ? 'pass' : $policy;
+        }
+    }
+
+    return;
+}
+
+sub filter {
+    my($entity, $fname, $ext, $type) = @_;
+    return action_accept();
+}
+
+#***********************************************************************
+# filter_end -- ask every backend and record its verdict and latency.
+#***********************************************************************
+sub filter_end {
+    my($entity) = @_;
+
+    my $out = $ENV{MD_ML_BENCH_OUT};
+    unless (defined $out && length $out) {
+        md_syslog('err', 'ml-benchmark: MD_ML_BENCH_OUT is not set');
+        return;
+    }
+
+    my $state = ml_build_state(
+        Entity   => $entity,
+        MailFrom => $Sender,
+        SPF      => $SPFResult,
+        DKIM     => $DKIMResult,
+        DMARC    => $DMARCResult,
+    );
+
+    if (my $dump = $ENV{MD_ML_DUMP_FILE}) {
+        if (open(my $dfh, '>:encoding(UTF-8)', $dump)) {
+            for my $backend (@MLBackends) {
+                print $dfh "### $backend\n",
+                    Mail::MIMEDefang::ML::state_to_text($state,
+                        $Mail::MIMEDefang::ML::Config{lc $backend}), "\n\n";
+            }
+            close($dfh);
+        } else {
+            md_syslog('err', "ml-benchmark: cannot write $dump: $!");
+        }
+    }
+
+    open(my $fh, '>>', $out) or do {
+        md_syslog('err', "ml-benchmark: cannot write $out: $!");
+        return;
+    };
+    my $json = JSON::PP->new->canonical;
+    for my $backend (@MLBackends) {
+        local $Mail::MIMEDefang::ML::Config{backend} = $backend;
+        my $t0      = [Time::HiRes::gettimeofday()];
+        my $verdict = ml_classify($state);
+        my $secs    = Time::HiRes::tv_interval($t0);
+
+        my %rec = (backend => lc $backend, secs => $secs);
+        if ($verdict->{error}) {
+            $rec{error} = $verdict->{error};
+        } else {
+            for my $q (qw(is_spam is_phishing)) {
+                $rec{$q} = {
+                    answer     => $verdict->{$q}{answer},
+                    confidence => $verdict->{$q}{confidence} + 0,
+                };
+            }
+        }
+        print $fh $json->encode(\%rec), "\n";
+    }
+    close($fh);
+
+    return;
+}
+
+# DO NOT delete the next line, or Perl will complain.
+1;

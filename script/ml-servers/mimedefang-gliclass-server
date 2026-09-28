@@ -37,6 +37,7 @@ see script/ml-servers/README.md in the MIMEDefang sources.
     mimedefang-gliclass-server --model knowledgator/gliclass-modern-large-v2.0 \\
         --threads 16 --torch-threads 2
     mimedefang-gliclass-server --device cuda:0 --port 8688
+    mimedefang-gliclass-server --max-length 8192 --port 8688
     mimedefang-gliclass-server --daemon --port 8688
 """
 
@@ -106,15 +107,19 @@ def daemonize():
     os.close(devnull_fd)
 
 
-def build_pipeline(model_name, device):
+def build_pipeline(model_name, device, max_length):
     global _pipeline, _model_name
-    log.info("loading GLiClass model %s on %s", model_name, device)
+    log.info("loading GLiClass model %s on %s, max length %d tokens",
+             model_name, device, max_length)
     model = GLiClassModel.from_pretrained(model_name)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     # multi-label: spam and phishing are scored independently, a message
     # can be both (or neither).
+    # max_length covers the labels and the text: the library default (1024
+    # tokens) would cut most of the message MIMEDefang sends.
     pipeline = ZeroShotClassificationPipeline(
-        model, tokenizer, classification_type="multi-label", device=device)
+        model, tokenizer, classification_type="multi-label", device=device,
+        max_length=max_length)
 
     # Warm up so the first real message doesn't pay for lazy init.
     pipeline("warm up", ["spam"], threshold=0.0)
@@ -182,6 +187,11 @@ def main():
     parser.add_argument("--device", default="cpu",
                          help="torch device, e.g. 'cpu' or 'cuda:0' "
                               "(default: %(default)s).")
+    parser.add_argument("--max-length", type=int, default=4096,
+                         help="Tokens of labels plus text the model reads, "
+                              "the rest of the text is cut. The "
+                              "gliclass-modern-* checkpoints take up to 8192; "
+                              "larger is slower (default: %(default)s).")
     parser.add_argument("--host", default="127.0.0.1",
                          help="Address to listen on (default: %(default)s). "
                               "This server has no authentication: if you "
@@ -227,7 +237,7 @@ def main():
 
     torch.set_num_threads(args.torch_threads)
 
-    build_pipeline(args.model, args.device)
+    build_pipeline(args.model, args.device, args.max_length)
 
     # waitress rather than Flask's dev server: this runs as a long-lived
     # local service, not a public-facing app.

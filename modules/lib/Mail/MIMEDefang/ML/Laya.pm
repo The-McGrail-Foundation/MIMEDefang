@@ -36,7 +36,13 @@ C<$Mail::MIMEDefang::ML::Config{backend} = 'laya'>.
 =head1 CONFIGURATION
 
 C<$Mail::MIMEDefang::ML::Config{laya}>: C<server_url> (default
-C<http://127.0.0.1:8687>), C<predict_path> (default C</predict>).
+C<http://127.0.0.1:8687>), C<predict_path> (default C</predict>),
+C<body_head_chars> and C<body_tail_chars> (default: the global ones, 1500
+and 500, sized for Laya's 512-token context), C<send_signals> (default 0:
+the signals computed by L<Mail::MIMEDefang::ML/ml_build_state> are left
+out, because Laya picks its English or multilingual checkpoint by the
+language of the whole state, and the English signal lines make it route
+non-English mail, and even English newsletters, to the wrong one).
 
 =cut
 
@@ -53,9 +59,12 @@ sub classify {
         $_ => { type => 'noul', instructions => $Mail::MIMEDefang::ML::QUESTIONS{$_} }
     } keys %Mail::MIMEDefang::ML::QUESTIONS;
 
+    my $send = { %$state, body => Mail::MIMEDefang::ML::state_body($state, $lc) };
+    delete $send->{signals} unless $lc->{send_signals};
+
     my $resp = Mail::MIMEDefang::ML::http_post_json(
         ($lc->{server_url} // '') . ($lc->{predict_path} // '/predict'),
-        { state => $state, questions => \%questions },
+        { state => $send, questions => \%questions },
     );
     return { error => $resp->{error} } if $resp->{error};
 

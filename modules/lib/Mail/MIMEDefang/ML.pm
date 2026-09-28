@@ -82,7 +82,8 @@ them safe.  C<mimedefang-laya-server> and C<mimedefang-gliclass-server>,
 with instructions for installing their Python modules and models, are in
 the F<script/ml-servers/> directory of the MIMEDefang sources.
 
-The body truncation limits below apply to every backend.
+The body truncation limits below are the defaults for every backend;
+each backend's section can override them.
 
 =head1 CONFIGURATION
 
@@ -92,30 +93,41 @@ F<mimedefang-filter>.  The keys, with their defaults:
   # Common settings
   $Mail::MIMEDefang::ML::Config{enabled}         = 1;       # 0 turns ml_classify() into a no-op
   $Mail::MIMEDefang::ML::Config{backend}         = 'laya';  # 'laya', 'gliclass' or 'openai'
-  $Mail::MIMEDefang::ML::Config{timeout}         = 10;      # seconds per HTTP request,
-                                                            # raise it for 'openai' (e.g. 60)
-  $Mail::MIMEDefang::ML::Config{connect_retries} = 1;
+  $Mail::MIMEDefang::ML::Config{timeout}         = 30;      # seconds per HTTP request
+  $Mail::MIMEDefang::ML::Config{connect_retries} = 1;       # retries when the server can't be
+                                                            # reached, never after a timeout
   $Mail::MIMEDefang::ML::Config{min_confidence}  = 0.55;    # below this -> no opinion
 
-  # What ml_build_state() puts in the state
+  # What ml_build_state() puts in the state, and what backends get of it
   $Mail::MIMEDefang::ML::Config{body_head_chars} = 1500;    # body kept: first N chars ...
   $Mail::MIMEDefang::ML::Config{body_tail_chars} = 500;     # ... plus last N chars
   $Mail::MIMEDefang::ML::Config{spam_top_rules}  = 8;       # rules kept per engine
+  $Mail::MIMEDefang::ML::Config{url_max_chars}   = 80;      # longer URLs are cut, 0: never
+  $Mail::MIMEDefang::ML::Config{max_link_domains} = 5;      # link domains listed in the signals
+  $Mail::MIMEDefang::ML::Config{max_attachments}  = 5;      # attachments listed in the signals
 
   # Laya (mimedefang-laya-server)
   $Mail::MIMEDefang::ML::Config{laya}{server_url}     = 'http://127.0.0.1:8687';
+  $Mail::MIMEDefang::ML::Config{laya}{send_signals}   = 0;
 
   # GLiClass (mimedefang-gliclass-server)
   $Mail::MIMEDefang::ML::Config{gliclass}{server_url} = 'http://127.0.0.1:8688';
-  $Mail::MIMEDefang::ML::Config{gliclass}{labels}{is_spam}
-      = 'spam, unsolicited bulk mail, advertising or scam';
-  $Mail::MIMEDefang::ML::Config{gliclass}{labels}{is_phishing}
-      = 'phishing, impersonation to steal credentials or payment details';
+  $Mail::MIMEDefang::ML::Config{gliclass}{body_head_chars} = 6000;
+  $Mail::MIMEDefang::ML::Config{gliclass}{body_tail_chars} = 1500;
 
   # Self-hosted generative model (Ollama, llama.cpp, vLLM, LM Studio)
   $Mail::MIMEDefang::ML::Config{openai}{base_url}     = 'http://127.0.0.1:11434/v1';
   $Mail::MIMEDefang::ML::Config{openai}{model}        = undef;   # required, e.g. 'qwen3:8b' (>= 7-8B parameters)
   $Mail::MIMEDefang::ML::Config{openai}{max_tokens}   = 100;
+  $Mail::MIMEDefang::ML::Config{openai}{body_head_chars} = 6000;
+  $Mail::MIMEDefang::ML::Config{openai}{body_tail_chars} = 1500;
+
+Model latency grows faster than linearly with the text length: the
+defaults assume a GPU, or a fast CPU.  On slower hardware lower the
+per-backend budgets, or raise C<timeout>; C<ml_classify> can wait up to
+C<timeout> seconds (C<connect_retries> only retries requests that could
+not connect, which fail at once), keep that below the
+multiplexor's busy timeout (see L<Mail::MIMEDefang::ML::OpenAI/TIMEOUT>).
 
 See each backend's documentation for its remaining keys.
 
@@ -226,14 +238,25 @@ use Mail::MIMEDefang::Utils qw(md_get_plain_text_body);
 our %Config = (
     enabled            => 1,
     backend            => 'laya',
-    timeout            => 10,
+    timeout            => 30,
     connect_retries    => 1,
 
-    # State-building limits, Laya's English checkpoint has a 512-token
-    # context (1024 for laya-typed-decisions); keep well under that.
+    # Body kept when the state is handed to a backend: the first
+    # body_head_chars plus the last body_tail_chars characters.  These are
+    # the defaults, each backend's section may override them.  Laya's
+    # English checkpoint has a 512-token context (1024 for
+    # laya-typed-decisions); keep well under that.
     body_head_chars    => 1500,
     body_tail_chars    => 500,
     spam_top_rules     => 8,
+
+    # URLs in the body longer than this are cut (the host is always kept),
+    # so tracking links don't eat the body budget.
+    url_max_chars      => 80,
+    # Link domains and attachments listed in the signals, see
+    # ml_build_state().
+    max_link_domains   => 10,
+    max_attachments    => 5,
 
     # Headers read from the entity passed to ml_build_state(), in the order
     # they are shown to the model.  From, Reply-To and Subject have their
@@ -252,19 +275,24 @@ our %Config = (
     laya => {
         server_url   => 'http://127.0.0.1:8687',
         predict_path => '/predict',
+        # Laya picks its checkpoint by the language of the whole state,
+        # and the English signal lines make it misjudge non-English mail.
+        send_signals => 0,
     },
     gliclass => {
         server_url   => 'http://127.0.0.1:8688',
         predict_path => '/predict',
-        labels       => {
-            is_spam     => 'spam, unsolicited bulk mail, advertising or scam',
-            is_phishing => 'phishing, impersonation to steal credentials or payment details',
-        },
+        # About 2500 tokens with the headers; ModernBERT reads up to 8k,
+        # see the server's --max-length.
+        body_head_chars => 6000,
+        body_tail_chars => 1500,
     },
     openai => {
         base_url     => 'http://127.0.0.1:11434/v1',
         model        => undef,    # required, e.g. 'qwen3:8b' (>= 7-8B parameters)
         max_tokens   => 100,
+        body_head_chars => 6000,
+        body_tail_chars => 1500,
     },
 );
 
@@ -278,7 +306,10 @@ my %BACKENDS = (
 # The questions every backend answers, phrased for the ones that take
 # free-text instructions (Laya, chat LLMs).
 our %QUESTIONS = (
-    is_spam     => 'Is this email unsolicited bulk mail, advertising, or a scam?',
+    is_spam     => 'Is this email spam: a scam, fraud, malware, or mail sent to the '
+                 . 'recipient without their consent by a sender they have no '
+                 . 'relationship with?  Newsletters, marketing and notifications '
+                 . 'from organisations the recipient deals with are not spam.',
     is_phishing => 'Does this email attempt to impersonate a person, brand, or '
                  . 'service to steal credentials, payment details, or other '
                  . 'sensitive information?',
@@ -310,8 +341,22 @@ Pass the message as C<Entity> (the C<MIME::Entity> given to C<filter_end>)
 and the state is filled from it: C<From>, C<ReplyTo> and C<Subject> from
 their headers, C<Body> from C<md_get_plain_text_body>, plus the headers
 listed in C<$Config{headers}> (decoded, unfolded and capped at
-C<header_max_chars> each) under C<headers>.  Arguments passed explicitly
-override the values read from the entity.
+C<header_max_chars> each) under C<headers>.
+Arguments passed explicitly override the values read from the entity.
+
+The text is normalized for the models: HTML entities are decoded,
+invisible (zero-width, bidi-control, soft-hyphen) characters removed,
+blanks and separator lines collapsed and URLs longer than
+C<url_max_chars> cut.  The whole body is kept in the state (up to 64k
+characters); each backend cuts it to its own C<body_head_chars> and
+C<body_tail_chars> when it sends it.
+
+C<signals> summarizes, as short lines of text, the domains the body
+links to (up to C<max_link_domains>, with the number of links to each)
+and the names and types of the attachments (up to C<max_attachments>).
+Everything else about the message (authentication, sender reputation,
+header anomalies, ...) is left to SpamAssassin, whose results can be
+passed in as C<SAScore>/C<SARules>.
 
 Args: C<Entity>, C<From>, C<ReplyTo>, C<Subject>, C<Body>, C<MailFrom> (the
 envelope sender, C<$Sender>), C<SPF>, C<DKIM>, C<DMARC>.
@@ -332,7 +377,7 @@ otherwise lack context, at the cost of repeating their mistakes.
 sub ml_build_state {
     my (%args) = @_;
 
-    my %headers;
+    my (%headers, @attachments);
     if (my $entity = $args{Entity}) {
         my $head = $entity->head;
         my %seen;
@@ -351,14 +396,15 @@ sub ml_build_state {
         $args{Subject} //= delete $headers{Subject};
         delete @headers{qw(From Reply-To Subject)};
         $args{Body}    //= md_get_plain_text_body($entity);
+
+        @attachments = _attachments($entity);
     }
 
-    my $body = defined $args{Body} ? $args{Body} : '';
-    if (length($body) > $Config{body_head_chars} + $Config{body_tail_chars}) {
-        $body = substr($body, 0, $Config{body_head_chars})
-              . "\n[...truncated...]\n"
-              . substr($body, -$Config{body_tail_chars});
-    }
+    my $body = _normalize_text($args{Body} // '');
+    my %links = _link_domains($body);
+    $body = _shorten_urls($body);
+    # md_get_plain_text_body() already caps what it returns at 64k.
+    $body = substr($body, 0, 65536) if length($body) > 65536;
 
     my %state = (
         from         => $args{From}    // '',
@@ -370,6 +416,7 @@ sub ml_build_state {
         dkim         => $args{DKIM}  // 'unknown',
         dmarc        => $args{DMARC} // 'unknown',
     );
+    $state{$_} = _normalize_text($state{$_}) for qw(from reply_to subject);
 
     for my $f (['sa', 'SAScore', 'SARules'], ['rspamd', 'RspamdScore', 'RspamdSymbols']) {
         my ($prefix, $score, $rules) = @$f;
@@ -380,17 +427,149 @@ sub ml_build_state {
 
     $state{headers} = \%headers if %headers;
 
+    my @signals = _signals(\%links, \@attachments);
+    $state{signals} = \@signals if @signals;
+
     return \%state;
 }
 
-# A raw header value as readable text: RFC 2047 decoded, unfolded, trimmed.
+# Zero-width, joiner, bidi-control and soft-hyphen characters: invisible
+# when rendered, used to break up words so that filters don't match them.
+my $INVISIBLE = qr/[\x{00AD}\x{034F}\x{061C}\x{115F}\x{1160}\x{17B4}\x{17B5}\x{180E}\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{206A}-\x{206F}\x{3164}\x{FEFF}\x{FFA0}]/;
+
+my $HAVE_ENTITIES = eval { require HTML::Entities; 1 };
+
+# Used when HTML::Entities is not installed.
+my %ENTITY = (amp => '&', lt => '<', gt => '>', quot => '"', apos => "'",
+              nbsp => ' ', zwnj => "\x{200C}", zwj => "\x{200D}", shy => "\x{00AD}");
+
+# Text as a model should read it: HTML entities decoded, invisible
+# characters removed, runs of blanks and blank lines collapsed.
+sub _normalize_text {
+    my ($text) = @_;
+    return '' unless defined $text && length $text;
+
+    if ($HAVE_ENTITIES) {
+        HTML::Entities::decode_entities($text);
+    } else {
+        $text =~ s{&(?:#[xX]([0-9a-fA-F]{1,6})|#([0-9]{1,7})|([a-zA-Z]+));}{
+            defined $1 ? _chr(hex $1) : defined $2 ? _chr($2) : ($ENTITY{$3} // "&$3;")
+        }ge;
+    }
+
+    $text =~ s/$INVISIBLE+//g;
+
+    $text =~ s/\r\n?/\n/g;
+    # Separator lines (HTML::FormatText draws <hr> as a 9999-wide rule).
+    $text =~ s/([\-=_*~#.+])\1{9,}/$1 x 10/ge;
+    $text =~ s/(?:[^\S\n]|\x{A0})+/ /g;
+    $text =~ s/ ?\n ?/\n/g;
+    $text =~ s/\n{3,}/\n\n/g;
+    $text =~ s/^\s+|\s+$//g;
+    return $text;
+}
+
+sub _chr {
+    my ($cp) = @_;
+    return ($cp > 0 && $cp <= 0x10FFFF && ($cp < 0xD800 || $cp > 0xDFFF)) ? chr($cp) : '';
+}
+
+# A raw header value as readable text: RFC 2047 decoded, unfolded,
+# invisible characters removed, trimmed.
 sub _header_text {
     my ($value) = @_;
     return '' unless defined $value;
     my $text = eval { Encode::decode('MIME-Header', $value) } // $value;
+    $text =~ s/$INVISIBLE+//g;
     $text =~ s/\s+/ /g;
     $text =~ s/^ | $//g;
     return $text;
+}
+
+my $URL = qr{\bhttps?://[^\s<>"'`{}|\\^\[\]]+}i;
+
+# Registered domain -> number of links to it.
+sub _link_domains {
+    my ($text) = @_;
+    my %count;
+    while ($text =~ /($URL)/g) {
+        my ($host) = $1 =~ m{^https?://(?:[^/\@?#]*\@)?([^/:?#]+)}i;
+        next unless defined $host;
+        $host = lc $host;
+        $host =~ s/\.+$//;
+        $count{ _org_domain($host) }++ if length $host;
+    }
+    return %count;
+}
+
+sub _shorten_urls {
+    my ($text) = @_;
+    my $max = $Config{url_max_chars};
+    return $text unless $max;
+    $text =~ s{($URL)}{
+        my $url = $1;
+        if (length($url) > $max) {
+            my ($site) = $url =~ m{^(https?://[^/?#]+)}i;
+            $url = length($site) >= $max ? "$site/..." : substr($url, 0, $max) . '...';
+        }
+        $url
+    }ge;
+    return $text;
+}
+
+# Registered domain, approximately: the last two labels, or three under a
+# two-letter country code with a generic second level (example.co.uk).
+sub _org_domain {
+    my ($domain) = @_;
+    return '' unless defined $domain && length $domain;
+    my @labels = split(/\./, lc $domain);
+    my $n = (@labels >= 3 && $labels[-1] =~ /^[a-z]{2}$/
+             && $labels[-2] =~ /^(?:co|com|net|org|gov|edu|ac|ne|or|go|gob|gv)$/) ? 3 : 2;
+    return join('.', @labels > $n ? @labels[-$n .. -1] : @labels);
+}
+
+# "name (type)" of the parts sent as attachments or carrying a file name.
+sub _attachments {
+    my ($entity) = @_;
+    my @found;
+    my @todo = ($entity);
+    while (my $part = shift @todo) {
+        if ($part->is_multipart) {
+            push @todo, $part->parts;
+            next;
+        }
+        my $head = $part->head;
+        my $name = $head->recommended_filename;
+        my $disposition = lc($head->mime_attr('content-disposition') || '');
+        next unless defined $name || $disposition eq 'attachment';
+        $name = defined $name ? _header_text($name) : '(no name)';
+        push @found, "$name (" . lc($head->mime_type || 'unknown') . ')';
+    }
+    return @found;
+}
+
+# The domains the body links to and the attachments, as short lines of
+# text.
+sub _signals {
+    my ($links, $attachments) = @_;
+    my @signals;
+
+    if (%$links) {
+        my @hosts = sort { $links->{$b} <=> $links->{$a} || $a cmp $b } keys %$links;
+        my $max = $Config{max_link_domains} || 5;
+        my $more = @hosts > $max ? @hosts - $max : 0;
+        splice(@hosts, $max) if $more;
+        push @signals, 'Link domains: ' . join(', ', map { "$_ ($links->{$_})" } @hosts)
+                     . ($more ? ", and $more more" : '');
+    }
+
+    if (@$attachments) {
+        my $max = $Config{max_attachments} || 5;
+        my @list = @$attachments > $max ? (@$attachments[0 .. $max - 1], '...') : @$attachments;
+        push @signals, 'Attachments: ' . join(', ', @list);
+    }
+
+    return @signals;
 }
 
 # Rules as an arrayref or a comma/space-separated string -> capped arrayref.
@@ -463,8 +642,11 @@ A backend is a module C<Mail::MIMEDefang::ML::E<lt>NameE<gt>> with a
 C<classify($state, \%Config)> function returning either C<{ error =E<gt> $reason }>
 or C<{ is_spam =E<gt> { answer =E<gt> 0|1, confidence =E<gt> 0..1 }, is_phishing =E<gt> {...} }>.
 Confidence gating is done here, not in the backend.  Backends may use the
-helpers C<http_post_json($url, $payload, \%headers)> and
-C<state_to_text($state)> from this package.
+helpers C<http_post_json($url, $payload, \%headers)>,
+C<state_body($state, \%backend_cfg)> (the body cut to the backend's
+C<body_head_chars>/C<body_tail_chars>) and
+C<state_to_text($state, \%backend_cfg)> (the state as text, with the
+signals and that body) from this package.
 
 =cut
 
@@ -476,9 +658,24 @@ sub _clamp {
     return $v;
 }
 
-# Render the state as plain text for backends that take a single string.
+# The state's body cut to the backend's budget: its own body_head_chars /
+# body_tail_chars if set in \%backend_cfg, else the global ones.
+sub state_body {
+    my ($state, $bcfg) = @_;
+    $bcfg ||= {};
+    my $head = $bcfg->{body_head_chars} // $Config{body_head_chars};
+    my $tail = $bcfg->{body_tail_chars} // $Config{body_tail_chars};
+
+    my $body = $state->{body} // '';
+    return $body if length($body) <= $head + $tail;
+    return substr($body, 0, $head) . "\n[...truncated...]\n"
+         . ($tail ? substr($body, -$tail) : '');
+}
+
+# Render the state as plain text for backends that take a single string,
+# with the body cut to the budget in \%backend_cfg (see state_body()).
 sub state_to_text {
-    my ($state) = @_;
+    my ($state, $bcfg) = @_;
 
     my @lines = (
         "From: $state->{from}",
@@ -502,7 +699,19 @@ sub state_to_text {
         my $rules = $state->{"${prefix}_rules"} || [];
         push @lines, "$name rules: " . join(', ', @$rules) if @$rules;
     }
-    return join("\n", @lines) . "\n\n" . ($state->{body} // '');
+    my @signals = @{ $state->{signals} || [] };
+    push @lines, 'Signals computed by the mail filter:', map { "- $_" } @signals
+        if @signals;
+    return join("\n", @lines) . "\n\n" . state_body($state, $bcfg);
+}
+
+# LWP reports errors of its own as a 500 response with this header.
+sub _connect_failed {
+    my ($resp) = @_;
+    return 0 unless $resp && !$resp->is_success
+        && ($resp->header('Client-Warning') // '') eq 'Internal response';
+    my $msg = $resp->message // '';
+    return $msg =~ /^Can't connect/ && $msg !~ /time(?:d )?out/i ? 1 : 0;
 }
 
 sub http_post_json {
@@ -514,11 +723,15 @@ sub http_post_json {
     $req->header($_ => $headers->{$_}) for keys %{ $headers || {} };
     $req->content(encode_json($payload));
 
+    # Retry only when the server could not be reached at all (e.g. while
+    # it restarts).  A server that took the request and timed out or
+    # failed is busy or broken: sending the message again would only
+    # double the wait and its load.
     my $tries = 1 + $Config{connect_retries};
     my $resp;
     while ($tries-- > 0) {
         $resp = _ua()->request($req);
-        last if $resp->is_success;
+        last unless _connect_failed($resp);
     }
 
     unless ($resp && $resp->is_success) {

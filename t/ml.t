@@ -24,20 +24,42 @@ sub _state {
   return ml_build_state(From => 'a@example.com', Subject => 'hi', Body => 'hello', SPF => 'pass');
 }
 
-sub t_build_state : Test(5)
+sub t_build_state : Test(7)
 {
   local $Mail::MIMEDefang::ML::Config{body_head_chars} = 10;
   local $Mail::MIMEDefang::ML::Config{body_tail_chars} = 5;
 
-  my $state = ml_build_state(From => 'a@example.com', Body => ('x' x 10) . ('y' x 20) . 'zzzzz',
+  my $body = ('x' x 10) . ('y' x 20) . 'zzzzz';
+  my $state = ml_build_state(From => 'a@example.com', Body => $body,
                               SARules => [qw(A B C)], SAScore => '5.5');
-  is($state->{body}, ('x' x 10) . "\n[...truncated...]\nzzzzz", 'body truncated head+tail');
+  is($state->{body}, $body, 'whole body kept in the state');
+  is(Mail::MIMEDefang::ML::state_body($state), ('x' x 10) . "\n[...truncated...]\nzzzzz", 'body truncated head+tail');
+  is(Mail::MIMEDefang::ML::state_body($state, { body_head_chars => 3, body_tail_chars => 0 }),
+     "xxx\n[...truncated...]\n", 'backend budget overrides the global one');
   is($state->{subject}, '', 'missing subject defaults to empty');
   is($state->{dkim}, 'unknown', 'missing DKIM defaults to unknown');
   is($state->{sa_score}, 5.5, 'SA score included when passed');
 
   $state = ml_build_state(From => 'a@example.com');
   ok(!exists $state->{sa_score} && !exists $state->{sa_rules}, 'no SA keys when not passed');
+}
+
+sub t_normalize : Test(6)
+{
+  my $text = Mail::MIMEDefang::ML::_normalize_text(
+    "Pa\x{200B}y&#x200c;Pal &amp; co&#46;\r\n\r\n\r\n\r\n" . ('-' x 50) . "\n  \x{200C}\x{A0}\x{200C} end  ");
+  is($text, "PayPal & co.\n\n----------\nend", 'entities decoded, invisible characters, blanks and rules collapsed');
+
+  my $state = ml_build_state(From => 'a@example.com',
+    Body => 'see https://example.org/' . ('a' x 200) . ' now');
+  like($state->{body}, qr{^see https://example\.org/a+\.\.\. now$}, 'long URL cut');
+  is(length($state->{body}), length('see  now') + $Mail::MIMEDefang::ML::Config{url_max_chars} + 3, 'URL cut at url_max_chars');
+  is_deeply($state->{signals}, ['Link domains: example.org (1)'], 'link domains signal');
+
+  $state = ml_build_state(From => 'Bob <bob@gmail.com>', Subject => 'hi', Body => 'hello');
+  ok(!exists $state->{signals}, 'no signals without links or attachments');
+
+  is(Mail::MIMEDefang::ML::_org_domain('a.b.example.co.uk'), 'example.co.uk', 'org domain under a ccTLD');
 }
 
 sub t_build_state_spam_results : Test(7)
@@ -122,7 +144,7 @@ sub t_chdir : Test(4)
   ok(!$v->{error}, 'classify works after chdir');
 }
 
-sub t_laya : Test(7)
+sub t_laya : Test(9)
 {
   local $Mail::MIMEDefang::ML::Config{backend} = 'laya';
 
@@ -137,6 +159,13 @@ sub t_laya : Test(7)
   is($v->{is_spam}{answer}, 1, 'spam yes');
   is($v->{is_spam}{confidence}, 0.85, 'spam confidence');
   ok(!defined $v->{is_phishing}{answer}, 'low confidence -> no opinion');
+
+  my $state = ml_build_state(From => 'x@example.com', Body => 'see https://example.org/');
+  ml_classify($state);
+  ok($state->{signals} && !exists $last_payload->{state}{signals}, 'signals not sent to Laya by default');
+  local $Mail::MIMEDefang::ML::Config{laya}{send_signals} = 1;
+  ml_classify($state);
+  is_deeply($last_payload->{state}{signals}, $state->{signals}, 'signals sent with send_signals');
 
   _stub({ error => '500 Internal Server Error' });
   is(ml_classify(_state())->{error}, '500 Internal Server Error', 'http error passed through');
@@ -157,6 +186,20 @@ sub t_gliclass : Test(7)
 
   _stub({ nothing => 1 });
   is(ml_classify(_state())->{error}, 'bad response', 'missing scores');
+}
+
+sub t_gliclass_ham_labels : Test(4)
+{
+  local $Mail::MIMEDefang::ML::Config{backend} = 'gliclass';
+
+  _stub({ scores => { is_spam => 0.6, is_phishing => 0.1, _ham0 => 0.9 } });
+  my $v = ml_classify(_state());
+  is(scalar(grep { /^_ham\d$/ } keys %{ $last_payload->{labels} }), 1, 'ham label sent');
+  is($v->{is_spam}{answer}, 0, 'spam weighed against the ham label');
+  cmp_ok(abs($v->{is_spam}{confidence} - (1 - 0.6 / 1.5)), '<', 1e-9, 'p = s / (s + ham)');
+
+  _stub({ scores => { is_spam => 0.9, is_phishing => 0.1, _ham0 => 0.1 } });
+  cmp_ok(abs(ml_classify(_state())->{is_spam}{confidence} - 0.9), '<', 1e-9, 'spam wins over a weak ham label');
 }
 
 sub t_openai : Test(15)
@@ -207,6 +250,38 @@ sub t_openai : Test(15)
   local $Mail::MIMEDefang::ML::Config{openai}{reasoning_effort} = '';
   ml_classify(_state());
   ok(!exists $last_payload->{reasoning_effort}, 'reasoning_effort can be omitted');
+}
+
+sub t_retry : Test(4)
+{
+  require HTTP::Response;
+  my @queue;
+  my $calls = 0;
+  {
+    package Mail::MIMEDefang::Unit::ML::FakeUA;
+    sub new { return bless {}, shift }
+    sub request { $calls++; return shift @queue }
+  }
+  my $internal = sub {
+    my ($msg) = @_;
+    my $r = HTTP::Response->new(500, $msg);
+    $r->header('Client-Warning' => 'Internal response');
+    return $r;
+  };
+  my $ok = HTTP::Response->new(200, 'OK', [], '{"scores":{}}');
+
+  no warnings 'redefine';
+  local *Mail::MIMEDefang::ML::http_post_json = $real_post;
+  local *Mail::MIMEDefang::ML::_ua = sub { Mail::MIMEDefang::Unit::ML::FakeUA->new };
+  local $Mail::MIMEDefang::ML::Config{connect_retries} = 1;
+
+  @queue = ($internal->("Can't connect to 127.0.0.1:8688 (Connection refused)"), $ok);
+  ok(!Mail::MIMEDefang::ML::http_post_json('http://x/', {})->{error}, 'refused connection retried');
+  is($calls, 2, 'two requests');
+
+  ($calls, @queue) = (0, $internal->('read timeout'), $ok);
+  like(Mail::MIMEDefang::ML::http_post_json('http://x/', {})->{error}, qr/read timeout/, 'read timeout not retried');
+  is($calls, 1, 'one request');
 }
 
 sub t_live : Test(1)

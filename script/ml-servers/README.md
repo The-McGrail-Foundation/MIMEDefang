@@ -151,7 +151,9 @@ Useful options (both servers; `--help` lists them all):
 GLiClass also takes `--model` (a Hugging Face name or a local path; the
 default is `knowledgator/gliclass-modern-base-v2.0`, and
 `knowledgator/gliclass-modern-large-v2.0` is more accurate but slower) and
-`--device` (`cpu`, or e.g. `cuda:0`). Laya also takes `--preload`,
+`--device` (`cpu`, or e.g. `cuda:0`) and `--max-length` (tokens of labels
+plus message text read, default 4096; the rest is cut, the
+`gliclass-modern-*` checkpoints take up to 8192). Laya also takes `--preload`,
 `--checkpoint` and `--attach-language`.
 
 ### Under systemd
@@ -181,6 +183,7 @@ lines:
 | `GLICLASS_THREADS`, `GLICLASS_TORCH_THREADS` | `8`, `2` | gliclass |
 | `GLICLASS_MODEL` | `knowledgator/gliclass-modern-base-v2.0` | gliclass |
 | `GLICLASS_DEVICE` | `cpu` | gliclass |
+| `GLICLASS_MAX_LENGTH` | `4096` | gliclass |
 | `LAYA_HOST`, `LAYA_PORT` | `127.0.0.1`, `8687` | laya |
 | `LAYA_THREADS`, `LAYA_TORCH_THREADS` | `8`, `2` | laya |
 | `LAYA_PRELOAD` | unset (all stock checkpoints) | laya |
@@ -195,7 +198,8 @@ that has them, e.g. `ML_PYTHON=/usr/bin/python3` for distribution packages.
 curl http://127.0.0.1:8688/health
 curl -s http://127.0.0.1:8688/predict -H 'Content-Type: application/json' -d '{
   "text": "Subject: You won!\n\nClaim your prize, send your bank details today.",
-  "labels": {"is_spam": "spam, unsolicited bulk mail, advertising or scam"}
+  "labels": {"is_spam": "fraudulent email: fake invoice, fake order, fake account alert or advance-fee scam",
+             "_ham0": "newsletter or marketing email from a company the recipient subscribed to"}
 }'
 
 curl http://127.0.0.1:8687/health
@@ -224,6 +228,30 @@ The server then fails to start if the model is missing.
 - Laya: the server has no device option; the `laya` library picks the device.
 - On a GPU, `--torch-threads` matters less, but `--threads` still limits how
   many requests run at once.
+
+## Training a model
+
+The stock models are zero-shot: they classify mail they were never trained
+on, from the label texts alone. Their accuracy varies from site to site,
+and a model trained on your own mail usually does much better. Of the
+three backends, only GLiClass can be easily trained:
+
+- **GLiClass**: `contrib/ml-benchmark/gliclass-train HAM_DIR SPAM_DIR`
+  fine-tunes a GLiClass model on a directory of ham and one of spam
+  (plus, optionally, `--phishing-dir`). It trains on the exact text and
+  labels `Mail::MIMEDefang::ML::GLiClass` sends, and reports false
+  positives and false negatives on a held-out part of the corpus before
+  and after training. Serve the result with `--model DIR`
+  (`GLICLASS_MODEL=DIR` in the unit). It needs `accelerate`, which is in
+  `requirements-gliclass.txt`, and a GPU in practice. Use a few hundred
+  labelled messages at least, ideally thousands.
+- **Laya**: the `laya` Python package only runs models, it contains no
+  training code. `--checkpoint` can serve a Laya model trained elsewhere,
+  with the Laya project's own tools.
+- **OpenAI-compatible LLMs**: fine-tuning an 8B generative model means
+  LoRA training with separate tools (e.g. Unsloth or LLaMA-Factory),
+  converting the result to GGUF and importing it into Ollama, on a GPU
+  with enough memory for the model. MIMEDefang provides nothing for that.
 
 ## Sizing
 

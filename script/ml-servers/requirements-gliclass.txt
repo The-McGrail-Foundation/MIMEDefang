@@ -4,8 +4,12 @@
 # torch from the CPU wheel index first (see README.md), then:
 #
 #   pip install -r requirements-gliclass.txt
+#
+# accelerate is only needed to fine-tune a model with
+# contrib/ml-benchmark/gliclass-train.
 gliclass
 transformers
 torch
 flask
 waitress
+accelerate>=1.1.0
