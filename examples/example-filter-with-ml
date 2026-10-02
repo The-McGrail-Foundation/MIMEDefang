@@ -65,11 +65,11 @@ $AddWarningsInline = 0;
 $Mail::MIMEDefang::ML::Config{timeout}        = 10;
 
 # Laya (mimedefang-laya-server):
-# $Mail::MIMEDefang::ML::Config{backend} = 'Laya';
+$Mail::MIMEDefang::ML::Config{backend} = 'Laya';
 # $Mail::MIMEDefang::ML::Config{laya}{server_url} = 'http://127.0.0.1:8687';
 
 # GLiClass (mimedefang-gliclass-server):
-$Mail::MIMEDefang::ML::Config{backend}              = 'GLiClass';
+# $Mail::MIMEDefang::ML::Config{backend}              = 'GLiClass';
 # $Mail::MIMEDefang::ML::Config{gliclass}{server_url} = 'http://127.0.0.1:8688';
 
 # Local model via Ollama.  Use a model with at least 7-8B parameters
@@ -264,40 +264,40 @@ sub filter_end {
     }
 
     #*******************************************************************
-    # Expose the model's opinion as a signed header, positive leans spam,
-    # negative leans ham.
+    # Expose the model's opinion on each question, so later policy can
+    # act on headers alone.  Each question asked gets two headers, a
+    # question not asked gets none:
+    #   X-MIMEDefang-ML-<Q>-Score  - signed confidence, positive leans
+    #                                yes, negative leans no, 0.00 when
+    #                                the model has no opinion (confidence
+    #                                under min_confidence)
+    #   X-MIMEDefang-ML-<Q>-Answer - yes:    confident enough to act on
+    #                                        (thresholds above)
+    #                                no:     the model says no
+    #                                unsure: anything else, the model
+    #                                        leans yes below the action
+    #                                        threshold, or has no opinion
     #*******************************************************************
-    if (defined $verdict->{is_spam}{answer}) {
-        my $sign  = $verdict->{is_spam}{answer} ? 1 : -1;
-        my $score = $sign * $verdict->{is_spam}{confidence};
-        action_change_header('X-MIMEDefang-ML-Score', sprintf('%.2f', $score));
-    }
+    my %acted = (is_spam => $is_spam_verdict, is_phishing => $is_phishing_verdict);
+    my $unsure = 0;
+    foreach my $q (['is_spam', 'Spam'], ['is_phishing', 'Phishing']) {
+        my ($key, $name) = @$q;
+        next unless grep { $_ eq $key } @{ $verdict->{questions} };
+        my $answer = $verdict->{$key}{answer};
+        my $sign = !defined $answer ? 0 : $answer ? 1 : -1;
+        action_change_header("X-MIMEDefang-ML-$name-Score",
+            sprintf('%.2f', $sign * $verdict->{$key}{confidence}));
 
-    #*******************************************************************
-    # Spell out the model's verdict in words too:
-    #   phishing / spam - confident enough to act on (thresholds above)
-    #   ham             - the model is confident the message is not spam,
-    #                     and doesn't lean towards phishing
-    #   unsure          - anything else: the model leans spam/phishing
-    #                     but below the action thresholds, or has no
-    #                     opinion (confidence under min_confidence)
-    #*******************************************************************
-    my $ml_answer = 'unsure';
-    if ($is_phishing_verdict) {
-        $ml_answer = 'phishing';
-    } elsif ($is_spam_verdict) {
-        $ml_answer = 'spam';
-    } elsif (defined $verdict->{is_spam}{answer} && !$verdict->{is_spam}{answer}
-             && !$verdict->{is_phishing}{answer}) {
-        $ml_answer = 'ham';
+        my $word = $acted{$key} ? 'yes' : $sign < 0 ? 'no' : 'unsure';
+        $unsure++ if $word eq 'unsure';
+        action_change_header("X-MIMEDefang-ML-$name-Answer", $word);
     }
-    if ($ml_answer eq 'unsure') {
+    if ($unsure) {
         md_syslog('info', sprintf("ml($verdict->{backend}): unsure, spam %s/%.2f phishing %s/%.2f",
             $verdict->{is_spam}{answer} // 'undef', $verdict->{is_spam}{confidence},
             $verdict->{is_phishing}{answer} // 'undef', $verdict->{is_phishing}{confidence}));
         md_graphdefang_log('ml_unsure');
     }
-    action_change_header('X-MIMEDefang-ML-Answer', $ml_answer);
     action_change_header('X-MIMEDefang-ML-Backend', $verdict->{backend});
 
     md_graphdefang_log('mail_in');

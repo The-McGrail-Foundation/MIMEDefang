@@ -57,7 +57,7 @@ sub classify {
 
     my %questions = map {
         $_ => { type => 'noul', instructions => $Mail::MIMEDefang::ML::QUESTIONS{$_} }
-    } keys %Mail::MIMEDefang::ML::QUESTIONS;
+    } Mail::MIMEDefang::ML::active_questions($cfg);
 
     my $send = { %$state, body => Mail::MIMEDefang::ML::state_body($state, $lc) };
     delete $send->{signals} unless $lc->{send_signals};

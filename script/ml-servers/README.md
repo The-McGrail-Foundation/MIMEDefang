@@ -198,8 +198,8 @@ that has them, e.g. `ML_PYTHON=/usr/bin/python3` for distribution packages.
 curl http://127.0.0.1:8688/health
 curl -s http://127.0.0.1:8688/predict -H 'Content-Type: application/json' -d '{
   "text": "Subject: You won!\n\nClaim your prize, send your bank details today.",
-  "labels": {"is_spam": "fraudulent email: fake invoice, fake order, fake account alert or advance-fee scam",
-             "_ham0": "newsletter or marketing email from a company the recipient subscribed to"}
+  "labels": {"is_spam": "scam email: fake invoice, fake order, fake prize, advance-fee or investment fraud",
+             "_ham0": "personal or business email between people who know each other"}
 }'
 
 curl http://127.0.0.1:8687/health

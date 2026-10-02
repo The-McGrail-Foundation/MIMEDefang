@@ -138,7 +138,7 @@ sub t_chdir : Test(4)
     ok("Mail::MIMEDefang::ML::$mod"->can('classify'), "$mod loaded before chdir");
   }
   local $Mail::MIMEDefang::ML::Config{backend} = 'gliclass';
-  _stub({ scores => { is_spam => 0.9, is_phishing => 0.1 } });
+  _stub({ scores => { 'is_spam#0' => 0.9, 'is_phishing#0' => 0.1 } });
   my $v = ml_classify(_state());
   chdir($cwd) or die "chdir: $!";
   ok(!$v->{error}, 'classify works after chdir');
@@ -175,11 +175,11 @@ sub t_gliclass : Test(7)
 {
   local $Mail::MIMEDefang::ML::Config{backend} = 'gliclass';
 
-  _stub({ scores => { is_spam => 0.1, is_phishing => 0.6 } });
+  _stub({ scores => { 'is_spam#0' => 0.1, 'is_phishing#0' => 0.6 } });
   my $v = ml_classify(_state());
   like($last_url, qr{:8688/predict$}, 'gliclass url');
   like($last_payload->{text}, qr/^From: a\@example\.com\n.*SPF: pass.*\n\nhello$/s, 'state rendered as text');
-  ok(exists $last_payload->{labels}{is_spam} && exists $last_payload->{labels}{is_phishing}, 'labels sent');
+  ok(exists $last_payload->{labels}{'is_spam#0'} && exists $last_payload->{labels}{'is_phishing#0'}, 'labels sent');
   is($v->{is_spam}{answer}, 0, 'spam no');
   cmp_ok(abs($v->{is_spam}{confidence} - 0.9), '<', 1e-9, 'no-confidence is 1-p');
   is($v->{is_phishing}{answer}, 1, 'p=0.6 -> yes, confidence 0.6 passes default gate');
@@ -192,14 +192,50 @@ sub t_gliclass_ham_labels : Test(4)
 {
   local $Mail::MIMEDefang::ML::Config{backend} = 'gliclass';
 
-  _stub({ scores => { is_spam => 0.6, is_phishing => 0.1, _ham0 => 0.9 } });
+  _stub({ scores => { 'is_spam#0' => 0.6, 'is_phishing#0' => 0.1, _ham0 => 0.9 } });
   my $v = ml_classify(_state());
-  is(scalar(grep { /^_ham\d$/ } keys %{ $last_payload->{labels} }), 1, 'ham label sent');
+  is(scalar(grep { /^_ham\d$/ } keys %{ $last_payload->{labels} }),
+     scalar(@Mail::MIMEDefang::ML::GLiClass::HAM_LABELS), 'ham labels sent');
   is($v->{is_spam}{answer}, 0, 'spam weighed against the ham label');
   cmp_ok(abs($v->{is_spam}{confidence} - (1 - 0.6 / 1.5)), '<', 1e-9, 'p = s / (s + ham)');
 
-  _stub({ scores => { is_spam => 0.9, is_phishing => 0.1, _ham0 => 0.1 } });
+  _stub({ scores => { 'is_spam#0' => 0.9, 'is_phishing#0' => 0.1, _ham0 => 0.1 } });
   cmp_ok(abs(ml_classify(_state())->{is_spam}{confidence} - 0.9), '<', 1e-9, 'spam wins over a weak ham label');
+}
+
+sub t_gliclass_scores : Test(4)
+{
+  local $Mail::MIMEDefang::ML::Config{backend} = 'gliclass';
+
+  _stub({ scores => { 'is_spam#0' => 0.6, 'is_phishing#0' => 0.2, _ham0 => 0.6 } });
+  my $sc = ml_classify(_state())->{scores};
+  is($sc->{is_spam}, 0.6, 'raw spam label score reported');
+  is($sc->{ham}, 0.6, 'raw ham label score reported');
+  cmp_ok(abs($sc->{p_is_spam} - 0.5), '<', 1e-9, 'p reported');
+
+  local $Mail::MIMEDefang::ML::Config{backend} = 'laya';
+  _stub({ answers => { is_spam => { noul => 0.9, confidence => 0.85 } } });
+  ok(!exists ml_classify(_state())->{scores}, 'no scores from a backend that reports none');
+}
+
+sub t_gliclass_label_config : Test(7)
+{
+  local $Mail::MIMEDefang::ML::Config{backend} = 'gliclass';
+  local $Mail::MIMEDefang::ML::Config{gliclass}{labels} = { is_spam => ['fraud', 'bulk ads'] };
+  local $Mail::MIMEDefang::ML::Config{gliclass}{ham_labels} = ['newsletter', 'personal mail'];
+
+  _stub({ scores => { 'is_spam#0' => 0.1, 'is_spam#1' => 0.8, 'is_phishing#0' => 0.1,
+                      _ham0 => 0.2, _ham1 => 0.1 } });
+  my $v = ml_classify(_state());
+  my $l = $last_payload->{labels};
+  is($l->{'is_spam#1'}, 'bulk ads', 'configured spam labels sent');
+  is($l->{'is_phishing#0'}, $Mail::MIMEDefang::ML::GLiClass::LABELS{is_phishing},
+     'question not configured keeps its default label');
+  is($l->{_ham1}, 'personal mail', 'configured ham labels sent');
+  is(scalar(keys %$l), 5, 'no default labels added');
+  is($v->{scores}{is_spam}, 0.8, 'best spam label counts');
+  is($v->{scores}{ham}, 0.2, 'best ham label counts');
+  cmp_ok(abs($v->{is_spam}{confidence} - 0.8), '<', 1e-9, 'p = best s / (best s + best ham)');
 }
 
 sub t_openai : Test(15)
@@ -250,6 +286,48 @@ sub t_openai : Test(15)
   local $Mail::MIMEDefang::ML::Config{openai}{reasoning_effort} = '';
   ml_classify(_state());
   ok(!exists $last_payload->{reasoning_effort}, 'reasoning_effort can be omitted');
+}
+
+sub t_questions : Test(14)
+{
+  local $Mail::MIMEDefang::ML::Config{questions} = ['is_phishing'];
+
+  local $Mail::MIMEDefang::ML::Config{backend} = 'laya';
+  _stub({ answers => {
+    is_spam     => { noul => 0.9, confidence => 0.85 },
+    is_phishing => { noul => 0.9, confidence => 0.95 },
+  } });
+  my $v = ml_classify(_state());
+  is_deeply([keys %{ $last_payload->{questions} }], ['is_phishing'], 'laya asked phishing only');
+  is_deeply($v->{questions}, ['is_phishing'], 'questions asked reported');
+  ok(!defined $v->{is_spam}{answer} && $v->{is_spam}{confidence} == 0, 'unasked question -> no opinion');
+  is($v->{is_phishing}{answer}, 1, 'phishing answered');
+
+  $v = ml_classify(_state(), questions => ['is_spam']);
+  is_deeply([keys %{ $last_payload->{questions} }], ['is_spam'], 'per-call questions override the config');
+  is($v->{is_spam}{answer}, 1, 'spam answered');
+  ok(!defined $v->{is_phishing}{answer}, 'phishing not asked');
+
+  is(ml_classify(_state(), questions => ['nonsense'])->{error}, 'no questions', 'unknown questions only -> error');
+  is_deeply([Mail::MIMEDefang::ML::active_questions({ questions => 'is_phishing, is_spam,is_phishing' })],
+            [qw(is_phishing is_spam)], 'string list, order kept, duplicates dropped');
+
+  local $Mail::MIMEDefang::ML::Config{backend} = 'gliclass';
+  _stub({ scores => { 'is_phishing#0' => 0.9, _ham0 => 0.1 } });
+  $v = ml_classify(_state());
+  is_deeply([sort keys %{ $last_payload->{labels} }],
+            [(map { "_ham$_" } 0 .. $#Mail::MIMEDefang::ML::GLiClass::HAM_LABELS), 'is_phishing#0'],
+            'gliclass sent phishing labels only');
+  is($v->{is_phishing}{answer}, 1, 'gliclass phishing answered');
+
+  local $Mail::MIMEDefang::ML::Config{backend} = 'openai';
+  local $Mail::MIMEDefang::ML::Config{openai}{model} = 'test-model';
+  _stub({ choices => [ { message => { content => '{"is_spam": 0.9, "is_phishing": 0.95}' } } ] });
+  $v = ml_classify(_state());
+  my $prompt = $last_payload->{messages}[0]{content};
+  ok($prompt !~ /is_spam/ && $prompt =~ /one question/, 'openai prompt asks phishing only');
+  like($prompt, qr/\{"is_phishing": 0\.0-1\.0\}/, 'openai reply format has phishing only');
+  ok(!defined $v->{is_spam}{answer} && $v->{is_phishing}{answer} == 1, 'openai spam answer ignored');
 }
 
 sub t_retry : Test(4)

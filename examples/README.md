@@ -76,14 +76,18 @@ running backend.
   uncomment `SAScore`/`SARules` (or pass `RspamdScore`/`RspamdSymbols`).
   The model only acts (subject tagging) on confident verdicts. If the backend can't be reached, or the verdict has
   low confidence, SpamAssassin's own scoring is used. The verdict is
-  exposed in the `X-MIMEDefang-ML-Score`, `X-MIMEDefang-ML-Answer`, and
-  `X-MIMEDefang-ML-Backend` headers. `X-MIMEDefang-ML-Answer` is
-  `phishing` or `spam` when the verdict is confident enough to act on,
-  `ham` when the model is confident the message is not spam and doesn't
-  lean towards phishing, and `unsure` otherwise. `unsure` covers a model
-  that leans spam or phishing below the action thresholds, or that has no
-  opinion. Unsure verdicts are also logged, which helps when tuning the
-  thresholds.
+  exposed, per question, in the `X-MIMEDefang-ML-Spam-Score`,
+  `X-MIMEDefang-ML-Spam-Answer`, `X-MIMEDefang-ML-Phishing-Score` and
+  `X-MIMEDefang-ML-Phishing-Answer` headers, two for each question asked,
+  so later policy can decide on headers alone; `X-MIMEDefang-ML-Backend`
+  names the backend. The score headers are signed: positive when the model
+  leans spam/phishing, negative when it doesn't, with the confidence as
+  magnitude (e.g. `-0.61` and `0.56`), and `0.00` when the model has no
+  opinion (confidence under `min_confidence`). The answer headers are
+  `yes` when the verdict is confident enough to act on, `no` when the
+  model says no, and `unsure` otherwise: the model leans yes below the
+  action threshold, or has no opinion. Unsure verdicts are also logged,
+  which helps when tuning the thresholds.
 
 The Laya and GLiClass model servers, with instructions for installing
 their Python modules, downloading the models, running them under systemd,

@@ -6,15 +6,19 @@ on a corpus of ham and spam messages, and measure it on a held-out part.
 The training text of every message is built by the Mail::MIMEDefang::ML
 Perl code itself (ml_build_state() + state_to_text() with the GLiClass
 body limits), and the label texts are read from
-Mail::MIMEDefang::ML::GLiClass, so the model is trained on exactly what
-the backend sends it at filtering time.
+Mail::MIMEDefang::ML::GLiClass, so the model is trained on exactly
+what the backend sends it at filtering time.
 
 Each message gets these labels:
-    ham                       the ham label if it is bulk mail (it has a
+    ham                       the ham labels if it is bulk mail (it has a
                               List-Unsubscribe or List-Id header), none
                               otherwise
-    spam (SPAM_DIR)           the is_spam label
+    spam (SPAM_DIR)           the is_spam labels
     phishing (--phishing-dir) the is_spam and is_phishing labels
+
+If $Mail::MIMEDefang::ML::Config{gliclass}{labels} / {ham_labels} are
+changed, train a new model: it must be served with the labels it was
+trained on.
 
 Usage:
     gliclass-train [options] HAM_DIR SPAM_DIR
@@ -56,10 +60,9 @@ use Mail::MIMEDefang::ML;
 
 Mail::MIMEDefang::Utils::md_init();
 my $json = JSON::PP->new->utf8->canonical;
-print $json->encode({
-    labels => \%Mail::MIMEDefang::ML::GLiClass::LABELS,
-    ham    => \@Mail::MIMEDefang::ML::GLiClass::HAM_LABELS,
-}), "\n";
+require Mail::MIMEDefang::ML::GLiClass;
+my ($labels, $ham) = Mail::MIMEDefang::ML::GLiClass::label_set(\%Mail::MIMEDefang::ML::Config);
+print $json->encode({ labels => $labels, ham => $ham }), "\n";
 
 my $parser = MIME::Parser->new;
 $parser->output_to_core(1);
@@ -93,7 +96,7 @@ def collect(directory):
 
 
 def render(files, lib):
-    """Return (labels, ham_labels, {file: (text, is_list)}) from the Perl code."""
+    """Return ({question: [labels]}, ham_labels, {file: (text, is_list)}) from the Perl code."""
     cmd = ["perl"] + (["-I", lib] if lib else []) + ["-e", PERL_RENDER]
     proc = subprocess.run(cmd, input="\n".join(files) + "\n", capture_output=True,
                           text=True, encoding="utf-8", check=False)
@@ -109,12 +112,13 @@ def render(files, lib):
     return head["labels"], head["ham"], msgs
 
 
-def spam_probability(scores, key, ham_keys):
-    """Mirror Mail::MIMEDefang::ML::GLiClass: s / (s + best ham score)."""
-    s = scores.get(key)
+def spam_probability(scores, keys, ham_keys):
+    """Mirror Mail::MIMEDefang::ML::GLiClass: best s / (best s + best ham score)."""
+    ss = [scores[k] for k in keys if scores.get(k) is not None]
     hams = [scores[k] for k in ham_keys if scores.get(k) is not None]
-    if s is None:
+    if not ss:
         return None
+    s = max(ss)
     if not hams:
         return s
     h = max(hams)
@@ -127,16 +131,22 @@ def evaluate(title, model, tokenizer, device, examples, labels, ham_labels, max_
     pipeline = ZeroShotClassificationPipeline(
         model, tokenizer, classification_type="multi-label", device=device,
         max_length=max_length, progress_bar=False)
-    texts = [labels["is_spam"], labels["is_phishing"]] + ham_labels
+    keys, texts = [], []
+    for q in ("is_spam", "is_phishing"):
+        for i, t in enumerate(labels.get(q, [])):
+            keys.append("%s#%d" % (q, i))
+            texts.append(t)
+    spam_keys = [k for k in keys if k.startswith("is_spam#")]
     ham_keys = ["_ham%d" % i for i in range(len(ham_labels))]
-    keys = ["is_spam", "is_phishing"] + ham_keys
+    keys += ham_keys
+    texts += ham_labels
 
     rows = []
     for ex in examples:
         result = pipeline(ex["text"], texts, threshold=0.0)[0]
         by_label = {r["label"]: float(r["score"]) for r in result}
         scores = {k: by_label.get(t) for k, t in zip(keys, texts)}
-        rows.append((ex["class"], spam_probability(scores, "is_spam", ham_keys)))
+        rows.append((ex["class"], spam_probability(scores, spam_keys, ham_keys)))
 
     print("\n%s, held-out messages: %d ham, %d spam"
           % (title, sum(c == "ham" for c, _ in rows), sum(c != "ham" for c, _ in rows)))
@@ -192,7 +202,12 @@ def main():
         sys.exit("gliclass-train: no messages found")
 
     labels, ham_labels, msgs = render([f for _, f in corpus], args.lib)
-    all_labels = [labels["is_spam"], labels["is_phishing"]] + ham_labels
+    spam_labels = labels.get("is_spam", [])
+    phish_labels = labels.get("is_phishing", [])
+    # A text used for more than one purpose would get conflicting targets.
+    all_labels = list(dict.fromkeys(spam_labels + phish_labels + ham_labels))
+    if len(all_labels) != len(spam_labels) + len(phish_labels) + len(ham_labels):
+        sys.exit("gliclass-train: the same label text is used twice")
 
     examples = []
     for cls, f in corpus:
@@ -202,9 +217,9 @@ def main():
         if cls == "ham":
             true = list(ham_labels) if is_list else []
         elif cls == "spam":
-            true = [labels["is_spam"]]
+            true = list(spam_labels)
         else:
-            true = [labels["is_spam"], labels["is_phishing"]]
+            true = spam_labels + phish_labels
         # Each example needs its own label list: the dataset shuffles it in place.
         examples.append({"class": cls, "text": text,
                          "all_labels": list(all_labels), "true_labels": true})

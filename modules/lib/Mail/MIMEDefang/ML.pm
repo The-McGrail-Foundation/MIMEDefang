@@ -97,6 +97,9 @@ F<mimedefang-filter>.  The keys, with their defaults:
   $Mail::MIMEDefang::ML::Config{connect_retries} = 1;       # retries when the server can't be
                                                             # reached, never after a timeout
   $Mail::MIMEDefang::ML::Config{min_confidence}  = 0.55;    # below this -> no opinion
+  $Mail::MIMEDefang::ML::Config{questions}       = [qw(is_spam is_phishing)];
+                                                            # questions asked, e.g.
+                                                            # ['is_phishing'] alone
 
   # What ml_build_state() puts in the state, and what backends get of it
   $Mail::MIMEDefang::ML::Config{body_head_chars} = 1500;    # body kept: first N chars ...
@@ -128,6 +131,12 @@ per-backend budgets, or raise C<timeout>; C<ml_classify> can wait up to
 C<timeout> seconds (C<connect_retries> only retries requests that could
 not connect, which fail at once), keep that below the
 multiplexor's busy timeout (see L<Mail::MIMEDefang::ML::OpenAI/TIMEOUT>).
+
+C<questions> lists the questions the backend is asked, C<is_spam> and/or
+C<is_phishing>.  Asking only one of them makes the request lighter
+(fewer GLiClass labels, a shorter prompt and reply for generative models),
+e.g. to use the model only as a phishing detector and leave spam to
+SpamAssassin or rspamd.  It can also be set per call, see L</ml_classify($state, %opts)>.
 
 See each backend's documentation for its remaining keys.
 
@@ -186,14 +195,30 @@ in the MIMEDefang sources for the complete filter.
           action_change_header('Subject', "[SPAM] $Subject");
       }
 
-      # Signed score: positive leans spam, negative leans ham.
-      if (defined $verdict->{is_spam}{answer}) {
-          my $sign = $verdict->{is_spam}{answer} ? 1 : -1;
-          action_change_header('X-MIMEDefang-ML-Score',
-              sprintf('%.2f', $sign * $verdict->{is_spam}{confidence}));
+      # Per question: a signed score (positive leans yes, negative leans
+      # no, 0.00 for no opinion) and yes/no/unsure.
+      my %acted = (is_spam => $spam, is_phishing => $phishing);
+      foreach my $q (['is_spam', 'Spam'], ['is_phishing', 'Phishing']) {
+          my ($key, $name) = @$q;
+          next unless grep { $_ eq $key } @{ $verdict->{questions} };
+          my $answer = $verdict->{$key}{answer};
+          my $sign = !defined $answer ? 0 : $answer ? 1 : -1;
+          action_change_header("X-MIMEDefang-ML-$name-Score",
+              sprintf('%.2f', $sign * $verdict->{$key}{confidence}));
+          action_change_header("X-MIMEDefang-ML-$name-Answer",
+              $acted{$key} ? 'yes' : $sign < 0 ? 'no' : 'unsure');
       }
       action_change_header('X-MIMEDefang-ML-Backend', $verdict->{backend});
   }
+
+To use the model only against phishing, ask just that question; the
+C<is_spam> answer is then always C<undef>:
+
+  $Mail::MIMEDefang::ML::Config{questions} = ['is_phishing'];
+
+or, for one call only:
+
+  my $verdict = ml_classify($state, questions => ['is_phishing']);
 
 Change the confidence thresholds, the actions (C<action_quarantine_entire_message>,
 C<action_change_header>, C<action_bounce>, C<action_discard>, ...) and where in
@@ -272,6 +297,9 @@ our %Config = (
     # Verdicts below this confidence are treated as "no opinion".
     min_confidence     => 0.55,
 
+    # Questions asked (keys of %QUESTIONS).
+    questions          => [qw(is_spam is_phishing)],
+
     laya => {
         server_url   => 'http://127.0.0.1:8687',
         predict_path => '/predict',
@@ -304,15 +332,26 @@ my %BACKENDS = (
 );
 
 # The questions every backend answers, phrased for the ones that take
-# free-text instructions (Laya, chat LLMs).
+# free-text instructions (Laya, chat LLMs): the question, what counts,
+# then what doesn't.  Keep them short, Laya reads 512 tokens in all.
 our %QUESTIONS = (
-    is_spam     => 'Is this email spam: a scam, fraud, malware, or mail sent to the '
-                 . 'recipient without their consent by a sender they have no '
-                 . 'relationship with?  Newsletters, marketing and notifications '
-                 . 'from organisations the recipient deals with are not spam.',
-    is_phishing => 'Does this email attempt to impersonate a person, brand, or '
-                 . 'service to steal credentials, payment details, or other '
-                 . 'sensitive information?',
+    is_spam     => 'Is this email spam?  Spam is mail the recipient did not ask for, '
+                 . 'from a sender they have no relationship with: scams and fraud '
+                 . '(advance-fee, fake prizes, fake invoices or orders), malware, and '
+                 . 'bulk or cold commercial pitches (sales, services, SEO, loans, '
+                 . 'pills, dating, crypto).  Not spam: personal or business '
+                 . 'correspondence and replies, receipts and account or delivery '
+                 . 'notices from services the recipient uses, and newsletters, '
+                 . 'mailing lists or marketing from organisations they deal with.',
+    is_phishing => 'Is this email phishing?  Phishing pretends to come from a bank, '
+                 . 'company, courier, service, colleague or executive the recipient '
+                 . 'trusts, to trick them into entering a password, paying or wiring '
+                 . 'money, giving out payment or personal details, or opening a '
+                 . 'malicious link or attachment (fake account, mailbox or delivery '
+                 . 'alerts, fake invoices or bank detail changes, urgent requests '
+                 . 'from a "boss").  Not phishing: genuine notices from the real '
+                 . 'service, and spam that sells something without pretending to be '
+                 . 'someone else.',
 );
 
 my $_ua;
@@ -583,22 +622,35 @@ sub _rule_list {
     return \@rules;
 }
 
-=item ml_classify($state)
+=item ml_classify($state, %opts)
 
 Hands the state to the configured backend and returns a verdict hashref.
+C<%opts> may hold C<questions>, overriding C<$Config{questions}> for this
+call, e.g. C<questions =E<gt> ['is_phishing']>.  Questions not asked are
+returned with C<answer> set to C<undef> and C<confidence> 0, as for no
+opinion; C<questions> in the verdict lists the ones that were asked.
 Returns C<{ error => $reason }> on any failure, callers should treat that
 the same as "no opinion" and fall back to SA/rspamd-only handling.
 
 Answers whose confidence is below C<min_confidence> are returned with
 C<answer> set to C<undef>, whichever backend produced them.
 
+When the backend reports its raw scores (see L</BACKEND API>), they are
+copied to C<scores>, for diagnostics; don't base filtering decisions on
+them, their meaning is backend specific.
+
 =cut
 
 sub ml_classify {
-    my ($state) = @_;
+    my ($state, %opts) = @_;
 
     return { error => 'disabled' } unless $Config{enabled};
     return { error => 'no state' } unless $state && ref($state) eq 'HASH';
+
+    my $asked = exists $opts{questions} ? $opts{questions} : $Config{questions};
+    my @questions = active_questions({ questions => $asked });
+    return { error => 'no questions' } unless @questions;
+    my %cfg = (%Config, questions => \@questions);
 
     my $name = lc($Config{backend} // '');
     my $mod  = $BACKENDS{$name};
@@ -611,16 +663,17 @@ sub ml_classify {
         return { error => "cannot load backend '$name'" };
     }
 
-    my $raw = eval { $pkg->can('classify')->($state, \%Config) };
+    my $raw = eval { $pkg->can('classify')->($state, \%cfg) };
     if ($@ || !$raw || ref($raw) ne 'HASH') {
         md_syslog('info', "ml: $name backend failed: " . ($@ || 'no result'));
         return { error => 'backend failure' };
     }
     return { error => $raw->{error}, backend => $name } if $raw->{error};
 
-    my %verdict = (backend => $name);
+    my %verdict = (backend => $name, questions => [@questions]);
+    my %ask = map { $_ => 1 } @questions;
     for my $key (keys %QUESTIONS) {
-        my $a = $raw->{$key};
+        my $a = $ask{$key} ? $raw->{$key} : undef;
         if (!$a || !defined $a->{answer} || !defined $a->{confidence}) {
             $verdict{$key} = { answer => undef, confidence => 0 };
             next;
@@ -631,6 +684,8 @@ sub ml_classify {
             confidence => $conf,
         };
     }
+    # Raw backend scores, for diagnostics only.
+    $verdict{scores} = { %{ $raw->{scores} } } if ref($raw->{scores}) eq 'HASH';
     return \%verdict;
 }
 
@@ -641,12 +696,17 @@ sub ml_classify {
 A backend is a module C<Mail::MIMEDefang::ML::E<lt>NameE<gt>> with a
 C<classify($state, \%Config)> function returning either C<{ error =E<gt> $reason }>
 or C<{ is_spam =E<gt> { answer =E<gt> 0|1, confidence =E<gt> 0..1 }, is_phishing =E<gt> {...} }>.
-Confidence gating is done here, not in the backend.  Backends may use the
+Confidence gating is done here, not in the backend.  A backend may also
+return C<scores =E<gt> { name =E<gt> number, ... }> with its raw scores,
+passed on as they are for diagnostics.  Backends may use the
 helpers C<http_post_json($url, $payload, \%headers)>,
 C<state_body($state, \%backend_cfg)> (the body cut to the backend's
-C<body_head_chars>/C<body_tail_chars>) and
+C<body_head_chars>/C<body_tail_chars>),
 C<state_to_text($state, \%backend_cfg)> (the state as text, with the
-signals and that body) from this package.
+signals and that body) and C<active_questions(\%Config)> (the questions to
+answer, in order) from this package.  A backend asks the model only the
+questions C<active_questions> returns; answers to other questions are
+ignored.
 
 =cut
 
@@ -656,6 +716,21 @@ sub _clamp {
     return 0 if $v < 0;
     return 1 if $v > 1;
     return $v;
+}
+
+# The questions to ask: $cfg->{questions} (a list, or one name) cut to
+# the known ones, in order and without duplicates.  Undefined -> all of
+# them; a list of unknown names only -> none.
+sub active_questions {
+    my ($cfg) = @_;
+    my $q = $cfg ? $cfg->{questions} : undef;
+    unless (defined $q) {
+        my @all = sort keys %QUESTIONS;
+        return @all;
+    }
+    my %seen;
+    return grep { defined && exists $QUESTIONS{$_} && !$seen{$_}++ }
+           (ref($q) eq 'ARRAY' ? @$q : split(/[\s,]+/, $q));
 }
 
 # The state's body cut to the backend's budget: its own body_head_chars /

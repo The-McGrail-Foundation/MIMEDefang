@@ -14,6 +14,7 @@
 #   MD_ML_BACKENDS           comma separated backends (laya,gliclass,openai)
 #   MD_ML_TIMEOUT            seconds per HTTP request
 #   MD_ML_MIN_CONFIDENCE     verdicts below this are "no opinion"
+#   MD_ML_QUESTIONS          comma separated questions asked (is_spam,is_phishing)
 #   MD_ML_LAYA_URL           Laya server URL
 #   MD_ML_GLICLASS_URL       GLiClass server URL
 #   MD_ML_OPENAI_URL         OpenAI-compatible base URL
@@ -43,6 +44,7 @@ my @MLBackends = grep { length } split(/\s*,\s*/, $ENV{MD_ML_BACKENDS} // 'laya,
     my $c = \%Mail::MIMEDefang::ML::Config;
     $c->{timeout}              = $ENV{MD_ML_TIMEOUT}           if $ENV{MD_ML_TIMEOUT};
     $c->{min_confidence}       = $ENV{MD_ML_MIN_CONFIDENCE}    if defined $ENV{MD_ML_MIN_CONFIDENCE};
+    $c->{questions}            = [split(/\s*,\s*/, $ENV{MD_ML_QUESTIONS})] if $ENV{MD_ML_QUESTIONS};
     $c->{laya}{server_url}     = $ENV{MD_ML_LAYA_URL}          if $ENV{MD_ML_LAYA_URL};
     $c->{gliclass}{server_url} = $ENV{MD_ML_GLICLASS_URL}      if $ENV{MD_ML_GLICLASS_URL};
     $c->{openai}{base_url}     = $ENV{MD_ML_OPENAI_URL}        if $ENV{MD_ML_OPENAI_URL};
@@ -175,6 +177,8 @@ sub filter_end {
                     confidence => $verdict->{$q}{confidence} + 0,
                 };
             }
+            $rec{scores} = { map { $_ => $verdict->{scores}{$_} + 0 } keys %{ $verdict->{scores} } }
+                if ref($verdict->{scores}) eq 'HASH';
         }
         print $fh $json->encode(\%rec), "\n";
     }
