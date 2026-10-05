@@ -195,10 +195,10 @@ lib/manpages:
 		--release=$(VERSION) \
 		modules/lib/Mail/MIMEDefang/MIME.pm modules/man/Mail::MIMEDefang::MIME.3
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \
-		--center="Mail::MIMEDefang::MIME::Base64/ Documentation" \
+		--center="Mail::MIMEDefang::MIME::Base64 Documentation" \
 		--name="Mail::MIMEDefang::MIME::Base64" \
 		--release=$(VERSION) \
-		modules/lib/Mail/MIMEDefang/MIME/Base64.pm modules/man/Mail::MIMEDefang::MIME::Base64.3	
+		modules/lib/Mail/MIMEDefang/MIME/Base64.pm modules/man/Mail::MIMEDefang::MIME::Base64.3
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \
 		--center="Mail::MIMEDefang::Net Documentation" \
 		--name="Mail::MIMEDefang::Net" \
