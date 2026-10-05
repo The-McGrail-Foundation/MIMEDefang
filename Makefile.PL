@@ -820,6 +820,11 @@ md_module_manpages:
 \t\t--release=\$(MD_VERSION) \\
 \t\tmodules/lib/Mail/MIMEDefang/MIME.pm "modules/man/Mail::MIMEDefang::MIME.$MAN3EXT"
 \t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
+\t\t--center="Mail::MIMEDefang::MIME::Base64 Documentation" \\
+\t\t--name="Mail::MIMEDefang::MIME::Base64" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tmodules/lib/Mail/MIMEDefang/MIME/Base64.pm "modules/man/Mail::MIMEDefang::MIME::Base64.$MAN3EXT"
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=3 --perm_rw=644 \\
 \t\t--center="Mail::MIMEDefang::Net Documentation" \\
 \t\t--name="Mail::MIMEDefang::Net" \\
 \t\t--release=\$(MD_VERSION) \\
@@ -916,6 +921,7 @@ install_man: pod2man
 \t    Mail::MIMEDefang::DKIM::ARC.$MAN3EXT \\
 \t    Mail::MIMEDefang::Mail.$MAN3EXT \\
 \t    Mail::MIMEDefang::MIME.$MAN3EXT \\
+\t    Mail::MIMEDefang::MIME::Base64.$MAN3EXT \\
 \t    Mail::MIMEDefang::Net.$MAN3EXT \\
 \t    Mail::MIMEDefang::RFC2822.$MAN3EXT \\
 \t    Mail::MIMEDefang::SPF.$MAN3EXT \\
