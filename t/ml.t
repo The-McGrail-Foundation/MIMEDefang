@@ -5,6 +5,12 @@ use lib qw(modules/lib);
 use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
+BEGIN {
+  unless (eval { require LWP::UserAgent; 1 }) {
+    plan skip_all => 'LWP::UserAgent not installed';
+  }
+}
+
 use Mail::MIMEDefang::ML;
 
 my $real_post = \&Mail::MIMEDefang::ML::http_post_json;
