@@ -2,6 +2,21 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2026-10-07 Giovanni Bechis <g.bechis@snb.it>
+
+        * add `Mail::MIMEDefang::ML`, a provider-neutral ham/spam/phishing
+          classifier API (`ml_build_state`, `ml_classify`) configured through
+          `%Mail::MIMEDefang::ML::Config`; backends: Laya, GLiClass and any
+          self-hosted OpenAI-compatible server (Ollama, llama.cpp, vLLM,
+          LM Studio).  Backend failures or low-confidence answers are
+          returned as "no opinion", so mail flow is never blocked.
+        * add `mimedefang-laya-server` and `mimedefang-gliclass-server`
+          Python model servers in `script/ml-servers/` with their systemd
+          units, installed with `--enable-ml-servers` (`ML_SERVERS=1` with
+          Makefile.PL).
+        * add `contrib/ml-benchmark/ml-benchmark` to measure backends against
+          a ham/spam corpus and `gliclass-train` to fine-tune a GLiClass model.
+
 2026-09-24 Giovanni Bechis <gbechis@pccc.com>
 
         * detect base64 parts made of concatenated streams and ambiguous MIME structures;
