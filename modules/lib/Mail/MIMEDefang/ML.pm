@@ -77,6 +77,10 @@ to reach the backend, or a low-confidence verdict, is treated as "no
 opinion" so callers can fall back to their existing SpamAssassin/rspamd-only
 path.
 
+The stock models are not trained on your mail and their accuracy varies
+a lot from site to site: for good results, train them first, see
+L</TRAINING A MODEL>.
+
 Backends are self-hosted model servers; see L</SECURITY> for how to keep
 them safe.  C<mimedefang-laya-server> and C<mimedefang-gliclass-server>,
 with instructions for installing their Python modules and models, are in
@@ -225,6 +229,50 @@ C<action_change_header>, C<action_bounce>, C<action_discard>, ...) and where in
 the filter this runs to match your site's policy.  Phishing uses a higher
 threshold than spam because legitimate bulk marketing mail (tracking links,
 redirects) can look like phishing to a model.
+
+=head1 TRAINING A MODEL
+
+The stock models are zero-shot: they classify mail they were never
+trained on, from the label texts or the questions alone.  Out of the box
+their accuracy is modest and varies a lot from site to site, especially
+on mail that is not in English; do not act on their verdicts before
+checking them against your own mail.  To get good results, train the
+model on a corpus of your own ham and spam (a few hundred labelled
+messages at least, ideally thousands), and retrain it as your mail
+changes.
+
+=over 4
+
+=item C<gliclass>
+
+F<contrib/ml-benchmark/gliclass-train> fine-tunes a GLiClass model on a
+directory of ham and one of spam (and, optionally, one of phishing with
+C<--phishing-dir>), using the exact text and labels this module sends.
+It reports false positives and false negatives on a held-out part of the
+corpus before and after training.  Serve the result with
+C<mimedefang-gliclass-server --model DIR>, with the labels it was trained
+on (see L<Mail::MIMEDefang::ML::GLiClass>).  Training needs a GPU in
+practice.
+
+=item C<laya>
+
+The C<laya> Python package contains no training code; a Laya model
+trained with the Laya project's own tools can be served with
+C<mimedefang-laya-server --checkpoint>.
+
+=item C<openai>
+
+Fine-tuning a generative model (LoRA training with tools such as Unsloth
+or LLaMA-Factory, then importing the result into Ollama) is outside the
+scope of MIMEDefang.
+
+=back
+
+F<contrib/ml-benchmark/ml-benchmark> measures the false positive and
+false negative rates of every backend on a directory of ham and one of
+spam: use it before and after training, and to choose the confidence
+thresholds used in the filter.  See "Training a model" in
+F<script/ml-servers/README.md> for details.
 
 =head1 SECURITY
 
