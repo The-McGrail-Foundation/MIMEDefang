@@ -42,7 +42,9 @@ and 500, sized for Laya's 512-token context), C<send_signals> (default 0:
 the signals computed by L<Mail::MIMEDefang::ML/ml_build_state> are left
 out, because Laya picks its English or multilingual checkpoint by the
 language of the whole state, and the English signal lines make it route
-non-English mail, and even English newsletters, to the wrong one).
+non-English mail, and even English newsletters, to the wrong one),
+C<question_texts> (question wording for this backend, keep it short, see
+L<Mail::MIMEDefang::ML/CONFIGURATION>).
 
 =cut
 
@@ -56,7 +58,7 @@ sub classify {
     my $lc = $cfg->{laya} || {};
 
     my %questions = map {
-        $_ => { type => 'noul', instructions => $Mail::MIMEDefang::ML::QUESTIONS{$_} }
+        $_ => { type => 'noul', instructions => Mail::MIMEDefang::ML::question_text($cfg, $_, $lc) }
     } Mail::MIMEDefang::ML::active_questions($cfg);
 
     my $send = { %$state, body => Mail::MIMEDefang::ML::state_body($state, $lc) };

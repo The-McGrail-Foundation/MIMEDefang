@@ -171,6 +171,30 @@ sub t_laya : Test(9)
   is(ml_classify(_state())->{error}, '500 Internal Server Error', 'http error passed through');
 }
 
+sub t_question_texts : Test(5)
+{
+  local $Mail::MIMEDefang::ML::Config{backend} = 'laya';
+  local $Mail::MIMEDefang::ML::Config{question_texts} = { is_spam => 'Spam?', bogus => 'Bogus?' };
+
+  _stub({ answers => {} });
+  ml_classify(_state());
+  my $q = $last_payload->{questions};
+  is($q->{is_spam}{instructions}, 'Spam?', 'configured question text sent');
+  is($q->{is_phishing}{instructions}, $Mail::MIMEDefang::ML::QUESTIONS{is_phishing},
+     'question not configured keeps its default text');
+  ok(!exists $q->{bogus}, 'unknown questions ignored');
+
+  local $Mail::MIMEDefang::ML::Config{laya}{question_texts} = { is_spam => 'Laya spam?' };
+  ml_classify(_state());
+  is($last_payload->{questions}{is_spam}{instructions}, 'Laya spam?', 'backend question text wins');
+
+  local $Mail::MIMEDefang::ML::Config{backend} = 'openai';
+  local $Mail::MIMEDefang::ML::Config{openai}{model} = 'test-model';
+  _stub({ choices => [ { message => { content => '{"is_spam": 0.1, "is_phishing": 0.1}' } } ] });
+  ml_classify(_state());
+  like($last_payload->{messages}[0]{content}, qr/^is_spam: Spam\?$/m, 'question text in the system prompt');
+}
+
 sub t_gliclass : Test(7)
 {
   local $Mail::MIMEDefang::ML::Config{backend} = 'gliclass';
@@ -335,11 +359,8 @@ sub t_retry : Test(4)
   require HTTP::Response;
   my @queue;
   my $calls = 0;
-  {
-    package Mail::MIMEDefang::Unit::ML::FakeUA;
-    sub new { return bless {}, shift }
-    sub request { $calls++; return shift @queue }
-  }
+  local *Mail::MIMEDefang::Unit::ML::FakeUA::new = sub { return bless {}, shift };
+  local *Mail::MIMEDefang::Unit::ML::FakeUA::request = sub { $calls++; return shift @queue };
   my $internal = sub {
     my ($msg) = @_;
     my $r = HTTP::Response->new(500, $msg);

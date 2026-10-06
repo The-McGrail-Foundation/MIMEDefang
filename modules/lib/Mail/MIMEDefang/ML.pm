@@ -104,6 +104,7 @@ F<mimedefang-filter>.  The keys, with their defaults:
   $Mail::MIMEDefang::ML::Config{questions}       = [qw(is_spam is_phishing)];
                                                             # questions asked, e.g.
                                                             # ['is_phishing'] alone
+  $Mail::MIMEDefang::ML::Config{question_texts}  = {};      # question wording, see below
 
   # What ml_build_state() puts in the state, and what backends get of it
   $Mail::MIMEDefang::ML::Config{body_head_chars} = 1500;    # body kept: first N chars ...
@@ -141,6 +142,22 @@ C<is_phishing>.  Asking only one of them makes the request lighter
 (fewer GLiClass labels, a shorter prompt and reply for generative models),
 e.g. to use the model only as a phishing detector and leave spam to
 SpamAssassin or rspamd.  It can also be set per call, see L</ml_classify($state, %opts)>.
+
+C<question_texts> rewords the questions put to the backends that take
+free-text instructions (Laya, generative models), keyed by question; a
+question not in it keeps its default text from
+C<%Mail::MIMEDefang::ML::QUESTIONS>.  Each of these backends can have its
+own, which wins over the global one: Laya reads 512 tokens in all and
+wants short texts, a generative model can take longer ones.
+
+  $Mail::MIMEDefang::ML::Config{question_texts}{is_phishing} =
+      'Is this email phishing?  ...';
+  $Mail::MIMEDefang::ML::Config{laya}{question_texts}{is_spam} =
+      'Is this email unsolicited bulk mail or a scam?';
+
+GLiClass scores labels instead of answering questions: set them with
+C<$Mail::MIMEDefang::ML::Config{gliclass}{labels}> and C<{ham_labels}>,
+see L<Mail::MIMEDefang::ML::GLiClass/CONFIGURATION>.
 
 See each backend's documentation for its remaining keys.
 
@@ -347,6 +364,9 @@ our %Config = (
 
     # Questions asked (keys of %QUESTIONS).
     questions          => [qw(is_spam is_phishing)],
+    # Question wording overrides (key of %QUESTIONS -> text), see
+    # question_text().
+    question_texts     => {},
 
     laya => {
         server_url   => 'http://127.0.0.1:8687',
@@ -751,8 +771,9 @@ helpers C<http_post_json($url, $payload, \%headers)>,
 C<state_body($state, \%backend_cfg)> (the body cut to the backend's
 C<body_head_chars>/C<body_tail_chars>),
 C<state_to_text($state, \%backend_cfg)> (the state as text, with the
-signals and that body) and C<active_questions(\%Config)> (the questions to
-answer, in order) from this package.  A backend asks the model only the
+signals and that body), C<active_questions(\%Config)> (the questions to
+answer, in order) and C<question_text(\%Config, $question, \%backend_cfg)>
+(the question's text, see C<question_texts>) from this package.  A backend asks the model only the
 questions C<active_questions> returns; answers to other questions are
 ignored.
 
@@ -779,6 +800,18 @@ sub active_questions {
     my %seen;
     return grep { defined && exists $QUESTIONS{$_} && !$seen{$_}++ }
            (ref($q) eq 'ARRAY' ? @$q : split(/[\s,]+/, $q));
+}
+
+# A question's text: the backend's question_texts, else the global
+# ones, else the default in %QUESTIONS.
+sub question_text {
+    my ($cfg, $key, $bcfg) = @_;
+    for my $texts (($bcfg || {})->{question_texts}, ($cfg || {})->{question_texts}) {
+        next unless ref($texts) eq 'HASH';
+        my $t = $texts->{$key};
+        return $t if defined $t && !ref($t) && length $t;
+    }
+    return $QUESTIONS{$key};
 }
 
 # The state's body cut to the backend's budget: its own body_head_chars /

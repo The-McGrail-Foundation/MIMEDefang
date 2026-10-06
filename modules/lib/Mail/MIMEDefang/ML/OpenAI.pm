@@ -79,7 +79,8 @@ C<max_tokens> (default 100), C<json_mode> (default 1; set to 0 for servers
 that reject C<response_format>), C<reasoning_effort> (default C<none>),
 C<body_head_chars> and C<body_tail_chars> (body kept, default 6000 and 1500
 characters; lower them for models with a small context window or to save
-time on CPU).
+time on CPU), C<question_texts> (question wording for this backend, see
+L<Mail::MIMEDefang::ML/CONFIGURATION>).
 
 Thinking models (Qwen3, DeepSeek-R1, gpt-oss, ...) otherwise spend the
 C<max_tokens> budget on their chain of thought and return an empty answer;
@@ -98,12 +99,12 @@ use JSON::PP qw(decode_json);
 use Mail::MIMEDefang::ML ();
 
 sub _system_prompt {
-    my @keys = @_;
-    my $q = \%Mail::MIMEDefang::ML::QUESTIONS;
+    my ($cfg, @keys) = @_;
+    my %q = map { $_ => Mail::MIMEDefang::ML::question_text($cfg, $_, $cfg->{openai}) } @keys;
     my $n = @keys == 1 ? 'one question' : @keys == 2 ? 'two questions' : @keys . ' questions';
     return 'You are an email security classifier. You are given an email '
          . "(headers, links, attachments, body) and must answer $n.\n"
-         . join('', map { "$_: $q->{$_}\n" } @keys)
+         . join('', map { "$_: $q{$_}\n" } @keys)
          . "The \"Signals computed by the mail filter\" lines list the domains the "
          . "body links to and the attachments, as found in the message.\n"
          . "Judge the text, the links and the attachment names. Suspicious: "
@@ -131,7 +132,7 @@ sub classify {
         temperature => 0,
         max_tokens  => $oc->{max_tokens} // 100,
         messages    => [
-            { role => 'system', content => _system_prompt(@questions) },
+            { role => 'system', content => _system_prompt($cfg, @questions) },
             { role => 'user',   content => Mail::MIMEDefang::ML::state_to_text($state, $oc) },
         ],
     };
