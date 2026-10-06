@@ -3791,7 +3791,55 @@ then :
 fi
 
 
-CFLAGS="$CFLAGS -std=c17"
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for a C dialect compatible with libmilter" >&5
+printf %s "checking for a C dialect compatible with libmilter... " >&6; }
+md_c_std=none
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+typedef int bool;
+int
+main (void)
+{
+bool b = 0; (void)b;
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  md_c_std="default"
+else case e in #(
+  e) OLD_CFLAGS="$CFLAGS"
+   for md_std in gnu17 gnu11 gnu99; do
+     CFLAGS="$OLD_CFLAGS -std=$md_std"
+     cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+typedef int bool;
+int
+main (void)
+{
+bool b = 0; (void)b;
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  md_c_std="-std=$md_std"; break
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+   done
+   CFLAGS="$OLD_CFLAGS" ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $md_c_std" >&5
+printf "%s\n" "$md_c_std" >&6; }
+case "$md_c_std" in
+  none)    as_fn_error $? "no pre-C23 C dialect found; libmilter headers are not C23 compatible" "$LINENO" 5 ;;
+  default) ;;
+  *)       CFLAGS="$CFLAGS $md_c_std" ;;
+esac
 
 for ac_prog in ar
 do
