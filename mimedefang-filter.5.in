@@ -1888,6 +1888,9 @@ This function returns the new global Mail::SpamAssassin object with the
 specified or default config (outlined above).  If the global object is
 already defined, returns it -- does not change config files!  The object
 can be used to perform other SpamAssassin related functions.
+$config_file should be an absolute path: filter callbacks run in the
+per-message working directory, so a relative path is unlikely to be found.
+If $config_file cannot be read, a warning is logged.
 
 .TP
 .B spam_assassin_mail()

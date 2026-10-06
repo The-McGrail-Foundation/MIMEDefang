@@ -147,6 +147,9 @@ sub spam_assassin_status {
 =item spam_assassin_init
 
 Initialize Apache SpamAssassin and returns a C<Mail::SpamAssassin> object.
+The config file path should be absolute: filter callbacks run from
+the per-message working directory, so a relative path is unlikely to
+be found. A warning is logged if the config file cannot be read.
 
 =cut
 
@@ -168,7 +171,11 @@ sub spam_assassin_init {
     }
 
     if (!defined($SASpamTester)) {
-        if (!defined($config)) {
+        if (defined($config)) {
+            # SpamAssassin silently ignores a missing prefs file.
+            md_syslog('warning', "SpamAssassin config file $config is not readable, ignoring it")
+                unless -r $config;
+        } else {
             if (-r $Features{'Path:CONFDIR'} . '/sa-mimedefang.cf') {
                 $config = $Features{'Path:CONFDIR'} . '/sa-mimedefang.cf';
             } elsif (-r $Features{'Path:CONFDIR'} . '/spamassassin/sa-mimedefang.cf') {
