@@ -39,6 +39,9 @@ contrib/linuxorg/filter
 contrib/linuxorg/README
 contrib/linuxorg/spam-deliver
 contrib/linuxorg/spam-trusted-hosts
+contrib/ml-benchmark/gliclass-train
+contrib/ml-benchmark/mimedefang-filter
+contrib/ml-benchmark/ml-benchmark
 contrib/munin/mimedefang_munin_plugin
 contrib/README.md
 contrib/word-to-html
@@ -57,6 +60,8 @@ examples/README.md
 examples/redhat-logrotate-file
 examples/stream-by-domain-filter
 examples/suggested-minimum-filter-for-windows-clients
+examples/example-filter-with-async-checks
+examples/example-filter-with-ml
 gen_id.c
 gen-ip-validator.pl
 install-sh
@@ -92,6 +97,10 @@ modules/lib/Mail/MIMEDefang/DKIM/ARC.pm
 modules/lib/Mail/MIMEDefang/DKIM.pm
 modules/lib/Mail/MIMEDefang/Mail.pm
 modules/lib/Mail/MIMEDefang/MIME.pm
+modules/lib/Mail/MIMEDefang/ML.pm
+modules/lib/Mail/MIMEDefang/ML/GLiClass.pm
+modules/lib/Mail/MIMEDefang/ML/Laya.pm
+modules/lib/Mail/MIMEDefang/ML/OpenAI.pm
 modules/lib/Mail/MIMEDefang/MIME/Base64.pm
 modules/lib/Mail/MIMEDefang/Net.pm
 modules/lib/Mail/MIMEDefang.pm
@@ -112,10 +121,18 @@ redhat/mimedefang-sysconfig.in
 rm_r.c
 script/mimedefang-test-mail
 script/mimedefang-util.in
+script/ml-servers/README.md
+script/ml-servers/mimedefang-gliclass-server
+script/ml-servers/mimedefang-laya-server
+script/ml-servers/requirements-gliclass.txt
+script/ml-servers/requirements-laya.txt
 SpamAssassin/spamassassin.cf
 syslog-fac.c
 systemd-units/mimedefang-multiplexor.service
 systemd-units/mimedefang.service
+systemd-units/mimedefang-gliclass-server.service
+systemd-units/mimedefang-laya-server.service
+t/c_unit.t
 t/actions.t
 t/antispam.t
 t/arc.t
@@ -161,6 +178,7 @@ t/docker/dockerSendmail.sh
 t/graphdefang.t
 t/headers.t
 t/helo.t
+t/ml.t
 t/mimedefang_test_mail.t
 t/mime.t
 t/net.t

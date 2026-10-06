@@ -1,0 +1,522 @@
+#!/usr/bin/perl
+
+#***********************************************************************
+#
+# ml-benchmark
+#
+# Run script/mimedefang-test-mail against a directory of ham and a
+# directory of spam messages, with a filter that asks every configured
+# Mail::MIMEDefang::ML backend for a verdict, and report false positive /
+# false negative rates and average processing times per backend.
+#
+# Copyright (C) 2026 The McGrail Foundation
+#
+# This program may be distributed under the terms of the GNU General
+# Public License, Version 2.
+#
+#***********************************************************************
+
+use strict;
+use warnings;
+use FindBin;
+use File::Find;
+use File::Spec;
+use File::Temp qw( tempfile );
+use Getopt::Long;
+use JSON::PP ();
+use MIME::Head;
+use Pod::Usage;
+use POSIX qw( _exit );
+use Time::HiRes qw( gettimeofday tv_interval );
+
+my $top = File::Spec->catdir($FindBin::Bin, File::Spec->updir, File::Spec->updir);
+
+my %opt = (
+    'test-mail'          => File::Spec->catfile($top, 'script', 'mimedefang-test-mail'),
+    filter               => File::Spec->catfile($FindBin::Bin, 'mimedefang-filter'),
+    lib                  => (-d File::Spec->catdir($top, 'modules', 'lib')
+                             ? File::Spec->catdir($top, 'modules', 'lib') : undef),
+    backends             => 'laya,gliclass,openai',
+    'spam-threshold'     => 0.80,
+    'phishing-threshold' => 0.90,
+    questions            => 'is_spam,is_phishing',
+    to                   => 'benchmark@localhost',
+);
+
+GetOptions(
+    \%opt,
+    'test-mail=s',
+    'filter|f=s',
+    'lib|I=s',
+    'backends|b=s',
+    'laya-url=s',
+    'gliclass-url=s',
+    'openai-url=s',
+    'openai-model=s',
+    'openai-max-tokens=i',
+    'timeout=i',
+    'min-confidence=f',
+    'questions|q=s',
+    'spam-threshold=f',
+    'phishing-threshold=f',
+    'auth',
+    'dump-state=s',
+    'to=s',
+    'csv=s',
+    'limit=i',
+    'verbose|v',
+    'help|h',
+) or pod2usage(2);
+
+pod2usage(-verbose => 1) if $opt{help};
+pod2usage("Expected HAM_DIR and SPAM_DIR arguments") unless @ARGV == 2;
+
+my ($ham_dir, $spam_dir) = @ARGV;
+for my $d ($ham_dir, $spam_dir) {
+    pod2usage("Not a directory: $d") unless -d $d;
+}
+die "Cannot read $opt{'test-mail'}\n" unless -r $opt{'test-mail'};
+die "Cannot read filter $opt{filter}\n" unless -r $opt{filter};
+$opt{filter} = File::Spec->rel2abs($opt{filter});
+$opt{lib}    = File::Spec->rel2abs($opt{lib}) if defined $opt{lib};
+
+my @backends = map { lc } grep { length } split(/\s*,\s*/, $opt{backends});
+die "No backends given\n" unless @backends;
+
+my @questions = grep { length } split(/\s*,\s*/, lc $opt{questions});
+die "No questions given\n" unless @questions;
+for my $q (@questions) {
+    die "Unknown question '$q' (expected is_spam or is_phishing)\n"
+        unless $q eq 'is_spam' || $q eq 'is_phishing';
+}
+my %asked = map { $_ => 1 } @questions;
+
+# Environment read by contrib/ml-benchmark/mimedefang-filter.
+$ENV{MD_ML_BACKENDS}          = join(',', @backends);
+$ENV{MD_ML_AUTH}              = $opt{auth} ? 1 : 0;
+$ENV{MD_ML_QUESTIONS}         = join(',', @questions);
+$ENV{MD_ML_TIMEOUT}           = $opt{timeout}             if defined $opt{timeout};
+$ENV{MD_ML_MIN_CONFIDENCE}    = $opt{'min-confidence'}    if defined $opt{'min-confidence'};
+$ENV{MD_ML_LAYA_URL}          = $opt{'laya-url'}          if defined $opt{'laya-url'};
+$ENV{MD_ML_GLICLASS_URL}      = $opt{'gliclass-url'}      if defined $opt{'gliclass-url'};
+$ENV{MD_ML_OPENAI_URL}        = $opt{'openai-url'}        if defined $opt{'openai-url'};
+$ENV{MD_ML_OPENAI_MODEL}      = $opt{'openai-model'}      if defined $opt{'openai-model'};
+$ENV{MD_ML_OPENAI_MAX_TOKENS} = $opt{'openai-max-tokens'} if defined $opt{'openai-max-tokens'};
+
+if (defined $opt{'dump-state'}) {
+    -d $opt{'dump-state'} or mkdir($opt{'dump-state'})
+        or die "Cannot create $opt{'dump-state'}: $!\n";
+    $opt{'dump-state'} = File::Spec->rel2abs($opt{'dump-state'});
+}
+
+my @corpus = ((map { ['ham',  $_] } collect_files($ham_dir)),
+              (map { ['spam', $_] } collect_files($spam_dir)));
+die "No messages found\n" unless @corpus;
+
+my %stats = map {
+    $_ => { ham => 0, spam => 0, fp => 0, fn => 0, unsure => 0,
+            err => 0, secs => 0, calls => 0, errors => {}, fp_files => [], fn_files => [],
+            samples => [], dist => {} }
+} @backends;
+
+# Raw scores some backends report (GLiClass: best label score of each
+# question, best ham label score, and the resulting probabilities).
+my @score_keys = qw(is_spam is_phishing ham p_is_spam p_is_phishing);
+my %corpus_count = (ham => 0, spam => 0);
+my @failures;
+my ($run_secs, $runs) = (0, 0);
+
+my $csv;
+if (defined $opt{csv}) {
+    open($csv, '>', $opt{csv}) or die "Cannot write $opt{csv}: $!\n";
+    print $csv join(',', qw(file class backend predicted is_spam is_spam_conf
+                            is_phishing is_phishing_conf secs error),
+                    map { "score_$_" } @score_keys), "\n";
+}
+
+my $n = 0;
+for my $item (@corpus) {
+    my ($class, $file) = @$item;
+    $n++;
+    printf STDERR "[%d/%d] %s %s\n", $n, scalar(@corpus), $class, $file;
+    $corpus_count{$class}++;
+
+    my ($secs, $results, $log) = run_one($file);
+    $run_secs += $secs;
+    $runs++;
+
+    unless (@$results) {
+        push @failures, $file;
+        print STDERR $log if $opt{verbose} && defined $log;
+        next;
+    }
+
+    for my $r (@$results) {
+        my $s = $stats{ $r->{backend} } or next;
+        $s->{secs} += $r->{secs} // 0;
+        $s->{calls}++;
+
+        my $predicted = '';
+        if (defined $r->{error}) {
+            $s->{err}++;
+            $s->{errors}{ $r->{error} }++;
+        } else {
+            my $spam  = $r->{is_spam}     || {};
+            my $phish = $r->{is_phishing} || {};
+            # Only the questions asked count: the others are always
+            # "no opinion".
+            my $spam_p  = ($asked{is_spam}     && $spam->{answer})  ? $spam->{confidence}  : 0;
+            my $phish_p = ($asked{is_phishing} && $phish->{answer}) ? $phish->{confidence} : 0;
+            my $is_spam = $spam_p >= $opt{'spam-threshold'} && $spam_p > 0
+                       || $phish_p >= $opt{'phishing-threshold'} && $phish_p > 0;
+            $predicted = $is_spam ? 'spam' : 'ham';
+            push @{ $s->{samples} }, [$class, $spam_p, $phish_p];
+            $s->{unsure}++ unless grep { defined $r->{$_}{answer} } @questions;
+            if (ref($r->{scores}) eq 'HASH') {
+                for my $k (@score_keys) {
+                    push @{ $s->{dist}{$class}{$k} }, $r->{scores}{$k}
+                        if defined $r->{scores}{$k};
+                }
+            }
+            $s->{$class}++;
+            if ($class eq 'ham' && $is_spam) {
+                $s->{fp}++;
+                push @{ $s->{fp_files} }, $file;
+            } elsif ($class eq 'spam' && !$is_spam) {
+                $s->{fn}++;
+                push @{ $s->{fn_files} }, $file;
+            }
+        }
+
+        if ($csv) {
+            print $csv join(',', map { csv_field($_) }
+                $file, $class, $r->{backend}, $predicted,
+                $r->{is_spam}{answer}, $r->{is_spam}{confidence},
+                $r->{is_phishing}{answer}, $r->{is_phishing}{confidence},
+                sprintf('%.4f', $r->{secs} // 0), $r->{error},
+                map { defined $_ ? sprintf('%.4f', $_) : undef }
+                    map { ref($r->{scores}) eq 'HASH' ? $r->{scores}{$_} : undef } @score_keys), "\n";
+        }
+    }
+}
+close($csv) if $csv;
+
+report();
+exit 0;
+
+# ------------------------------------------------------------------
+sub collect_files {
+    my ($dir) = @_;
+    my @files;
+    find({ no_chdir => 1, wanted => sub { push @files, $_ if -f $_ && -s _ } }, $dir);
+    @files = sort @files;
+    splice(@files, $opt{limit}) if $opt{limit} && @files > $opt{limit};
+    return map { File::Spec->rel2abs($_) } @files;
+}
+
+# Run mimedefang-test-mail on one message; returns the wall-clock time,
+# the parsed per-backend results and the tool's output (stdout+stderr).
+sub run_one {
+    my ($file) = @_;
+
+    my ($rfh, $rfile) = tempfile('ml-benchmark-XXXXXX', TMPDIR => 1, UNLINK => 1);
+    close($rfh);
+    my ($lfh, $lfile) = tempfile('ml-benchmark-log-XXXXXX', TMPDIR => 1, UNLINK => 1);
+    close($lfh);
+    local $ENV{MD_ML_BENCH_OUT} = $rfile;
+    local $ENV{MD_ML_DUMP_FILE};
+    if (defined $opt{'dump-state'}) {
+        my (undef, $dir, $name) = File::Spec->splitpath($file);
+        my $class = (File::Spec->splitdir($dir))[-2] // 'msg';
+        $ENV{MD_ML_DUMP_FILE} = File::Spec->catfile($opt{'dump-state'}, "$class-$name.txt");
+    }
+
+    my @cmd = ($^X, (defined $opt{lib} ? ('-I', $opt{lib}) : ()),
+               $opt{'test-mail'}, '-f', $opt{filter},
+               '--to', $opt{to},
+               # Skip the PTR lookup mimedefang-test-mail does for the "_" macro.
+               '--macro', '_=[127.0.0.1]');
+    push @cmd, '--from', 'unknown@localhost' unless has_sender($file);
+    push @cmd, $file;
+
+    my $t0 = [gettimeofday()];
+    my $pid = fork();
+    die "Cannot fork: $!\n" unless defined $pid;
+    if ($pid == 0) {
+        open(STDIN, '<', File::Spec->devnull);
+        open(STDOUT, '>', $lfile) or _exit(127);
+        open(STDERR, '>&', \*STDOUT) or _exit(127);
+        exec { $cmd[0] } @cmd or _exit(127);
+    }
+    waitpid($pid, 0);
+    my $secs = tv_interval($t0);
+
+    my @results;
+    my $json = JSON::PP->new;
+    if (open(my $fh, '<', $rfile)) {
+        while (my $line = <$fh>) {
+            my $r = eval { $json->decode($line) };
+            push @results, $r if ref($r) eq 'HASH' && defined $r->{backend};
+        }
+        close($fh);
+    }
+
+    my $log;
+    if ($opt{verbose} && open(my $fh, '<', $lfile)) {
+        local $/;
+        $log = <$fh>;
+        close($fh);
+    }
+    unlink($rfile, $lfile);
+    return ($secs, \@results, $log);
+}
+
+# mimedefang-test-mail dies when it cannot find an envelope sender.
+sub has_sender {
+    my ($file) = @_;
+    open(my $fh, '<', $file) or return 0;
+    my $head = MIME::Head->new;
+    $head->read($fh);
+    close($fh);
+    for my $h (qw(From Sender)) {
+        my $v = $head->get($h, 0);
+        return 1 if defined $v && $v =~ /\S/;
+    }
+    return 0;
+}
+
+sub csv_field {
+    my ($v) = @_;
+    return '' unless defined $v;
+    return $v unless $v =~ /[",\r\n]/;
+    $v =~ s/"/""/g;
+    return qq("$v");
+}
+
+sub pct {
+    my ($num, $den) = @_;
+    return $den ? sprintf('%.2f%%', 100 * $num / $den) : 'n/a';
+}
+
+# Value at quantile $q (0..1) of a list of numbers, nearest rank.
+sub quantile {
+    my ($q, @v) = @_;
+    return undef unless @v;
+    @v = sort { $a <=> $b } @v;
+    my $i = int($q * $#v + 0.5);
+    return $v[$i];
+}
+
+sub report {
+    print "\nML backend benchmark\n";
+    print "====================\n";
+    printf "Corpus: %d ham (%s), %d spam (%s)\n",
+        $corpus_count{ham}, $ham_dir, $corpus_count{spam}, $spam_dir;
+    printf "Questions: %s\n", join(', ', @questions);
+    printf "Thresholds: %s; SPF/DKIM/DMARC: %s\n",
+        join(', ', ($asked{is_spam}     ? sprintf('is_spam >= %.2f',     $opt{'spam-threshold'})     : ()),
+                   ($asked{is_phishing} ? sprintf('is_phishing >= %.2f', $opt{'phishing-threshold'}) : ())),
+        $opt{auth} ? 'on' : 'off';
+    printf "Messages not processed: %d\n", scalar(@failures);
+    printf "Avg mimedefang-test-mail time per email: %.3fs (%d runs, %.1fs total)\n\n",
+        $runs ? $run_secs / $runs : 0, $runs, $run_secs;
+
+    my $fmt = "%-10s %6s %6s %6s %6s %8s %6s %8s %7s %10s\n";
+    printf $fmt, qw(Backend Ham Spam Errors FP FP% FN FN% Unsure), 'Avg time';
+    printf $fmt, map { '-' x length } qw(Backend Ham Spam Errors FP FP% FN FN% Unsure), 'Avg time';
+    for my $be (@backends) {
+        my $s = $stats{$be};
+        printf $fmt, $be, $s->{ham}, $s->{spam}, $s->{err},
+            $s->{fp}, pct($s->{fp}, $s->{ham}),
+            $s->{fn}, pct($s->{fn}, $s->{spam}),
+            $s->{unsure},
+            sprintf('%.3fs', $s->{calls} ? $s->{secs} / $s->{calls} : 0);
+    }
+
+    my @thresholds = (0.55, 0.6, 0.7, 0.8, 0.9);
+    # Vary the is_spam threshold, or the is_phishing one when only
+    # phishing was asked.
+    my $vary = $asked{is_spam} ? 'is_spam' : 'is_phishing';
+    if ($vary eq 'is_spam') {
+        print "\nFP / FN by is_spam threshold"
+            . ($asked{is_phishing} ? " (is_phishing stays at $opt{'phishing-threshold'})" : '') . ":\n";
+    } else {
+        print "\nFP / FN by is_phishing threshold:\n";
+    }
+    printf "%-10s" . (" %11s" x @thresholds) . "\n", 'Backend', map { ">= $_" } @thresholds;
+    for my $be (@backends) {
+        my @cells;
+        for my $t (@thresholds) {
+            my ($fp, $fn) = (0, 0);
+            for my $x (@{ $stats{$be}{samples} }) {
+                my ($class, $p, $phish) = @$x;
+                my $spam = $vary eq 'is_spam'
+                    ? ($phish > 0 && $phish >= $opt{'phishing-threshold'}) || ($p > 0 && $p >= $t)
+                    : $phish > 0 && $phish >= $t;
+                $fp++ if $class eq 'ham'  && $spam;
+                $fn++ if $class eq 'spam' && !$spam;
+            }
+            push @cells, "$fp / $fn";
+        }
+        printf "%-10s" . (" %11s" x @cells) . "\n", $be, @cells;
+    }
+
+    for my $be (@backends) {
+        my $dist = $stats{$be}{dist};
+        next unless %$dist;
+        print "\n$be raw scores, p10 / median / p90:\n";
+        printf "%-6s" . (" %20s" x @score_keys) . "\n", 'Class', @score_keys;
+        for my $class (qw(ham spam)) {
+            next unless $dist->{$class};
+            printf "%-6s" . (" %20s" x @score_keys) . "\n", $class, map {
+                my @v = @{ $dist->{$class}{$_} // [] };
+                @v ? sprintf('%.2f / %.2f / %.2f', map { quantile($_, @v) } 0.1, 0.5, 0.9) : '-'
+            } @score_keys;
+        }
+    }
+
+    for my $be (@backends) {
+        my $s = $stats{$be};
+        next unless %{ $s->{errors} };
+        print "\n$be errors:\n";
+        for my $e (sort { $s->{errors}{$b} <=> $s->{errors}{$a} || $a cmp $b } keys %{ $s->{errors} }) {
+            printf "  %6d  %s\n", $s->{errors}{$e}, $e;
+        }
+    }
+
+    return unless $opt{verbose};
+
+    if (@failures) {
+        print "\nMessages not processed:\n";
+        print "  $_\n" for @failures;
+    }
+    for my $be (@backends) {
+        my $s = $stats{$be};
+        if (@{ $s->{fp_files} }) {
+            print "\n$be false positives:\n";
+            print "  $_\n" for @{ $s->{fp_files} };
+        }
+        if (@{ $s->{fn_files} }) {
+            print "\n$be false negatives:\n";
+            print "  $_\n" for @{ $s->{fn_files} };
+        }
+    }
+    return;
+}
+
+__END__
+
+=head1 NAME
+
+ml-benchmark -- measure Mail::MIMEDefang::ML backends against a ham/spam corpus
+
+=head1 SYNOPSIS
+
+    ml-benchmark [options] HAM_DIR SPAM_DIR
+
+=head1 DESCRIPTION
+
+Runs F<script/mimedefang-test-mail> on every file found (recursively) in
+HAM_DIR and SPAM_DIR, one message per file, using the filter
+F<contrib/ml-benchmark/mimedefang-filter>.  That filter builds the
+C<Mail::MIMEDefang::ML> state once per message and asks every selected
+backend (C<laya>, C<gliclass>, C<openai>) for a verdict.
+
+A message counts as spam for a backend when C<is_spam> is answered yes
+with confidence at or above B<--spam-threshold>, or C<is_phishing> with
+confidence at or above B<--phishing-threshold>; anything else, including
+"no opinion", counts as ham.  Only the questions selected with
+B<--questions> are asked and counted.  With C<is_phishing> alone the
+spam corpus should hold phishing: plain spam counts as a false negative.  Backend errors (server down, no model
+configured, ...) are counted separately and left out of the rates.
+
+The report lists, per backend: messages classified, errors, false
+positives (ham classified as spam) and false negatives (spam classified
+as ham) with their percentages, messages with no opinion on any question
+asked, and the average C<ml_classify()> time, then the false positives and
+false negatives at a few C<is_spam> thresholds (C<is_phishing> thresholds
+when only phishing is asked), to pick one without running the corpus
+again.  For backends that report raw scores
+(C<gliclass>) it also prints the 10th percentile, median and 90th
+percentile of each score on ham and on spam: if they overlap, no
+threshold separates the two, and the labels or the model need work.  It also prints the average
+wall-clock time of a whole mimedefang-test-mail run per message.
+
+mimedefang.pl must be built first (C<./configure && make> or
+C<perl Makefile.PL && make>).  The backend servers are the ones described
+in L<Mail::MIMEDefang::ML>.  Messages are never delivered anywhere.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-b>, B<--backends> LIST
+
+Comma separated backends to test (default: C<laya,gliclass,openai>).
+
+=item B<--laya-url> URL, B<--gliclass-url> URL
+
+Laya / GLiClass server URLs (module defaults if not given).
+
+=item B<--openai-url> URL, B<--openai-model> NAME, B<--openai-max-tokens> N
+
+OpenAI-compatible base URL, model and max_tokens.  The C<openai> backend
+reports an error for every message unless a model is given.
+
+=item B<--timeout> SECONDS
+
+Seconds per HTTP request to the backends; raise it for generative models.
+
+=item B<-q>, B<--questions> LIST
+
+Comma separated questions to ask the backends, C<is_spam> and/or
+C<is_phishing> (default: both), see
+C<$Mail::MIMEDefang::ML::Config{questions}>.  E.g. C<-q is_phishing> to
+measure a backend used only as a phishing detector.
+
+=item B<--min-confidence> N
+
+Override C<$Mail::MIMEDefang::ML::Config{min_confidence}>.
+
+=item B<--spam-threshold> N, B<--phishing-threshold> N
+
+Confidence needed to count a yes answer as spam (default 0.80 and 0.90,
+the thresholds used by F<examples/example-filter-with-ml>).
+
+=item B<--auth>
+
+Compute SPF, DKIM and DMARC results for the model's state.  Off by
+default: it needs DNS lookups and gives meaningless results on old mail.
+
+=item B<--dump-state> DIR
+
+Write the text each backend is sent for a message to
+F<DIR/ham-NAME.txt> or F<DIR/spam-NAME.txt>, to see what the models read.
+
+=item B<--to> ADDR
+
+Envelope recipient passed to mimedefang-test-mail (default:
+C<benchmark@localhost>).
+
+=item B<--csv> FILE
+
+Write one row per message and backend to FILE, with the raw scores
+(C<score_*> columns) of backends that report them.
+
+=item B<--limit> N
+
+Use at most N messages from each directory.
+
+=item B<-v>, B<--verbose>
+
+Print the mimedefang-test-mail output of messages that could not be
+processed, and list false positive / false negative files.
+
+=item B<--test-mail> PATH, B<-f>, B<--filter> PATH, B<-I>, B<--lib> DIR
+
+Paths to mimedefang-test-mail, the benchmark filter and the
+Mail::MIMEDefang modules (defaults: the ones in this source tree).
+
+=back
+
+=cut

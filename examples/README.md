@@ -26,6 +26,74 @@ Requires: `AnyEvent`, `AnyEvent::DNS`, `AnyEvent::Socket`, `AnyEvent::Handle`
 - `filter_end` - runs a non-blocking SpamAssassin (or optionally Rspamd)
   spam check.
 
+## `example-filter-with-ml`
+
+An example filter using `Mail::MIMEDefang::ML` to get ham/spam/phishing
+verdicts from a machine-learning model, in addition to the usual SPF, DKIM, DMARC,
+and SpamAssassin checks. The backend is chosen through
+`$Mail::MIMEDefang::ML::Config{backend}`; the filter code is the same for
+every backend:
+
+| Backend    | Model                                     | Server                                       | Typical latency       |
+|------------|-------------------------------------------|----------------------------------------------|-----------------------|
+| `laya`     | Laya non-autoregressive decision model    | `mimedefang-laya-server` (port 8687)         | tens of ms            |
+| `gliclass` | GLiClass zero-shot encoder (ModernBERT)   | `mimedefang-gliclass-server` (port 8688)     | tens of ms            |
+| `openai`   | self-hosted generative model, >= 7-8B parameters (e.g. Qwen3 8B) | Ollama / llama.cpp / vLLM, OpenAI-compatible API | hundreds of ms to seconds |
+
+Laya and GLiClass answer in a single forward pass and are fast enough for
+every message. The `openai` backend runs a generative model, so it is
+slower: the default `$Mail::MIMEDefang::ML::Config{timeout}` of 10 seconds
+is meant for Laya and GLiClass and must be increased for `openai` (e.g. to
+60; an 8B model on CPU takes seconds per message).  Keep
+`timeout * (1 + connect_retries)`, plus the SpamAssassin run time, below
+the multiplexor busy timeout (`mimedefang-multiplexor -b`, default 120
+seconds) and the MTA's milter timeouts, or raise those too.
+
+Use a model with at least 7-8 billion parameters (Qwen3 8B, Llama 3.1 8B,
+Mistral 7B, Gemma 2 9B or larger).  Smaller models (1-4B, e.g. Qwen3 1.7B
+or Phi-3 mini) catch blatant spam and phishing but judge subtler
+unsolicited mail, such as cold sales pitches, as ham, so they add little on
+top of SpamAssassin.
+
+Backend URLs can use any host name or IP address. The model servers have
+no authentication and every request carries message content, so keep them
+secure by limiting access with a firewall: only the MIMEDefang host(s)
+should be able to reach their ports, and they should never be exposed to
+the Internet. `mimedefang-laya-server` and `mimedefang-gliclass-server`
+listen on `127.0.0.1` by default; if you pass `--host` to make one listen
+on another address, firewall that port.
+
+Requires: `Mail::MIMEDefang::ML`, `LWP::UserAgent`, `JSON::PP`, and a
+running backend.
+
+- `filter_sender` - verifies SPF for the envelope sender.
+- `filter_begin` - runs DKIM verification and DMARC lookup, and publishes
+  an `Authentication-Results` header.
+- `filter_end` - runs SpamAssassin, then sends the message together with
+  the SPF/DKIM/DMARC results to the model for a second opinion. The
+  SpamAssassin score and rules are not passed to `ml_build_state`, so the
+  model can't amplify SpamAssassin false positives. To include them,
+  uncomment `SAScore`/`SARules` (or pass `RspamdScore`/`RspamdSymbols`).
+  The model only acts (subject tagging) on confident verdicts. If the backend can't be reached, or the verdict has
+  low confidence, SpamAssassin's own scoring is used. The verdict is
+  exposed, per question, in the `X-MIMEDefang-ML-Spam-Score`,
+  `X-MIMEDefang-ML-Spam-Answer`, `X-MIMEDefang-ML-Phishing-Score` and
+  `X-MIMEDefang-ML-Phishing-Answer` headers, two for each question asked,
+  so later policy can decide on headers alone; `X-MIMEDefang-ML-Backend`
+  names the backend. The score headers are signed: positive when the model
+  leans spam/phishing, negative when it doesn't, with the confidence as
+  magnitude (e.g. `-0.61` and `0.56`), and `0.00` when the model has no
+  opinion (confidence under `min_confidence`). The answer headers are
+  `yes` when the verdict is confident enough to act on, `no` when the
+  model says no, and `unsure` otherwise: the model leans yes below the
+  action threshold, or has no opinion. Unsure verdicts are also logged,
+  which helps when tuning the thresholds.
+
+The Laya and GLiClass model servers, with instructions for installing
+their Python modules, downloading the models, running them under systemd,
+and sizing them for your multiplexor, are in
+[`script/ml-servers/`](../script/ml-servers/README.md).
+
 ## `redhat-logrotate-file`
 
 If you log statistics to `/var/log/mimedefang/stats`, you want to rotate

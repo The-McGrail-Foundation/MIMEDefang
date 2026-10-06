@@ -1,0 +1,307 @@
+# -*- Perl -*-
+#***********************************************************************
+#
+# mimedefang-filter
+#
+# Example filter using Mail::MIMEDefang::ML to get ham/spam/phishing
+# verdicts from a machine-learning model, in addition to the usual SPF/DKIM/DMARC
+# and SpamAssassin checks.  The backend is selected by configuration
+# only, the filter code is the same for all of them:
+#
+#   laya     - Laya decision model (https://github.com/NandhaKishorM/laya),
+#              served by mimedefang-laya-server
+#   gliclass - GLiClass zero-shot encoder
+#              (https://github.com/Knowledgator/GLiClass), served by
+#              mimedefang-gliclass-server
+#   openai   - a self-hosted generative model served through the
+#              OpenAI-compatible API by Ollama / llama.cpp / vLLM
+#
+# The model servers have no authentication and receive message content:
+# keep them secure by limiting access to their ports with a firewall, so
+# only the MIMEDefang host(s) can reach them.
+#
+# The model is additive here, not a replacement for SpamAssassin: its
+# verdict only takes extra action (subject tagging) on confident answers,
+# and any failure to reach the backend is treated as "no opinion",
+# falling back to SpamAssassin alone.
+#
+# Requires: Mail::MIMEDefang::ML, and a running backend server.
+#
+# Copyright (C) 2026 The McGrail Foundation
+#
+# This program may be distributed under the terms of the GNU General
+# Public License, Version 2.
+#
+#***********************************************************************
+
+use Mail::MIMEDefang::Authres;
+use Mail::MIMEDefang::DKIM;
+use Mail::MIMEDefang::ML;
+use Mail::MIMEDefang::Net qw(get_host_name);
+use Mail::MIMEDefang::SPF;
+
+#***********************************************************************
+# Set administrator's e-mail address here.
+#***********************************************************************
+$AdminAddress = 'postmaster@localhost';
+$AdminName = "MIMEDefang Administrator's Full Name";
+
+#***********************************************************************
+# Set the envelope address that quarantine warnings appear to come from.
+#***********************************************************************
+$DaemonAddress = 'mimedefang@localhost';
+
+$AddWarningsInline = 0;
+
+#***********************************************************************
+# Pick the ML backend and point it at its server, and tune the
+# confidence threshold below which a verdict is treated as "no opinion".
+#***********************************************************************
+# $Mail::MIMEDefang::ML::Config{min_confidence} = 0.55;
+# The default timeout (10s) suits Laya and GLiClass; generative models
+# (OpenAI backend) are much slower, especially on CPU, so raise it.  Keep
+# timeout * (1 + connect_retries), plus SpamAssassin's run time, below the
+# multiplexor busy timeout (mimedefang-multiplexor -b, default 120s).
+$Mail::MIMEDefang::ML::Config{timeout}        = 10;
+
+# Laya (mimedefang-laya-server):
+$Mail::MIMEDefang::ML::Config{backend} = 'Laya';
+# $Mail::MIMEDefang::ML::Config{laya}{server_url} = 'http://127.0.0.1:8687';
+
+# GLiClass (mimedefang-gliclass-server):
+# $Mail::MIMEDefang::ML::Config{backend}              = 'GLiClass';
+# $Mail::MIMEDefang::ML::Config{gliclass}{server_url} = 'http://127.0.0.1:8688';
+
+# Local model via Ollama.  Use a model with at least 7-8B parameters
+# (Qwen3 8B, Llama 3.1 8B, Mistral 7B, Gemma 2 9B, ...): smaller ones only
+# catch blatant spam.  On CPU an 8B model needs seconds per message, see
+# the timeout above.
+# $Mail::MIMEDefang::ML::Config{backend}          = 'OpenAI';
+# $Mail::MIMEDefang::ML::Config{openai}{base_url} = 'http://127.0.0.1:11434/v1';
+# $Mail::MIMEDefang::ML::Config{openai}{model}    = 'qwen3:8b';
+# Thinking is disabled by default (reasoning_effort 'none'); for models or
+# servers that keep thinking anyway, give them room to finish:
+# $Mail::MIMEDefang::ML::Config{openai}{max_tokens} = 1024;
+
+md_graphdefang_log_enable('mail', 1);
+
+# Set various stupid things your mail client does below.
+$Stupidity{"NoMultipleInlines"} = 0;
+
+detect_and_load_perl_modules();
+
+#***********************************************************************
+# filter_sender -- called when the MAIL FROM: envelope address arrives.
+#
+# Verifies SPF for the envelope sender and stashes the result for use
+# once the From: header is available in filter_begin().
+#***********************************************************************
+sub filter_sender {
+    my($sender, $ip, $hostname, $helo) = @_;
+
+    (my $addr = $sender) =~ s/^<|>$//g;
+    my ($domain) = ($addr =~ /\@([\w.\-]+)/);
+
+    $Helo        = $helo;
+    $SPFMailFrom = $addr;
+    $SPFDomain   = $domain;
+    $SPFResult   = undef;
+
+    if (defined $domain && length $domain) {
+        my ($spfcode, $spfexpl) = md_spf_verify($addr, $ip, $helo);
+        if (defined $spfcode) {
+            $SPFResult = $spfcode;
+            md_syslog('info', "SPF result for $addr from $ip: $spfcode") unless $spfcode eq 'none';
+        }
+    }
+
+    return ('CONTINUE', 'ok');
+}
+
+#***********************************************************************
+# filter_begin -- called just before MIME parts are processed.
+#
+# Runs DKIM verification, DMARC lookup, and publishes an
+# Authentication-Results header, so SPF/DKIM/DMARC results are all
+# available for the model's state by the time filter_end() runs.
+#***********************************************************************
+sub filter_begin {
+    my($entity) = @_;
+
+    if ($SuspiciousCharsInHeaders) {
+        md_graphdefang_log('suspicious_chars');
+        action_quarantine_entire_message("Message quarantined because of suspicious characters in headers");
+        return action_discard();
+    }
+
+    my $from_header = $entity->head->get('From');
+    my ($from_domain) = (defined $from_header ? ($from_header =~ /\@([\w.\-]+)/) : ());
+
+    ($DKIMResult, $DKIMDomain) = md_dkim_verify();
+
+    my $authres = md_authres($SPFMailFrom, $RelayAddr, get_host_name(), $Helo, $from_domain);
+    if (defined $authres) {
+        action_change_header("Authentication-Results", $authres);
+    }
+
+    $DMARCResult = 'unknown';
+    if (defined $from_domain && length $from_domain) {
+        my $dmarc_record = md_get_dmarc_record($from_domain);
+        if (defined $dmarc_record) {
+            my $policy = 'none';
+            $policy = lc($1) if ($dmarc_record =~ /\bp=(\w+)/);
+
+            my $from_org = Mail::MIMEDefang::Authres::md_org_domain($from_domain);
+            my $aligned  = 0;
+            $aligned = 1 if (defined $DKIMResult && $DKIMResult eq 'pass'
+                              && defined $DKIMDomain && Mail::MIMEDefang::Authres::md_org_domain($DKIMDomain) eq $from_org);
+            $aligned = 1 if (!$aligned && defined $SPFResult && $SPFResult eq 'pass'
+                              && defined $SPFDomain && Mail::MIMEDefang::Authres::md_org_domain($SPFDomain) eq $from_org);
+
+            $DMARCResult = $aligned ? 'pass' : $policy;
+        }
+    }
+
+    return;
+}
+
+#***********************************************************************
+# filter -- called once per MIME part.  No attachment policy here --
+# this example is only about the ML integration in filter_end().
+#***********************************************************************
+sub filter {
+    my($entity, $fname, $ext, $type) = @_;
+
+    return if message_rejected();
+
+    return action_accept();
+}
+
+#***********************************************************************
+# filter_end -- called after all MIME parts have been processed.
+#
+# Runs the usual SpamAssassin scoring, then feeds its result -- along
+# with the message headers/body and the SPF/DKIM/DMARC results
+# gathered above -- to the model for a second, independent spam/phishing
+# opinion.  The model only acts on confident verdicts; anything else is
+# left to SpamAssassin's own scoring.
+#***********************************************************************
+sub filter_end {
+    my($entity) = @_;
+
+    return if message_rejected();
+
+    my ($hits, $req, $names, $report);
+    if ($Features{"SpamAssassin"} && -s "./INPUTMSG" < 512*1024) {
+        ($hits, $req, $names, $report) = spam_assassin_check();
+        if (defined $hits) {
+            my $stars = "*" x ($hits < 40 ? int($hits) : 40);
+            if ($hits >= $req) {
+                action_change_header("X-Spam-Score", "$hits ($stars) $names");
+                md_graphdefang_log('spam', $hits, $RelayAddr);
+                action_add_part($entity, "text/plain", "-suggest",
+                    "$report\n", "SpamAssassinReport.txt", "inline");
+            } else {
+                action_delete_header("X-Spam-Score");
+            }
+        }
+    }
+
+    #*******************************************************************
+    # Ask the model for a second opinion, using the auth results gathered
+    # above.  ml_build_state() reads From/Reply-To/Subject, the other
+    # headers listed in $Mail::MIMEDefang::ML::Config{headers} and the
+    # plain-text body from $entity, RFC 2047 decoded.
+    #*******************************************************************
+
+    # The SpamAssassin score and rules are not sent to the model: a model
+    # that sees them tends to follow them, amplifying SpamAssassin's false
+    # positives instead of giving an independent opinion.  Uncomment
+    # SAScore/SARules to send them anyway; with Rspamd, pass RspamdScore
+    # and RspamdSymbols from rspamd_check() the same way.
+    my $state = ml_build_state(
+        Entity   => $entity,
+        MailFrom => $Sender,
+        # SAScore => $hits,
+        # SARules => $names,
+        SPF      => $SPFResult,
+        DKIM     => $DKIMResult,
+        DMARC    => $DMARCResult,
+    );
+
+    my $verdict = ml_classify($state);
+
+    if ($verdict->{error}) {
+        md_syslog('info', "ml: no verdict ($verdict->{error}), falling back to SpamAssassin only");
+        md_graphdefang_log('mail_in');
+        return;
+    }
+
+    #*******************************************************************
+    # The is_phishing threshold is set higher (0.90) than is_spam's
+    # (0.80): with e.g. Laya's multilingual checkpoint, legitimate bulk/ESP
+    # marketing mail (tracking links, hidden preview-text padding,
+    # occasional blacklisted redirect URLs) can trip is_phishing at
+    # confidence >= 0.80, even at SpamAssassin scores well under its
+    # own reject threshold.
+    #*******************************************************************
+    my $is_phishing_verdict = $verdict->{is_phishing}{answer}
+        && $verdict->{is_phishing}{confidence} >= 0.90;
+    my $is_spam_verdict = $verdict->{is_spam}{answer}
+        && $verdict->{is_spam}{confidence} >= 0.80;
+
+    if ($is_phishing_verdict) {
+        md_syslog('info', sprintf("ml($verdict->{backend}): phishing, confidence %.2f",
+            $verdict->{is_phishing}{confidence}));
+        md_graphdefang_log('ml_phishing', $verdict->{is_phishing}{confidence});
+    }
+
+    if ($is_spam_verdict) {
+        md_syslog('info', sprintf("ml($verdict->{backend}): spam, confidence %.2f -- tagging subject",
+            $verdict->{is_spam}{confidence}));
+        md_graphdefang_log('ml_spam', $verdict->{is_spam}{confidence});
+        action_change_header('Subject', "[SPAM] $Subject");
+    }
+
+    #*******************************************************************
+    # Expose the model's opinion on each question, so later policy can
+    # act on headers alone.  Each question asked gets two headers, a
+    # question not asked gets none:
+    #   X-MIMEDefang-ML-<Q>-Score  - signed confidence, positive leans
+    #                                yes, negative leans no, 0.00 when
+    #                                the model has no opinion (confidence
+    #                                under min_confidence)
+    #   X-MIMEDefang-ML-<Q>-Answer - yes:    confident enough to act on
+    #                                        (thresholds above)
+    #                                no:     the model says no
+    #                                unsure: anything else, the model
+    #                                        leans yes below the action
+    #                                        threshold, or has no opinion
+    #*******************************************************************
+    my %acted = (is_spam => $is_spam_verdict, is_phishing => $is_phishing_verdict);
+    my $unsure = 0;
+    foreach my $q (['is_spam', 'Spam'], ['is_phishing', 'Phishing']) {
+        my ($key, $name) = @$q;
+        next unless grep { $_ eq $key } @{ $verdict->{questions} };
+        my $answer = $verdict->{$key}{answer};
+        my $sign = !defined $answer ? 0 : $answer ? 1 : -1;
+        action_change_header("X-MIMEDefang-ML-$name-Score",
+            sprintf('%.2f', $sign * $verdict->{$key}{confidence}));
+
+        my $word = $acted{$key} ? 'yes' : $sign < 0 ? 'no' : 'unsure';
+        $unsure++ if $word eq 'unsure';
+        action_change_header("X-MIMEDefang-ML-$name-Answer", $word);
+    }
+    if ($unsure) {
+        md_syslog('info', sprintf("ml($verdict->{backend}): unsure, spam %s/%.2f phishing %s/%.2f",
+            $verdict->{is_spam}{answer} // 'undef', $verdict->{is_spam}{confidence},
+            $verdict->{is_phishing}{answer} // 'undef', $verdict->{is_phishing}{confidence}));
+        md_graphdefang_log('ml_unsure');
+    }
+    action_change_header('X-MIMEDefang-ML-Backend', $verdict->{backend});
+
+    md_graphdefang_log('mail_in');
+}
+
+# DO NOT delete the next line, or Perl will complain.
+1;

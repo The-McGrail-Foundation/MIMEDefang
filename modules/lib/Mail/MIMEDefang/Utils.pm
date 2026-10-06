@@ -24,9 +24,11 @@ use strict;
 use warnings;
 
 use Carp;
+use Encode qw(decode);
 use MIME::Words qw(:all);
 
 use Mail::MIMEDefang;
+use Mail::MIMEDefang::MIME;
 use Mail::MIMEDefang::RFC2822;
 
 require Exporter;
@@ -34,7 +36,8 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(time_str date_str hour_str
                  synthesize_received_header copy_or_link
                  re_match re_match_ext re_match_in_rar_directory re_match_in_zip_directory
-                 re_match_in_7zip_directory re_match_in_tgz_directory md_copy_orig_msg_to_work_dir_as_mbox_file read_results);
+                 re_match_in_7zip_directory re_match_in_tgz_directory md_copy_orig_msg_to_work_dir_as_mbox_file
+		 md_get_plain_text_body read_results);
 our @EXPORT_OK = qw(md_init gen_mx_id);
 
 =item time_str
@@ -467,6 +470,13 @@ sub dummy_zip_error_handler {} ;
 
 sub md_init {
   local $@;
+  # Detect optional modules needed to convert text/html parts to plain text.
+  $Features{"HTML::FormatText"} = eval {
+    require HTML::TreeBuilder;
+    require HTML::FormatText;
+    1;
+  } ? 1 : 0;
+
   my ($tar_bin) = map { "$_/tar" } grep { -x "$_/tar" } split(/:/, $ENV{PATH} // '');
   $Features{"tar"} = $tar_bin // '';
   my ($zip_bin) = map { "$_/7za" } grep { -x "$_/7za" } split(/:/, $ENV{PATH} // '');
@@ -590,6 +600,131 @@ sub gen_mx_id {
   }
   $out[MX_ID_LEN - 1] = 0;
   return join('', @out);
+}
+
+=item md_get_plain_text_body
+
+Method that walks a parsed MIME::Entity and returns a single plain-text
+string suitable for use by other methods or by F<mimedefang-filter>.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: md_get_plain_text_body
+# %ARGUMENTS:
+#  entity -- a MIME entity
+# %RETURNS:
+#  A plain-text string extracted from the entity's first non-empty
+#  text/plain part, or (if there is none, or it is only a short stub such
+#  as "view this email in your browser", and HTML::TreeBuilder/
+#  HTML::FormatText are installed) its text/html part converted to plain
+#  text, with link targets kept.  Parts sent as attachments are skipped.
+#  Returns '' if nothing is available.
+# %DESCRIPTION:
+#  A helper function for filter.
+#***********************************************************************
+sub md_get_plain_text_body {
+  # Bytes of body text this sub will return before truncating.
+  use constant MAX_PLAIN_TEXT_BODY_BYTES => 65536;
+  # A text/plain part shorter than this (non-blank characters) loses to a
+  # longer text/html alternative.
+  use constant MIN_PLAIN_TEXT_CHARS => 200;
+
+  my ($entity) = @_;
+  return '' unless $entity;
+
+  my (@plain, @html);
+  _md_collect_text_parts($entity, \@plain, \@html);
+
+  my $text;
+  for my $part (@plain) {
+    my $t = _md_part_to_text($part);
+    if (defined $t && $t =~ /\S/) {
+      $text = $t;
+      last;
+    }
+  }
+  if ($Features{"HTML::FormatText"} && @html
+      && (!defined $text || _md_visible_length($text) < MIN_PLAIN_TEXT_CHARS)) {
+    for my $part (@html) {
+      my $t = _md_part_to_text($part);
+      next unless defined $t && $t =~ /\S/;
+      $text = $t if !defined $text || _md_visible_length($t) > _md_visible_length($text);
+      last;
+    }
+  }
+  return '' unless defined $text;
+
+  if (length($text) > MAX_PLAIN_TEXT_BODY_BYTES) {
+    $text = substr($text, 0, MAX_PLAIN_TEXT_BODY_BYTES);
+  }
+  return $text;
+}
+
+# Leaf text/plain and text/html parts in MIME order, leaving out
+# attachments and the contents of PGP/MIME signed or encrypted parts.
+sub _md_collect_text_parts {
+  my ($entity, $plain, $html) = @_;
+  my $type = lc($entity->head->mime_type || '');
+
+  if ($entity->is_multipart) {
+    return if $type eq 'multipart/signed' or $type eq 'multipart/encrypted';
+    _md_collect_text_parts($_, $plain, $html) for $entity->parts;
+    return;
+  }
+  my $disposition = lc($entity->head->mime_attr('content-disposition') || '');
+  return if $disposition eq 'attachment';
+  push @$plain, $entity if $type eq 'text/plain';
+  push @$html,  $entity if $type eq 'text/html';
+  return;
+}
+
+sub _md_visible_length {
+  my ($text) = @_;
+  (my $t = $text) =~ s/\s+//g;
+  return length $t;
+}
+
+sub _md_part_to_text {
+  my ($entity) = @_;
+  return unless $entity;
+
+  my $body = $entity->bodyhandle;
+  return unless $body;
+
+  my $raw = do {
+    local $/;
+    my $io = $body->open('r') or return;
+    my $data = $io->getline // '';
+    $data .= $_ // '' while defined($_ = $io->getline);
+    $io->close;
+    $data;
+  };
+  return unless length $raw;
+
+  my $charset = lc($entity->head->mime_attr('content-type.charset') || 'us-ascii');
+  my $decoded = eval { decode($charset, $raw, Encode::FB_DEFAULT) };
+  $decoded = $raw if $@ || !defined $decoded;
+
+  my $type = lc($entity->mime_type || '');
+  if ($type eq 'text/html') {
+    return unless $Features{"HTML::FormatText"};
+    my $tree = HTML::TreeBuilder->new;
+    $tree->parse($decoded);
+    $tree->eof;
+    # HTML::FormatText drops link targets: keep them after the link text,
+    # where they are in text/plain bodies too.
+    for my $link ($tree->look_down(_tag => 'a', href => qr{^\s*https?://}i)) {
+      (my $href = $link->attr('href')) =~ s/^\s+|\s+$//g;
+      $link->push_content(" <$href>");
+    }
+    my $formatter = HTML::FormatText->new(leftmargin => 0, rightmargin => 9999);
+    my $plain = $formatter->format($tree);
+    $tree->delete;
+    return $plain;
+  }
+
+  return $decoded;
 }
 
 =back
