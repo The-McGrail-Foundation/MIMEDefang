@@ -1,3 +1,5 @@
 required_hits 5
 use_auto_whitelist 0
 use_txrep 0
+use_bayes 0
+bayes_auto_learn 0

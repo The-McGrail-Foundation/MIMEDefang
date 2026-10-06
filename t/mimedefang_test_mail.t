@@ -32,6 +32,9 @@ sub t_score_parity : Test(2)
       '--helo', 'localhost',
     );
 
+    # mimedefang-test-mail runs the filter from inside its work directory,
+    # so the prefs file must be passed as an absolute path.
+    local $ENV{MD_TEST_SA_PREFS} = File::Spec->rel2abs('t/data/sa-test-prefs.cf');
     my $out = `perl -Iblib/lib -Imodules/lib script/mimedefang-test-mail -f t/data/mimedefang-score-filter @envelope --keep-workdir t/data/gtube.eml 2>&1`;
 
     my ($hits, $names) = $out =~ /^SCORE=(\S+) NAMES=(\S+)$/m;
@@ -52,17 +55,11 @@ sub t_score_parity : Test(2)
 
     # NOTE: mimedefang.pl:64 sets $SALocalTestsOnly = 1 unconditionally, so
     # spam_assassin_check() never runs SpamAssassin's network tests (DNSBL,
-    # SPF/DKIM/DMARC DNS lookups, ...). GTUBE doesn't trigger any
-    # network-dependent rule, so a plain `spamassassin -t` run is comparable
-    # here -- but this parity does NOT generalize to real-world messages
-    # that do trigger network rules (mimedefang will always score those
-    # lower/differently than a bare `spamassassin -t` run, by design).
-    # Passing -L/--local to force a like-for-like local-only comparison
-    # does *not* reliably reproduce the same score either: SpamAssassin
-    # picks per-rule scores from different internal "scoresets" depending
-    # on whether network/bayes tests are considered available, and that
-    # selection isn't simply toggled by -L.
-    my $cli_out = `$spamassassin -t --prefspath=t/data/sa-test-prefs.cf < $samsg 2>/dev/null`;
+    # SPF/DKIM/DMARC DNS lookups, ...). SpamAssassin picks per-rule scores
+    # from one of four "scoresets" depending on whether network tests are
+    # enabled and whether bayes is usable, so the same rules can add up to
+    # a different score.
+    my $cli_out = `$spamassassin -L -t --prefspath=t/data/sa-test-prefs.cf < $samsg 2>/dev/null`;
     system('rm', '-rf', $workdir);
 
     # SpamAssassin wraps long header values across "\r\n\t" continuation
