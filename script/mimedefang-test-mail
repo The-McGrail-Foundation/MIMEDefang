@@ -81,6 +81,20 @@ unless ($mimedefang_pl) {
 # main() is not auto-invoked. See Mail::MIMEDefang::Unit::include_mimedefang.
 # ------------------------------------------------------------------
 {
+    # Load our modules first, so the `use` statements in mimedefang.pl
+    # find them already loaded.
+    my $md_dir = File::Spec->catpath((File::Spec->splitpath($mimedefang_pl))[0, 1], '');
+    my $md_lib = File::Spec->catdir($md_dir eq '' ? File::Spec->curdir : $md_dir, 'modules', 'lib');
+    unshift @INC, $md_lib if -d $md_lib;
+    foreach my $module (qw(Mail::MIMEDefang Mail::MIMEDefang::MIME
+                           Mail::MIMEDefang::Net Mail::MIMEDefang::Mail
+                           Mail::MIMEDefang::RFC2822 Mail::MIMEDefang::Utils
+                           Mail::MIMEDefang::Actions Mail::MIMEDefang::Antispam)) {
+        eval "require $module; 1" or die "Cannot load $module: $@";
+    }
+}
+
+{
     no warnings 'redefine';
     local *CORE::GLOBAL::exit = sub { };
     local @ARGV = ();
