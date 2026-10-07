@@ -365,6 +365,7 @@ sub t_retry : Test(4)
   require HTTP::Response;
   my @queue;
   my $calls = 0;
+  no warnings qw(once);
   local *Mail::MIMEDefang::Unit::ML::FakeUA::new = sub { return bless {}, shift };
   local *Mail::MIMEDefang::Unit::ML::FakeUA::request = sub { $calls++; return shift @queue };
   my $internal = sub {
