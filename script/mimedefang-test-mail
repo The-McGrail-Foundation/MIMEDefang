@@ -315,6 +315,12 @@ for my $recip (@to) {
 }
 
 print "\n== Content filter ==\n";
+# do_scan() re-reads the recipients from COMMANDS and appends them to
+# @Recipients: drop the ones left over by the filter_recipient phase,
+# as mimedefang.pl does between SMTP phases, or every recipient is
+# seen twice (e.g. duplicated md_graphdefang_log lines).
+@main::Recipients = ();
+%main::RecipientMailers = ();
 main::do_scan($workdir);
 
 my %actions = %main::Actions;

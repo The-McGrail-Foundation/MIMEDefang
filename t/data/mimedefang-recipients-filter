@@ -1,0 +1,22 @@
+# -*- Perl -*-
+#***********************************************************************
+#
+# mimedefang-recipients-filter
+#
+# Minimal filter used by t/mimedefang_test_mail.t to check that the
+# recipients seen by filter_recipient are not seen twice by the content
+# filter.
+#
+#***********************************************************************
+
+sub filter_recipient {
+    return ('CONTINUE', 'ok');
+}
+
+sub filter_end {
+    my ($entity) = @_;
+    print STDERR "RECIPIENTS=" . join(',', @Recipients) . "\n";
+}
+
+# DO NOT delete the next line, or Perl will complain.
+1;

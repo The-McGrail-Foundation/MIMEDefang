@@ -158,6 +158,7 @@ t/data/exe.eml
 t/data/gtube.eml
 t/data/md.conf
 t/data/mimedefang-async-filter
+t/data/mimedefang-recipients-filter
 t/data/mimedefang-score-filter
 t/data/mimedefang-test-filter
 t/data/multipart.eml

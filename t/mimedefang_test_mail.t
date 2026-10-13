@@ -80,4 +80,28 @@ sub t_score_parity : Test(2)
   }
 }
 
+# filter_recipient runs before the content filter: the recipients it sees
+# must not be added again to @Recipients when COMMANDS is read.
+sub t_recipients_not_duplicated : Test(1)
+{
+  SKIP: {
+    my $mimedefang_pl = File::Spec->catfile('.', 'mimedefang.pl');
+    skip "No built mimedefang.pl (run ./configure && make, or perl Makefile.PL && make)", 1
+      unless -r $mimedefang_pl;
+
+    my @envelope = (
+      '--from', 'sender@example.com',
+      '--to', 'one@example.com',
+      '--to', 'two@example.com',
+      '--relay-ip', '127.0.0.1',
+      '--relay-host', 'localhost',
+      '--helo', 'localhost',
+    );
+    my $out = `perl -Iblib/lib -Imodules/lib script/mimedefang-test-mail -f t/data/mimedefang-recipients-filter @envelope t/data/gtube.eml 2>&1`;
+    my ($rcpts) = $out =~ /^RECIPIENTS=(.*)$/m;
+    is($rcpts, 'one@example.com,two@example.com',
+       "content filter sees each recipient once") or diag($out);
+  }
+}
+
 __PACKAGE__->runtests();
