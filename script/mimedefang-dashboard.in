@@ -1513,6 +1513,79 @@ other hosts, put it behind a reverse proxy that handles TLS and
 authentication.  Subjects and addresses are shown; use B<--anonymize> where
 that is not acceptable.
 
+=head2 Reverse proxy with Apache httpd
+
+Keep the dashboard on its default loopback address and let Apache httpd
+handle TLS and authentication.  You need B<mod_ssl>, B<mod_proxy>,
+B<mod_proxy_http>, B<mod_headers>, B<mod_auth_basic> and B<mod_authn_file>.
+A minimal virtual host:
+
+    <VirtualHost *:443>
+        ServerName dashboard.example.com
+        SSLEngine on
+        SSLCertificateFile    /etc/pki/tls/certs/dashboard.crt
+        SSLCertificateKeyFile /etc/pki/tls/private/dashboard.key
+        Header always set Strict-Transport-Security "max-age=31536000"
+
+        ProxyRequests     Off
+        ProxyPreserveHost Off
+        ProxyTimeout      3600
+        ProxyPass         /api/stream http://127.0.0.1:8689/api/stream flushpackets=on
+        ProxyPass         /           http://127.0.0.1:8689/
+        ProxyPassReverse  /           http://127.0.0.1:8689/
+
+        <Location />
+            AuthType Basic
+            AuthName "MIMEDefang dashboard"
+            AuthUserFile /etc/httpd/mimedefang-dashboard.htpasswd
+            Require valid-user
+        </Location>
+
+        # Optional: let a Prometheus server scrape without a password
+        <Location /metrics>
+            Require ip 192.0.2.10
+        </Location>
+    </VirtualHost>
+
+Create the password file with:
+
+    htpasswd -c /etc/httpd/mimedefang-dashboard.htpasswd admin
+
+Notes:
+
+=over 4
+
+=item *
+
+The user interface uses absolute URLs, so the dashboard must be served at
+the root of a virtual host, not under a sub-path such as F</dashboard/>.
+
+=item *
+
+With B<ProxyPreserveHost Off> (the Apache default) the dashboard sees
+C<127.0.0.1:8689> as Host and needs no extra option.  With
+B<ProxyPreserveHost On>, start it with
+B<--allow-host dashboard.example.com>.
+
+=item *
+
+F</api/stream> is a Server-Sent Events stream: B<flushpackets=on> and a long
+B<ProxyTimeout> keep the live view from stalling or being cut off.
+
+=item *
+
+Any other Apache authentication module, such as B<mod_auth_openidc> or
+B<mod_authnz_ldap>, can replace Basic authentication.  Add B<Require ip>
+to restrict access further.  Drop the F</metrics> block to keep the
+Prometheus endpoint behind authentication too.
+
+=item *
+
+Make sure port 8689 cannot be reached from other hosts, for example with a
+firewall rule, if the dashboard listens on a non-loopback address.
+
+=back
+
 =head1 SIGNALS
 
 B<SIGTERM> and B<SIGINT> save the state file and exit.  B<SIGHUP> saves
@@ -1520,7 +1593,7 @@ the state file.
 
 =head1 SEE ALSO
 
-mimedefang-filter(5), mimedefang-multiplexor(8), md-mx-ctrl(8)
+mimedefang-filter(5), mimedefang-multiplexor(8), md-mx-ctrl(8), httpd(8)
 
 =cut
 
