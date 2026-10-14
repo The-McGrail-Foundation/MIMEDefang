@@ -1,0 +1,2951 @@
+#!@PERL@
+
+#***********************************************************************
+#
+# mimedefang-dashboard
+#
+# Live web console for the MIMEDefang mail flow.  It runs its own HTTP
+# server and keeps everything in memory: events arrive on a UNIX
+# datagram socket fed by md_graphdefang_log() (see
+# md_graphdefang_feed_enable) and worker statistics are polled from the
+# multiplexor control socket.  It never reads the mail log and refuses
+# to run as root.
+#
+# * This program may be distributed under the terms of the GNU General
+# * Public License, Version 2.
+#
+#***********************************************************************
+
+package main;
+
+use strict;
+use warnings;
+
+use Encode qw(decode);
+use Errno qw(EAGAIN EWOULDBLOCK EINTR);
+use Fcntl qw(F_GETFL F_SETFL O_NONBLOCK);
+use File::Basename qw(dirname);
+use Getopt::Long;
+use IO::Select;
+use MIME::Base64 ();
+use IO::Socket::IP;
+use IO::Socket::UNIX;
+use POSIX qw(floor setsid);
+use Pod::Usage;
+use Socket qw(SOCK_DGRAM SOCK_STREAM PF_UNIX pack_sockaddr_un);
+use Time::HiRes qw(time);
+
+our $VERSION = '@VERSION@';
+my $DEFANGUSER = '@DEFANGUSER@';
+
+my $JSON_CLASS;
+BEGIN {
+  for my $c (qw(Cpanel::JSON::XS JSON::XS JSON::PP)) {
+    if (eval "require $c; 1") { ## no critic (BuiltinFunctions::ProhibitStringyEval)
+      $JSON_CLASS = $c;
+      last;
+    }
+  }
+}
+my $JSON = $JSON_CLASS->new->utf8->canonical(1)->allow_nonref(1);
+
+our %Opt = (
+  listen         => '127.0.0.1:8689',
+  'mx-socket'    => '@SPOOLDIR@/mimedefang-multiplexor.sock',
+  feed           => '@SPOOLDIR@/mimedefang-dashboard.sock',
+  'feed-mode'    => '0660',
+  interval       => 2,
+  history        => 5000,
+  'state-interval' => 300,
+  stale          => 900,
+  'spam-event'   => 'spam',
+  'ml-events'    => 'ml_spam,ml_phishing,ml_unsure',
+  'top-cap'      => 300,
+);
+
+#***********************************************************************
+# MDLOG parsing
+#***********************************************************************
+
+my $ADDR_RE  = qr/^(?:[^\s,]*\@[^\s,]*|<[^>]*>|)$/;
+my $RCPT_RE  = qr/^(?:rcpts=\d+|[^\s,]*\@[^\s,]*|<[^>]*>|)$/;
+
+sub pct_decode {
+  my ($s) = @_;
+  return '' unless defined $s;
+  $s =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/ge;
+  return decode('UTF-8', $s);
+}
+
+# RFC 2047 encoded-words (=?UTF-8?B?...?=), as logged when the filter
+# does not decode the subject itself
+sub mime_decode {
+  my ($s) = @_;
+  return $s unless defined $s && $s =~ /=\?[^?\s]+\?[BbQq]\?/;
+  my $d = eval { decode('MIME-Header', $s) };
+  return defined $d ? $d : $s;
+}
+
+sub addr_domain {
+  my ($a) = @_;
+  return '' unless defined $a && $a =~ /\@([^\@>\s]+)>?$/;
+  return lc $1;
+}
+
+#***********************************************************************
+# %PROCEDURE: parse_mdlog
+# %ARGUMENTS:
+#  line -- an MDLOG line, optionally preceded by a syslog prefix
+#  now -- arrival time
+# %RETURNS:
+#  A hashref describing the event, or undef if the line is not MDLOG.
+# %DESCRIPTION:
+#  The format is MDLOG,id,event,value...,sender,recipient,subject.
+#  Fields are percent-encoded so commas cannot appear inside them,
+#  except when md_graphdefang_log was asked to decode UTF-8, in which
+#  case the subject (last) and the values may contain commas.  The
+#  common case is tried first; otherwise the sender/recipient pair is
+#  located by shape.
+#***********************************************************************
+sub parse_mdlog {
+  my ($line, $now) = @_;
+  return unless defined $line;
+  my $i = index($line, 'MDLOG,');
+  return if $i < 0;
+  $line = substr($line, $i);
+  $line =~ s/[\r\n]+\z//;
+  my @f = split /,/, $line, -1;
+  return if @f < 6;
+  shift @f;
+  my $id = shift @f;
+  my $event = shift @f;
+  return if !defined $event || $event eq '';
+
+  my ($sender, $rcpt, $subject, @values);
+  if ($f[-3] =~ $ADDR_RE && $f[-2] =~ $RCPT_RE) {
+    ($sender, $rcpt, $subject) = @f[-3, -2, -1];
+    @values = @f[0 .. $#f - 3];
+  } else {
+    # Prefer a pair of non-empty fields: values are often empty
+    my $k;
+    for my $nonempty (1, 0) {
+      for my $j (1 .. $#f - 1) {
+        next if $nonempty && ($f[$j - 1] eq '' || $f[$j] eq '');
+        if ($f[$j - 1] =~ $ADDR_RE && $f[$j] =~ $RCPT_RE) {
+          $k = $j;
+          last;
+        }
+      }
+      last if defined $k;
+    }
+    return unless defined $k;
+    $sender = $f[$k - 1];
+    $rcpt = $f[$k];
+    $subject = join(',', @f[$k + 1 .. $#f]);
+    @values = @f[0 .. $k - 2];
+  }
+
+  my %ev = (
+    t       => 0 + sprintf('%.3f', $now),
+    id      => pct_decode($id),
+    event   => pct_decode($event),
+    values  => [ map { pct_decode($_) } @values ],
+    sender  => pct_decode($sender),
+    subject => mime_decode(pct_decode($subject)),
+  );
+  my $r = pct_decode($rcpt);
+  if ($r =~ /^rcpts=(\d+)$/) {
+    $ev{rcpt} = '';
+    $ev{rcpts} = $1 + 0;
+  } else {
+    $ev{rcpt} = $r;
+    $ev{rcpts} = 1;
+  }
+  return \%ev;
+}
+
+sub anonymize_event {
+  my ($ev) = @_;
+  for my $k (qw(sender rcpt)) {
+    next unless $ev->{$k} =~ /^(<?)([^\@]*)\@(.*)$/;
+    my $l = $2;
+    $ev->{$k} = $1 . (length($l) ? substr($l, 0, 1) . '***' : '') . '@' . $3;
+  }
+  $ev->{subject} = '';
+  return $ev;
+}
+
+#***********************************************************************
+# In-memory store
+#***********************************************************************
+
+package MDDash::Store; ## no critic (Modules::ProhibitMultiplePackages)
+
+use POSIX qw(floor);
+
+use constant {
+  MIN_KEEP   => 24 * 3600,
+  HOUR_KEEP  => 30 * 24 * 3600,
+  SLICE5     => 300,
+  TOP5_KEEP  => 3600,
+  TOPH_KEEP  => 24 * 3600,
+  SCORE_KEEP => 7 * 24 * 3600,
+  SLOTS      => 7,     # categorical slots; later events fold into "other"
+  STATE_VER  => 1,
+};
+
+my @DIMS = qw(sender sender_domain rcpt rcpt_domain value1 value2);
+
+sub new {
+  my ($class, %o) = @_;
+  my $self = bless {
+    history   => $o{history} || 5000,
+    top_cap   => $o{top_cap} || 300,
+    spam_event => $o{spam_event} // 'spam',
+    ml_events => { map { $_ => 1 } @{ $o{ml_events} || [] } },
+    recent    => [],
+    min       => {},
+    hour      => {},
+    top5      => {},
+    toph      => {},
+    score     => {},
+    totals    => {},
+    slots     => {},
+    nslots    => 0,
+    feed_count => 0,
+    feed_errors => 0,
+    last_event => undef,
+    mx        => undef,
+    mx_prev_msgs => undef,
+    started   => $o{now} // time(),
+  }, $class;
+  $self->slot($_) for @{ $o{pinned} || [] };
+  return $self;
+}
+
+# Stable color slot per event name: first come, first served.
+sub slot {
+  my ($self, $ev) = @_;
+  return $self->{slots}{$ev} if exists $self->{slots}{$ev};
+  return $self->{slots}{$ev} = ++$self->{nslots};
+}
+
+sub _bucket {
+  my ($h, $t) = @_;
+  return $h->{$t} //= { ev => {}, mxn => 0, busy => 0, ams => 0, amsn => 0, msgs => 0, queued => 0 };
+}
+
+sub add_event {
+  my ($self, $ev) = @_;
+  my $t = $ev->{t};
+  my $name = $ev->{event};
+  $self->slot($name);
+
+  push @{ $self->{recent} }, $ev;
+  splice(@{ $self->{recent} }, 0, @{ $self->{recent} } - $self->{history})
+    if @{ $self->{recent} } > $self->{history};
+
+  $self->{totals}{$name}++;
+  $self->{feed_count}++;
+  $self->{last_event} = $t;
+
+  _bucket($self->{min}, 60 * floor($t / 60))->{ev}{$name}++;
+  _bucket($self->{hour}, 3600 * floor($t / 3600))->{ev}{$name}++;
+
+  my %keys = (
+    sender        => $ev->{sender},
+    sender_domain => main::addr_domain($ev->{sender}),
+    rcpt          => $ev->{rcpt},
+    rcpt_domain   => main::addr_domain($ev->{rcpt}),
+    value1        => $ev->{values}[0],
+    value2        => $ev->{values}[1],
+  );
+  for my $slices ([ $self->{top5}, SLICE5 * floor($t / SLICE5) ],
+                  [ $self->{toph}, 3600 * floor($t / 3600) ]) {
+    my $s = $slices->[0]{ $slices->[1] } //= {};
+    for my $d (@DIMS) {
+      my $k = $keys{$d};
+      next if !defined $k || $k eq '';
+      for my $e ($name, '*') {
+        my $h = $s->{$d}{$e} //= {};
+        $h->{$k}++;
+        _trim($h, $self->{top_cap}) if keys(%$h) > 2 * $self->{top_cap};
+      }
+    }
+  }
+
+  my $v = $ev->{values}[0];
+  if (defined $v && $v =~ /^\s*(-?\d+(?:\.\d+)?)\s*$/) {
+    my $x = $1;
+    my $bin;
+    if ($name eq $self->{spam_event}) {
+      $bin = floor($x);
+      $bin = -10 if $bin < -10;
+      $bin = 50 if $bin > 50;
+    } elsif ($self->{ml_events}{$name}) {
+      $x /= 100 if $x > 1;
+      $x = 0 if $x < 0;
+      $bin = floor($x * 10) / 10;
+      $bin = 0.9 if $bin > 0.9;
+    }
+    $self->{score}{ 3600 * floor($t / 3600) }{$name}{$bin}++ if defined $bin;
+  }
+  return;
+}
+
+# Approximate top-N: keep the largest entries when a counter grows too big
+sub _trim {
+  my ($h, $cap) = @_;
+  my @k = sort { $h->{$b} <=> $h->{$a} } keys %$h;
+  delete @{$h}{ @k[$cap .. $#k] };
+  return;
+}
+
+sub add_mx_sample {
+  my ($self, $snap, $t) = @_;
+  $self->{mx} = $snap;
+  $self->{mx_time} = $t;
+  my $msgs = $snap->{msgs} // 0;
+  my $delta = 0;
+  if (defined $self->{mx_prev_msgs}) {
+    $delta = $msgs - $self->{mx_prev_msgs};
+    $delta = $msgs if $delta < 0;    # multiplexor restarted
+  }
+  $self->{mx_prev_msgs} = $msgs;
+  my $busy = $snap->{worker_states}{busy} // 0;
+  my $queued = $snap->{queued} // 0;
+  my $load = $snap->{load}{scan} || {};
+  for my $b (_bucket($self->{min}, 60 * floor($t / 60)),
+             _bucket($self->{hour}, 3600 * floor($t / 3600))) {
+    $b->{mxn}++;
+    $b->{busy} += $busy;
+    $b->{msgs} += $delta;
+    $b->{queued} = $queued if $queued > $b->{queued};
+    if (($load->{msgs_0} // 0) > 0) {
+      $b->{ams} += $load->{ams_0};
+      $b->{amsn}++;
+    }
+  }
+  return;
+}
+
+sub prune {
+  my ($self, $now) = @_;
+  for ([ min => MIN_KEEP ], [ hour => HOUR_KEEP ], [ top5 => TOP5_KEEP + SLICE5 ],
+       [ toph => TOPH_KEEP + 3600 ], [ score => SCORE_KEEP + 3600 ]) {
+    my ($k, $keep) = @$_;
+    my $h = $self->{$k};
+    delete @{$h}{ grep { $_ < $now - $keep } keys %$h };
+  }
+  return;
+}
+
+# Names of known events, ordered by slot
+sub event_names {
+  my ($self) = @_;
+  my $s = $self->{slots};
+  my @names = sort { $s->{$a} <=> $s->{$b} } keys %$s;
+  return @names;
+}
+
+my %RANGES = (
+  '1h'  => [ 'min',  3600,           60 ],
+  '6h'  => [ 'min',  6 * 3600,       300 ],
+  '24h' => [ 'min',  24 * 3600,      600 ],
+  '7d'  => [ 'hour', 7 * 24 * 3600,  3600 ],
+  '30d' => [ 'hour', 30 * 24 * 3600, 4 * 3600 ],
+);
+
+sub series {
+  my ($self, $range, $now) = @_;
+  my $r = $RANGES{$range // ''} || $RANGES{'1h'};
+  my ($src, $span, $step) = @$r;
+  my $unit = $src eq 'min' ? 60 : 3600;
+  my $end = $step * floor($now / $step) + $step;
+  my $start = $end - $span;
+  my $n = int($span / $step);
+  my %ev;
+  my (@msgs, @busy, @ams, @queued, @mxn, @amsn);
+  @$_ = (0) x $n for (\@msgs, \@busy, \@ams, \@queued, \@mxn, \@amsn);
+  my $h = $self->{$src};
+  for (my $t = $start - ($start % $unit); $t < $end; $t += $unit) {
+    my $b = $h->{$t} or next;
+    my $i = int(($t - $start) / $step);
+    next if $i < 0 || $i >= $n;
+    while (my ($e, $c) = each %{ $b->{ev} }) {
+      ($ev{$e} //= [ (0) x $n ])->[$i] += $c;
+    }
+    $msgs[$i] += $b->{msgs};
+    $busy[$i] += $b->{busy};
+    $mxn[$i] += $b->{mxn};
+    $ams[$i] += $b->{ams};
+    $amsn[$i] += $b->{amsn};
+    $queued[$i] = $b->{queued} if $b->{queued} > $queued[$i];
+  }
+  for my $i (0 .. $n - 1) {
+    $busy[$i] = $mxn[$i] ? 0 + sprintf('%.2f', $busy[$i] / $mxn[$i]) : undef;
+    $ams[$i] = $amsn[$i] ? 0 + sprintf('%.1f', $ams[$i] / $amsn[$i]) : undef;
+    $msgs[$i] = undef unless $mxn[$i];
+  }
+  return {
+    range => (exists $RANGES{$range // ''} ? $range : '1h'),
+    start => $start, step => $step, n => $n,
+    events => [ grep { exists $ev{$_} } $self->event_names ],
+    ev => \%ev,
+    mx => { msgs => \@msgs, busy => \@busy, ams => \@ams, queued => \@queued },
+  };
+}
+
+sub totals_window {
+  my ($self, $secs, $now) = @_;
+  my %c;
+  my $from = $now - $secs;
+  my ($src, $unit) = $secs <= MIN_KEEP ? ($self->{min}, 60) : ($self->{hour}, 3600);
+  while (my ($t, $b) = each %$src) {
+    next if $t + $unit <= $from;
+    $c{$_} += $b->{ev}{$_} for keys %{ $b->{ev} };
+  }
+  return \%c;
+}
+
+sub top {
+  my ($self, %q) = @_;
+  my $dim = $q{dim} // 'sender_domain';
+  return { error => "unknown dimension" } unless grep { $_ eq $dim } @DIMS;
+  my $event = defined $q{event} && $q{event} ne '' ? $q{event} : '*';
+  my $n = $q{n} && $q{n} =~ /^\d+$/ ? ($q{n} > 200 ? 200 : $q{n}) : 20;
+  my $day = ($q{window} // '1h') eq '24h';
+  my ($slices, $from, $len) = $day ? ($self->{toph}, $q{now} - TOPH_KEEP, 3600)
+                                   : ($self->{top5}, $q{now} - TOP5_KEEP, SLICE5);
+  my %sum;
+  while (my ($t, $s) = each %$slices) {
+    next if $t + $len <= $from;
+    my $h = $s->{$dim}{$event} or next;
+    $sum{$_} += $h->{$_} for keys %$h;
+  }
+  my @k = sort { $sum{$b} <=> $sum{$a} || $a cmp $b } keys %sum;
+  splice(@k, $n) if @k > $n;
+  return {
+    dim => $dim, event => $event, window => ($day ? '24h' : '1h'),
+    items => [ map { { key => $_, count => $sum{$_} } } @k ],
+  };
+}
+
+sub scores {
+  my ($self, $window, $now) = @_;
+  my $secs = ($window // '24h') eq '7d' ? 7 * 24 * 3600 : 24 * 3600;
+  my %out;
+  while (my ($t, $s) = each %{ $self->{score} }) {
+    next if $t + 3600 <= $now - $secs;
+    for my $e (keys %$s) {
+      $out{$e}{$_} += $s->{$e}{$_} for keys %{ $s->{$e} };
+    }
+  }
+  my %res;
+  for my $e (keys %out) {
+    my $bins = $out{$e};
+    $res{$e} = [ map { { bin => 0 + $_, count => $bins->{$_} } }
+                 sort { $a <=> $b } keys %$bins ];
+  }
+  return {
+    window => ($secs > 24 * 3600 ? '7d' : '24h'),
+    spam_event => $self->{spam_event},
+    ml_events => [ sort keys %{ $self->{ml_events} } ],
+    scores => \%res,
+  };
+}
+
+sub events {
+  my ($self, %q) = @_;
+  my $limit = $q{limit} && $q{limit} =~ /^\d+$/ ? $q{limit} : 200;
+  $limit = 1000 if $limit > 1000;
+  my $re;
+  if (defined $q{q} && $q{q} ne '') {
+    $re = qr/\Q$q{q}\E/i;
+  }
+  my @out;
+  for (my $i = $#{ $self->{recent} }; $i >= 0 && @out < $limit; $i--) {
+    my $ev = $self->{recent}[$i];
+    next if defined $q{event} && $q{event} ne '' && $ev->{event} ne $q{event};
+    next if defined $q{id} && $q{id} ne '' && $ev->{id} ne $q{id};
+    next if $re && join("\0", $ev->{id}, $ev->{event}, @{ $ev->{values} },
+                        $ev->{sender}, $ev->{rcpt}, $ev->{subject}) !~ $re;
+    push @out, $ev;
+  }
+  return { events => \@out, total => scalar @{ $self->{recent} } };
+}
+
+sub to_state {
+  my ($self) = @_;
+  return {
+    version => STATE_VER,
+    last_event => $self->{last_event},
+    map { $_ => $self->{$_} } qw(min hour top5 toph score totals slots nslots),
+  };
+}
+
+sub from_state {
+  my ($self, $st) = @_;
+  return 0 unless ref $st eq 'HASH' && ($st->{version} // 0) == STATE_VER;
+  for my $k (qw(min hour top5 toph score totals slots)) {
+    $self->{$k} = $st->{$k} if ref $st->{$k} eq 'HASH';
+  }
+  $self->{last_event} = $st->{last_event} if defined $st->{last_event};
+  # Slots pinned on the command line keep their position
+  my $n = 0;
+  for my $v (values %{ $self->{slots} }) {
+    $n = $v if $v > $n;
+  }
+  $self->{nslots} = $n;
+  return 1;
+}
+
+package main; ## no critic (Modules::ProhibitMultiplePackages)
+
+#***********************************************************************
+# Multiplexor client
+#***********************************************************************
+
+#***********************************************************************
+# %PROCEDURE: mx_command
+# %ARGUMENTS:
+#  path -- multiplexor control socket
+#  cmd -- command (without newline)
+#  timeout -- seconds
+# %RETURNS:
+#  The answer, or undef with $@ set.
+# %DESCRIPTION:
+#  Same protocol as md-mx-ctrl: write "cmd\n", read until EOF.
+#***********************************************************************
+sub mx_command {
+  my ($path, $cmd, $timeout) = @_;
+  $timeout ||= 2;
+  my $s = IO::Socket::UNIX->new(Peer => $path, Type => SOCK_STREAM, Timeout => $timeout);
+  if (!$s) {
+    $@ = "connect $path: $!";
+    return;
+  }
+  my $deadline = time() + $timeout;
+  if (!defined syswrite($s, "$cmd\n")) {
+    $@ = "write: $!";
+    return;
+  }
+  my $sel = IO::Select->new($s);
+  my $ans = '';
+  while (1) {
+    my $left = $deadline - time();
+    if ($left <= 0 || !$sel->can_read($left)) {
+      $@ = 'timeout';
+      return;
+    }
+    my $n = sysread($s, my $buf, 65536);
+    if (!defined $n) {
+      next if $! == EINTR;
+      $@ = "read: $!";
+      return;
+    }
+    last if $n == 0;
+    $ans .= $buf;
+  }
+  close $s;
+  return $ans;
+}
+
+# Build a snapshot from the text commands of an older multiplexor
+sub mx_legacy_snapshot {
+  my ($path) = @_;
+  my $status = mx_command($path, 'status') // return;
+  my $load = mx_command($path, 'load') // return;
+  my ($states, $msgs, $act, $qsize, $queued, $uptime) = split ' ', $status;
+  return if !defined $uptime || $states !~ /^[IBSK?]+$/;
+  my @l = split ' ', $load;
+  my %cnt = (busy => 0, idle => 0, stopped => 0, killed => 0);
+  my %name = (B => 'busy', I => 'idle', S => 'stopped', K => 'killed');
+  my @workers;
+  my $i = 0;
+  for my $c (split //, $states) {
+    my $st = $name{$c} // 'unknown';
+    $cnt{$st}++;
+    push @workers, { id => $i++, state => $st };
+  }
+  my %scan;
+  my @sfx = qw(0 1 5 10);
+  my @secs = (10, 60, 300, 600);
+  for my $j (0 .. 3) {
+    $scan{"msgs_$sfx[$j]"} = 0 + ($l[$j] // 0);
+    $scan{"avg_$sfx[$j]"} = 0 + ($l[4 + $j] // 0);
+    $scan{"ams_$sfx[$j]"} = 0 + ($l[8 + $j] // 0);
+    $scan{"mps_$sfx[$j]"} = 0 + sprintf('%.2f', ($l[$j] // 0) / $secs[$j]);
+  }
+  my @histo;
+  if (defined(my $h = mx_command($path, 'histo'))) {
+    for (split /\n/, $h) {
+      push @histo, 0 + $2 if /^\s*(\d+)\s+(\d+)/;
+    }
+  }
+  return {
+    legacy => 1, time => int(time()), uptime => 0 + $uptime, msgs => 0 + $msgs,
+    activations => 0 + $act, queue_size => 0 + $qsize, queued => 0 + $queued,
+    worker_states => { %cnt, max => length($states) },
+    load => { scan => \%scan }, histo => \@histo, workers => \@workers,
+  };
+}
+
+sub mx_snapshot {
+  my ($path) = @_;
+  my $ans = mx_command($path, 'jsonsnapshot');
+  return (undef, $@) unless defined $ans;
+  if ($ans =~ /^\s*\{/) {
+    my $snap = eval { $JSON->decode($ans) };
+    return ($snap, undef) if ref $snap eq 'HASH';
+    return (undef, "invalid JSON from multiplexor: $@");
+  }
+  # Older multiplexor: the command reached a Perl worker instead
+  my $snap = mx_legacy_snapshot($path);
+  return ($snap, undef) if $snap;
+  return (undef, $@ || 'unexpected answer from multiplexor');
+}
+
+#***********************************************************************
+# Application
+#***********************************************************************
+
+package MDDash::App; ## no critic (Modules::ProhibitMultiplePackages)
+
+use Errno qw(EAGAIN EWOULDBLOCK EINTR);
+use POSIX qw(floor);
+use Socket qw(SOCK_DGRAM PF_UNIX pack_sockaddr_un);
+
+use constant {
+  MAX_REQ       => 16384,
+  REQ_TIMEOUT   => 15,
+  MAX_CLIENTS   => 64,
+  MAX_SSE       => 32,
+  MAX_OUTBUF    => 4 * 1024 * 1024,
+  SSE_HEARTBEAT => 20,
+};
+
+sub new {
+  my ($class, %opt) = @_;
+  my $now = main::time();
+  my @ml = grep { length } split /\s*,\s*/, ($opt{'ml-events'} // '');
+  my $self = bless {
+    opt     => \%opt,
+    store   => MDDash::Store->new(
+      history => $opt{history}, top_cap => $opt{'top-cap'},
+      spam_event => $opt{'spam-event'}, ml_events => \@ml,
+      pinned => [ grep { length } split /\s*,\s*/, ($opt{events} // '') ],
+      now => $now,
+    ),
+    sel     => IO::Select->new,
+    clients => {},
+    pending => [],
+    started => $now,
+    mx_error => undef,
+    mx_enabled => ($opt{'mx-socket'} // 'none') ne 'none',
+    feed_enabled => ($opt{feed} // 'none') ne 'none',
+    assets  => main::load_assets(),
+  }, $class;
+  return $self;
+}
+
+sub log_msg {
+  my ($self, $msg) = @_;
+  return if $self->{opt}{quiet};
+  my @t = localtime();
+  printf STDERR "%04d-%02d-%02d %02d:%02d:%02d mimedefang-dashboard: %s\n",
+    $t[5] + 1900, $t[4] + 1, @t[3, 2, 1, 0], $msg;
+  return;
+}
+
+sub nonblock {
+  my ($fh) = @_;
+  my $fl = fcntl($fh, Fcntl::F_GETFL(), 0);
+  fcntl($fh, Fcntl::F_SETFL(), $fl | Fcntl::O_NONBLOCK()) if defined $fl;
+  return;
+}
+
+#***********************************************************************
+# %PROCEDURE: open_feed
+# %DESCRIPTION:
+#  Binds the datagram socket the filter writes to.  A stale socket file
+#  is removed, but not one another running dashboard is bound to.
+#***********************************************************************
+sub open_feed {
+  my ($self) = @_;
+  my $path = $self->{opt}{feed};
+  if (-S $path) {
+    socket(my $probe, PF_UNIX, SOCK_DGRAM, 0) or die "socket: $!\n";
+    if (connect($probe, pack_sockaddr_un($path))) {
+      die "Another process is bound to $path\n";
+    }
+    unlink $path or die "Cannot remove stale $path: $!\n";
+  } elsif (-e $path) {
+    die "$path exists and is not a socket\n";
+  }
+  socket(my $s, PF_UNIX, SOCK_DGRAM, 0) or die "socket: $!\n";
+  my $old = umask(0177);
+  my $ok = bind($s, pack_sockaddr_un($path));
+  umask($old);
+  die "Cannot bind $path: $!\n" unless $ok;
+  chmod(oct($self->{opt}{'feed-mode'}), $path)
+    or die "Cannot chmod $path: $!\n";
+  nonblock($s);
+  $self->{feed} = $s;
+  $self->{feed_path} = $path;
+  $self->{sel}->add($s);
+  $self->log_msg("receiving events on $path");
+  return;
+}
+
+sub open_listen {
+  my ($self) = @_;
+  my $l = $self->{opt}{listen};
+  my ($host, $port) = $l =~ /^\[([^\]]+)\]:(\d+)$/ ? ($1, $2)
+                    : $l =~ /^([^:]*):(\d+)$/       ? ($1, $2)
+                    : $l =~ /^(\d+)$/               ? ('127.0.0.1', $1)
+                    : die "Invalid --listen value '$l'\n";
+  $host = '127.0.0.1' if $host eq '';
+  my $s = IO::Socket::IP->new(
+    LocalHost => $host, LocalPort => $port, Listen => 64, ReuseAddr => 1,
+    Proto => 'tcp',
+  ) or die "Cannot listen on $l: $@\n";
+  nonblock($s);
+  $self->{listen} = $s;
+  $self->{port} = $s->sockport;
+  $self->{loopback} = ($host =~ /^(?:127\.|::1$|localhost$)/) ? 1 : 0;
+  $self->{sel}->add($s);
+  $self->log_msg("listening on http://" . ($host =~ /:/ ? "[$host]" : $host) . ":$self->{port}/");
+  return;
+}
+
+sub load_state {
+  my ($self) = @_;
+  my $f = $self->{opt}{state} or return;
+  return unless -e $f;
+  my $st = eval {
+    open(my $fh, '<:raw', $f) or die "$!\n";
+    local $/;
+    my $data = <$fh>;
+    close $fh;
+    $JSON->decode($data);
+  };
+  if (!$st || !$self->{store}->from_state($st)) {
+    $self->log_msg("ignoring state file $f: " . ($@ || 'unknown format'));
+    return;
+  }
+  $self->log_msg("loaded state from $f");
+  return;
+}
+
+sub save_state {
+  my ($self) = @_;
+  my $f = $self->{opt}{state} or return;
+  my $tmp = "$f.tmp.$$";
+  my $old = umask(077);    # the state contains addresses
+  my $ok = eval {
+    open(my $fh, '>:raw', $tmp) or die "$!\n";
+    print {$fh} $JSON->encode($self->{store}->to_state) or die "$!\n";
+    close $fh or die "$!\n";
+    rename($tmp, $f) or die "$!\n";
+    1;
+  };
+  umask($old);
+  if (!$ok) {
+    unlink $tmp;
+    $self->log_msg("cannot save state to $f: $@");
+  }
+  return;
+}
+
+sub poll_mx {
+  my ($self) = @_;
+  return unless $self->{mx_enabled};
+  my ($snap, $err) = main::mx_snapshot($self->{opt}{'mx-socket'});
+  if ($snap) {
+    $self->log_msg('multiplexor reachable') if $self->{mx_error};
+    $self->{mx_error} = undef;
+    $self->{store}->add_mx_sample($snap, main::time());
+  } else {
+    $self->log_msg("multiplexor: $err")
+      if !defined $self->{mx_error} || $self->{mx_error} ne $err;
+    $self->{mx_error} = $err;
+    $self->{store}{mx} = undef;
+  }
+  return;
+}
+
+sub drain_feed {
+  my ($self) = @_;
+  my $s = $self->{feed} or return;
+  my $store = $self->{store};
+  for (1 .. 5000) {
+    my $from = recv($s, my $buf, 65536, 0);
+    last unless defined $from;
+    my $ev = main::parse_mdlog($buf, main::time());
+    if (!$ev) {
+      $store->{feed_errors}++;
+      next;
+    }
+    main::anonymize_event($ev) if $self->{opt}{anonymize};
+    $store->add_event($ev);
+    push @{ $self->{pending} }, $ev;
+  }
+  return;
+}
+
+#***********************************************************************
+# Summary, alerts and metrics
+#***********************************************************************
+
+sub summary {
+  my ($self, $lite) = @_;
+  my $now = main::time();
+  my $st = $self->{store};
+  my $mx = $st->{mx};
+  my %s = (
+    now => int($now),
+    version => $VERSION,
+    uptime => int($now - $self->{started}),
+    mx => {
+      enabled => $self->{mx_enabled} ? \1 : \0,
+      up => $mx ? \1 : \0,
+      error => $self->{mx_error},
+      legacy => ($mx && $mx->{legacy}) ? \1 : \0,
+    },
+    feed => {
+      enabled => $self->{feed_enabled} ? \1 : \0,
+      path => $self->{feed_path},
+      received => $st->{feed_count},
+      errors => $st->{feed_errors},
+      last_event_age => defined $st->{last_event} ? int($now - $st->{last_event}) : undef,
+    },
+    slots => $st->{slots},
+    alerts => $self->alerts($now),
+  );
+  if ($mx) {
+    $s{mx}{$_} = $mx->{$_} for qw(version uptime msgs activations queue_size queued worker_states);
+    $s{mx}{load} = $mx->{load}{scan};
+  }
+  if (!$lite) {
+    $s{events_1h} = $st->totals_window(3600, $now);
+    $s{events_24h} = $st->totals_window(24 * 3600, $now);
+    $s{config} = {
+      anonymize => $self->{opt}{anonymize} ? \1 : \0,
+      interval => $self->{opt}{interval},
+      spam_event => $self->{opt}{'spam-event'},
+      ml_events => [ sort keys %{ $st->{ml_events} } ],
+    };
+  }
+  return \%s;
+}
+
+sub alerts {
+  my ($self, $now) = @_;
+  my $st = $self->{store};
+  my $mx = $st->{mx};
+  my @a;
+  if ($self->{mx_enabled} && !$mx) {
+    push @a, { level => 'critical', text => "Multiplexor unreachable: " . ($self->{mx_error} // 'no answer yet') };
+  }
+  if ($mx) {
+    my $ws = $mx->{worker_states} || {};
+    if (($mx->{queued} // 0) > 0) {
+      push @a, { level => 'warning', text => "$mx->{queued} request(s) waiting in the multiplexor queue" };
+    }
+    if (($ws->{max} // 0) > 0 && ($ws->{busy} // 0) >= $ws->{max}) {
+      push @a, { level => 'serious', text => "All $ws->{max} workers are busy" };
+    }
+  }
+  if ($self->{feed_enabled}) {
+    my $age = defined $st->{last_event} ? $now - $st->{last_event} : $now - $self->{started};
+    my $mx_busy = $mx && ($mx->{load}{scan}{msgs_10} // 0) > 0;
+    if ($age > $self->{opt}{stale} && $mx_busy) {
+      push @a, { level => 'warning',
+                 text => sprintf('Messages are being scanned but no events arrived for %d min: does the filter call md_graphdefang_feed_enable()?', $age / 60) };
+    } elsif ($age > $self->{opt}{stale} && !$self->{mx_enabled}) {
+      push @a, { level => 'warning', text => sprintf('No events received for %d min', $age / 60) };
+    }
+  }
+  return \@a;
+}
+
+sub _prom_label {
+  my ($v) = @_;
+  $v =~ s/(["\\])/\\$1/g;
+  $v =~ s/\n/\\n/g;
+  return $v;
+}
+
+sub metrics {
+  my ($self) = @_;
+  my $st = $self->{store};
+  my $mx = $st->{mx};
+  my @o;
+  my $metric = sub {
+    my ($name, $type, $help, @samples) = @_;
+    push @o, "# HELP $name $help", "# TYPE $name $type";
+    while (my ($labels, $val) = splice(@samples, 0, 2)) {
+      push @o, $name . ($labels ne '' ? "{$labels}" : '') . ' ' . (defined $val ? $val : 'NaN');
+    }
+  };
+  $metric->('mimedefang_dashboard_source_up', 'gauge', 'Whether a data source is reachable',
+            'source="multiplexor"', ($mx ? 1 : 0),
+            'source="feed"', ($st->{feed_count} || $self->{feed} ? 1 : 0));
+  $metric->('mimedefang_events_total', 'counter', 'Events received from md_graphdefang_log since dashboard start',
+            map { ('event="' . _prom_label($_) . '"', $st->{totals}{$_}) } sort keys %{ $st->{totals} });
+  $metric->('mimedefang_dashboard_feed_datagrams_total', 'counter', 'Datagrams received on the feed socket',
+            '', $st->{feed_count} + $st->{feed_errors});
+  $metric->('mimedefang_dashboard_feed_errors_total', 'counter', 'Datagrams that were not MDLOG lines',
+            '', $st->{feed_errors});
+  if ($mx) {
+    my $ws = $mx->{worker_states} || {};
+    $metric->('mimedefang_workers', 'gauge', 'Workers by state',
+              map { ("state=\"$_\"", $ws->{$_} // 0) } qw(busy idle stopped killed));
+    $metric->('mimedefang_workers_max', 'gauge', 'Maximum number of workers', '', $ws->{max});
+    $metric->('mimedefang_messages_processed_total', 'counter', 'Messages scanned since multiplexor start', '', $mx->{msgs});
+    $metric->('mimedefang_worker_activations_total', 'counter', 'Workers started since multiplexor start', '', $mx->{activations});
+    $metric->('mimedefang_request_queue_size', 'gauge', 'Size of the multiplexor request queue', '', $mx->{queue_size});
+    $metric->('mimedefang_requests_queued', 'gauge', 'Requests waiting in the queue', '', $mx->{queued});
+    $metric->('mimedefang_multiplexor_uptime_seconds', 'gauge', 'Multiplexor uptime', '', $mx->{uptime});
+    my (@ams, @mps, @avg);
+    for my $cmd (sort keys %{ $mx->{load} || {} }) {
+      my $l = $mx->{load}{$cmd};
+      for my $w ([ '0', '10s' ], [ '1', '1m' ], [ '5', '5m' ], [ '10', '10m' ]) {
+        my $lab = "command=\"$cmd\",window=\"$w->[1]\"";
+        push @ams, $lab, $l->{"ams_$w->[0]"};
+        push @mps, $lab, $l->{"mps_$w->[0]"};
+        push @avg, $lab, $l->{"avg_$w->[0]"};
+      }
+    }
+    $metric->('mimedefang_scan_time_ms', 'gauge', 'Average milliseconds per request', @ams);
+    $metric->('mimedefang_requests_per_second', 'gauge', 'Requests per second', @mps);
+    $metric->('mimedefang_busy_workers_avg', 'gauge', 'Average busy workers while handling a request', @avg);
+  }
+  return join("\n", @o) . "\n";
+}
+
+#***********************************************************************
+# HTTP
+#***********************************************************************
+
+my %STATUS = (200 => 'OK', 400 => 'Bad Request', 403 => 'Forbidden', 404 => 'Not Found',
+              405 => 'Method Not Allowed', 413 => 'Payload Too Large', 503 => 'Service Unavailable');
+
+my $CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        . "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+
+sub accept_clients {
+  my ($self) = @_;
+  while (my $c = $self->{listen}->accept) {
+    if (keys %{ $self->{clients} } >= MAX_CLIENTS) {
+      close $c;
+      next;
+    }
+    nonblock($c);
+    $self->{clients}{ fileno($c) } = { fh => $c, in => '', out => '', t => main::time() };
+    $self->{sel}->add($c);
+  }
+  return;
+}
+
+sub close_client {
+  my ($self, $c) = @_;
+  $self->{sel}->remove($c->{fh});
+  delete $self->{clients}{ fileno($c->{fh}) // -1 };
+  close $c->{fh};
+  return;
+}
+
+sub read_client {
+  my ($self, $c) = @_;
+  my $n = sysread($c->{fh}, my $buf, 8192);
+  if (!defined $n) {
+    return if $! == EAGAIN || $! == EWOULDBLOCK || $! == EINTR;
+    return $self->close_client($c);
+  }
+  return $self->close_client($c) if $n == 0;
+  return if $c->{sse} || $c->{done};    # ignore anything after the request
+  $c->{in} .= $buf;
+  if (length($c->{in}) > MAX_REQ) {
+    return $self->respond($c, 413, 'text/plain', "Request too large\n");
+  }
+  my $end = index($c->{in}, "\r\n\r\n");
+  $end = index($c->{in}, "\n\n") if $end < 0;
+  return if $end < 0;
+  $self->handle_request($c, substr($c->{in}, 0, $end));
+  return;
+}
+
+sub url_decode {
+  my ($s) = @_;
+  $s =~ tr/+/ /;
+  $s =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/ge;
+  return Encode::decode('UTF-8', $s);
+}
+
+sub host_allowed {
+  my ($self, $host) = @_;
+  my @allow = @{ $self->{opt}{'allow-host'} || [] };
+  return 1 if !@allow && !$self->{loopback};
+  return 0 unless defined $host;
+  $host = lc $host;
+  $host =~ s/:\d+$// unless $host =~ /^\[[^\]]*\]$/;
+  $host =~ s/^\[(.*)\]$/$1/;
+  return 1 if $self->{loopback} && $host =~ /^(?:localhost|127\.0\.0\.1|::1)$/;
+  return scalar grep { lc($_) eq $host } @allow;
+}
+
+sub handle_request {
+  my ($self, $c, $head) = @_;
+  $c->{done} = 1;
+  my ($line, @hdr) = split /\r?\n/, $head;
+  my ($method, $target) = ($line // '') =~ m{^([A-Z]+)\s+(\S+)\s+HTTP/\d\.\d$};
+  return $self->respond($c, 400, 'text/plain', "Bad request\n") unless $method;
+  my %h;
+  for (@hdr) {
+    $h{ lc $1 } = $2 if /^([^:]+):\s*(.*?)\s*$/;
+  }
+  return $self->respond($c, 403, 'text/plain', "Host not allowed\n")
+    unless $self->host_allowed($h{host});
+  return $self->respond($c, 405, 'text/plain', "Only GET is supported\n", { Allow => 'GET, HEAD' })
+    unless $method eq 'GET' || $method eq 'HEAD';
+  $c->{head_only} = $method eq 'HEAD';
+
+  my ($path, $qs) = split /\?/, $target, 2;
+  my %q;
+  for (split /&/, $qs // '') {
+    my ($k, $v) = split /=/, $_, 2;
+    $q{ url_decode($k) } = url_decode($v // '');
+  }
+  my $now = main::time();
+  my $st = $self->{store};
+
+  if ($path eq '/' || $path eq '/index.html') {
+    return $self->respond($c, 200, 'text/html; charset=utf-8', $self->{assets}{'index.html'});
+  }
+  if ($path eq '/app.css') {
+    return $self->respond($c, 200, 'text/css; charset=utf-8', $self->{assets}{'app.css'});
+  }
+  if ($path eq '/app.js') {
+    return $self->respond($c, 200, 'text/javascript; charset=utf-8', $self->{assets}{'app.js'});
+  }
+  if ($path eq '/logo.png') {
+    return $self->respond($c, 200, 'image/png', $self->{assets}{'logo.png'},
+                          { 'Cache-Control' => 'max-age=86400' });
+  }
+  if ($path eq '/favicon.png' || $path eq '/favicon.ico') {
+    return $self->respond($c, 200, 'image/png', $self->{assets}{'favicon.png'},
+                          { 'Cache-Control' => 'max-age=86400' });
+  }
+  if ($path eq '/apple-touch-icon.png') {
+    return $self->respond($c, 200, 'image/png', $self->{assets}{'apple-touch-icon.png'},
+                          { 'Cache-Control' => 'max-age=86400' });
+  }
+  if ($path eq '/metrics') {
+    return $self->respond($c, 200, 'text/plain; version=0.0.4; charset=utf-8', $self->metrics);
+  }
+  if ($path eq '/api/stream') {
+    return $self->start_sse($c);
+  }
+  my $data;
+  if ($path eq '/api/summary') {
+    $data = $self->summary;
+  } elsif ($path eq '/api/workers') {
+    my $mx = $st->{mx};
+    $data = $mx ? { %$mx, up => \1 } : { up => \0, error => $self->{mx_error} };
+  } elsif ($path eq '/api/series') {
+    $data = $st->series($q{range}, $now);
+  } elsif ($path eq '/api/top') {
+    $data = $st->top(%q, now => $now);
+  } elsif ($path eq '/api/events') {
+    $data = $st->events(%q);
+  } elsif ($path eq '/api/scores') {
+    $data = $st->scores($q{window}, $now);
+  } elsif ($path eq '/api/export') {
+    return $self->export($c, \%q, $now);
+  } else {
+    return $self->respond($c, 404, 'text/plain', "Not found\n");
+  }
+  return $self->respond($c, 200, 'application/json', $JSON->encode($data));
+}
+
+sub _csv {
+  my (@f) = @_;
+  return join(',', map {
+    my $v = $_ // '';
+    $v = "'$v" if $v =~ /^[=+\-\@\t\r]/;    # no spreadsheet formulas
+    $v =~ /[",\r\n]/ ? '"' . ($v =~ s/"/""/gr) . '"' : $v;
+  } @f) . "\r\n";
+}
+
+sub export {
+  my ($self, $c, $q, $now) = @_;
+  my $st = $self->{store};
+  my $what = ($q->{what} // 'events') eq 'series' ? 'series' : 'events';
+  my $csv = ($q->{fmt} // 'json') eq 'csv';
+  my $data = $what eq 'series' ? $st->series($q->{range}, $now)
+                               : $st->events(%$q, limit => 1000);
+  my $stamp = POSIX::strftime('%Y%m%d-%H%M%S', localtime($now));
+  my $fname = "mimedefang-$what-$stamp." . ($csv ? 'csv' : 'json');
+  my $hdr = { 'Content-Disposition' => "attachment; filename=\"$fname\"" };
+  return $self->respond($c, 200, 'application/json', $JSON->encode($data), $hdr) unless $csv;
+
+  my $out;
+  if ($what eq 'events') {
+    $out = _csv(qw(time id event value1 value2 sender recipient recipients subject));
+    for my $e (@{ $data->{events} }) {
+      $out .= _csv(POSIX::strftime('%Y-%m-%dT%H:%M:%S', localtime($e->{t})),
+                   $e->{id}, $e->{event}, $e->{values}[0], $e->{values}[1],
+                   $e->{sender}, $e->{rcpt}, $e->{rcpts}, $e->{subject});
+    }
+  } else {
+    my @ev = @{ $data->{events} };
+    $out = _csv('time', @ev, qw(mx_msgs mx_busy_avg mx_scan_ms mx_queued_max));
+    for my $i (0 .. $data->{n} - 1) {
+      $out .= _csv(POSIX::strftime('%Y-%m-%dT%H:%M:%S', localtime($data->{start} + $i * $data->{step})),
+                   (map { $data->{ev}{$_}[$i] } @ev),
+                   map { $data->{mx}{$_}[$i] } qw(msgs busy ams queued));
+    }
+  }
+  return $self->respond($c, 200, 'text/csv; charset=utf-8', Encode::encode('UTF-8', $out), $hdr);
+}
+
+sub respond {
+  my ($self, $c, $code, $type, $body, $extra) = @_;
+  $c->{done} = 1;
+  $body = Encode::encode('UTF-8', $body) if utf8::is_utf8($body);
+  my %h = (
+    'Content-Type' => $type,
+    'Content-Length' => length($body),
+    'Cache-Control' => 'no-store',
+    'X-Content-Type-Options' => 'nosniff',
+    'Referrer-Policy' => 'no-referrer',
+    'Content-Security-Policy' => $CSP,
+    'Connection' => 'close',
+    %{ $extra || {} },
+  );
+  my $out = "HTTP/1.1 $code " . ($STATUS{$code} // 'OK') . "\r\n"
+          . join('', map { "$_: $h{$_}\r\n" } sort keys %h) . "\r\n";
+  $out .= $body unless $c->{head_only};
+  $c->{out} .= $out;
+  $c->{close_after} = 1;
+  $self->flush_client($c);
+  return;
+}
+
+sub start_sse {
+  my ($self, $c) = @_;
+  my $n = grep { $_->{sse} } values %{ $self->{clients} };
+  return $self->respond($c, 503, 'text/plain', "Too many live clients\n") if $n >= MAX_SSE;
+  $c->{sse} = 1;
+  $c->{last_write} = main::time();
+  $c->{out} .= "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\n"
+             . "X-Content-Type-Options: nosniff\r\nX-Accel-Buffering: no\r\nConnection: keep-alive\r\n\r\n"
+             . "retry: 3000\n\n"
+             . "event: tick\ndata: " . $JSON->encode($self->summary(1)) . "\n\n";
+  $self->flush_client($c);
+  return;
+}
+
+sub sse_broadcast {
+  my ($self, $event, $data) = @_;
+  my $msg = "event: $event\ndata: " . $JSON->encode($data) . "\n\n";
+  for my $c (values %{ $self->{clients} }) {
+    next unless $c->{sse};
+    if (length($c->{out}) > MAX_OUTBUF) {
+      $self->close_client($c);    # client cannot keep up
+      next;
+    }
+    $c->{out} .= $msg;
+    $c->{last_write} = main::time();
+    $self->flush_client($c);
+  }
+  return;
+}
+
+sub flush_client {
+  my ($self, $c) = @_;
+  while (length $c->{out}) {
+    my $n = syswrite($c->{fh}, $c->{out});
+    if (!defined $n) {
+      return if $! == EAGAIN || $! == EWOULDBLOCK || $! == EINTR;
+      return $self->close_client($c);
+    }
+    substr($c->{out}, 0, $n, '');
+  }
+  $self->close_client($c) if $c->{close_after};
+  return;
+}
+
+#***********************************************************************
+# Main loop
+#***********************************************************************
+
+sub run {
+  my ($self, $stop) = @_;
+  my $now = main::time();
+  my %next = (poll => $now, save => $now + $self->{opt}{'state-interval'},
+              prune => $now + 60, tick => $now + $self->{opt}{interval});
+  while (!$stop->{stop}) {
+    if ($stop->{save}) {
+      $stop->{save} = 0;
+      $self->save_state;
+    }
+    $now = main::time();
+    if ($now >= $next{poll}) {
+      $self->poll_mx;
+      $next{poll} = $now + $self->{opt}{interval};
+    }
+    if ($now >= $next{tick}) {
+      $self->sse_broadcast(tick => $self->summary(1));
+      $next{tick} = $now + $self->{opt}{interval};
+    }
+    if ($now >= $next{prune}) {
+      $self->{store}->prune($now);
+      $next{prune} = $now + 60;
+    }
+    if ($self->{opt}{state} && $now >= $next{save}) {
+      $self->save_state;
+      $next{save} = $now + $self->{opt}{'state-interval'};
+    }
+    for my $c (values %{ $self->{clients} }) {
+      if (!$c->{sse} && !$c->{done} && $now - $c->{t} > REQ_TIMEOUT) {
+        $self->close_client($c);
+      } elsif ($c->{sse} && $now - $c->{last_write} > SSE_HEARTBEAT) {
+        $c->{out} .= ": keepalive\n\n";
+        $c->{last_write} = $now;
+        $self->flush_client($c);
+      }
+    }
+
+    my $wsel = IO::Select->new(map { $_->{fh} } grep { length $_->{out} } values %{ $self->{clients} });
+    my $timeout = 0.5;
+    my ($r, $w) = IO::Select->select($self->{sel}, $wsel, undef, $timeout);
+    for my $fh (@{ $r || [] }) {
+      if ($self->{listen} && $fh == $self->{listen}) {
+        $self->accept_clients;
+      } elsif ($self->{feed} && $fh == $self->{feed}) {
+        $self->drain_feed;
+      } elsif (my $c = $self->{clients}{ fileno($fh) // -1 }) {
+        $self->read_client($c);
+      }
+    }
+    for my $fh (@{ $w || [] }) {
+      my $c = $self->{clients}{ fileno($fh) // -1 } or next;
+      $self->flush_client($c);
+    }
+    if (@{ $self->{pending} }) {
+      $self->sse_broadcast(events => $self->{pending});
+      $self->{pending} = [];
+    }
+    last if $self->{opt}{_once};
+  }
+  return;
+}
+
+sub cleanup {
+  my ($self) = @_;
+  $self->save_state;
+  if ($self->{feed_path}) {
+    unlink $self->{feed_path};
+  }
+  return;
+}
+
+package main; ## no critic (Modules::ProhibitMultiplePackages)
+
+#***********************************************************************
+# Embedded UI assets (in __DATA__, split on "@@ name" lines)
+#***********************************************************************
+
+my %ASSETS;
+sub load_assets {
+  return \%ASSETS if %ASSETS;
+  my $name;
+  my $pos = tell(DATA);
+  my %b64;
+  while (my $l = <DATA>) {
+    if ($l =~ /^\@\@ (\S+)(\s+base64)?\s*$/) {
+      $name = $1;
+      $b64{$name} = 1 if $2;
+      $ASSETS{$name} = '';
+      next;
+    }
+    $ASSETS{$name} .= $l if defined $name;
+  }
+  seek(DATA, $pos, 0) if $pos >= 0;
+  $ASSETS{$_} = MIME::Base64::decode_base64($ASSETS{$_}) for keys %b64;
+  return \%ASSETS;
+}
+
+#***********************************************************************
+# %PROCEDURE: check_privileges
+# %ARGUMENTS:
+#  euid, ruid -- user ids to check (default: the current ones)
+# %RETURNS:
+#  An error message, or undef when it is safe to run.
+#***********************************************************************
+sub check_privileges {
+  my ($euid, $ruid) = @_;
+  $euid //= $>;
+  $ruid //= $<;
+  return "mimedefang-dashboard must not run as root; run it as the MIMEDefang user, "
+       . "e.g. 'runuser -u $DEFANGUSER -- mimedefang-dashboard' or systemd User=$DEFANGUSER\n"
+    if $euid == 0 || $ruid == 0;
+  return;
+}
+
+sub daemonize {
+  my ($pidfile) = @_;
+  defined(my $pid = fork()) or die "fork: $!\n";
+  exit 0 if $pid;
+  setsid() or die "setsid: $!\n";
+  defined($pid = fork()) or die "fork: $!\n";
+  exit 0 if $pid;
+  chdir '/';
+  open(STDIN, '<', '/dev/null');
+  open(STDOUT, '>', '/dev/null');
+  open(STDERR, '>', '/dev/null');
+  return;
+}
+
+sub main {
+  my @allow;
+  Getopt::Long::Configure('no_ignore_case');
+  GetOptions(\%Opt,
+    'listen|l=s', 'mx-socket|s=s', 'feed|f=s', 'feed-mode=s', 'interval|i=i',
+    'history=i', 'state=s', 'state-interval=i', 'stale=i', 'spam-event=s',
+    'ml-events=s', 'events=s', 'top-cap=i', 'anonymize', 'allow-host=s' => \@allow,
+    'pidfile|p=s', 'daemon|d', 'quiet|q', 'help|h', 'man', 'version|v',
+  ) or pod2usage(2);
+  pod2usage(-verbose => 1, -exitval => 0) if $Opt{help};
+  pod2usage(-verbose => 2, -exitval => 0) if $Opt{man};
+  if ($Opt{version}) {
+    print "mimedefang-dashboard version $VERSION\n";
+    return 0;
+  }
+  $Opt{'allow-host'} = \@allow;
+  $Opt{interval} = 1 if $Opt{interval} < 1;
+  $Opt{history} = 100 if $Opt{history} < 100;
+  $Opt{'state-interval'} = 30 if $Opt{'state-interval'} < 30;
+  die "Invalid --feed-mode\n" unless $Opt{'feed-mode'} =~ /^0?[0-7]{3}$/;
+
+  if (my $err = check_privileges()) {
+    print STDERR $err;
+    return 1;
+  }
+
+  my $app = MDDash::App->new(%Opt);
+  $app->load_state;
+  $app->open_feed if $app->{feed_enabled};
+  $app->open_listen;
+
+  if ($Opt{daemon}) {
+    daemonize();
+    $Opt{quiet} = 1;
+  }
+  if ($Opt{pidfile}) {
+    open(my $fh, '>', $Opt{pidfile}) or die "Cannot write $Opt{pidfile}: $!\n";
+    print {$fh} "$$\n";
+    close $fh;
+  }
+
+  my $flags = { stop => 0, save => 0 };
+  local $SIG{TERM} = sub { $flags->{stop} = 1 };
+  local $SIG{INT}  = sub { $flags->{stop} = 1 };
+  local $SIG{HUP}  = sub { $flags->{save} = 1 };
+  local $SIG{PIPE} = 'IGNORE';
+
+  $app->run($flags);
+  $app->cleanup;
+  unlink $Opt{pidfile} if $Opt{pidfile};
+  return 0;
+}
+
+exit(main()) unless caller;
+
+1;
+
+=head1 NAME
+
+mimedefang-dashboard - live web console for the MIMEDefang mail flow
+
+=head1 SYNOPSIS
+
+mimedefang-dashboard [options]
+
+ Options:
+   -l, --listen ADDR:PORT  HTTP listen address (default 127.0.0.1:8689)
+   -s, --mx-socket PATH    multiplexor control socket, or "none"
+   -f, --feed PATH         event feed datagram socket, or "none"
+       --feed-mode MODE    permissions of the feed socket (default 0660)
+   -i, --interval SECS     multiplexor polling interval (default 2)
+       --history N         recent events kept in memory (default 5000)
+       --state FILE        save aggregated data to FILE across restarts
+       --state-interval S  seconds between state saves (default 300)
+       --stale SECS        warn when no event arrived for SECS (default 900)
+       --spam-event NAME   event whose first value is a spam score (default spam)
+       --ml-events LIST    events whose first value is an ML confidence
+                           (default ml_spam,ml_phishing,ml_unsure)
+       --events LIST       events that get the first chart colors, in order
+       --top-cap N         keys kept per top-N counter slice (default 300)
+       --anonymize         drop subjects and mask local parts
+       --allow-host NAME   accepted HTTP Host header (repeatable)
+   -p, --pidfile FILE      write process id to FILE
+   -d, --daemon            detach from the terminal
+   -q, --quiet             no log output
+   -h, --help              brief help
+       --man               full documentation
+   -v, --version           print version
+
+=head1 DESCRIPTION
+
+B<mimedefang-dashboard> shows what MIMEDefang is doing right now: message
+and event throughput, the state of every worker, scan latency, top senders,
+recipients and domains, spam and machine-learning score distributions, and a
+live, searchable stream of events.  It runs its own small HTTP server and
+needs no web server, no database and no access to the mail log.  All data is
+kept in memory; with B<--state> the aggregates survive a restart.
+
+The dashboard refuses to run as root.  Run it as the MIMEDefang user
+(B<@DEFANGUSER@>), which can read the multiplexor socket and create the
+feed socket in the spool directory.
+
+=head2 Data sources
+
+=over 4
+
+=item Multiplexor
+
+Every B<--interval> seconds the dashboard sends B<jsonsnapshot> to the
+multiplexor control socket (the same socket B<md-mx-ctrl> uses, or the
+unprivileged one given to B<mimedefang-multiplexor -a>).  With an older
+multiplexor it falls back to the B<status>, B<load> and B<histo> commands.
+
+=item Event feed
+
+The filter sends every B<md_graphdefang_log> event to a UNIX datagram
+socket, F<@SPOOLDIR@/mimedefang-dashboard.sock> by default.  Enable it in
+F<mimedefang-filter>:
+
+    sub filter_initialize {
+        md_graphdefang_feed_enable();
+    }
+
+or call it at the top level of the filter.  Delivery never blocks the
+filter; events are dropped while the dashboard is not running.  This works
+with or without B<md_graphdefang_log_enable>, which logs the same events to
+syslog.
+
+=back
+
+=head2 HTTP interface
+
+The user interface is served at F</>.  The JSON API is:
+
+=over 4
+
+=item F</api/summary>
+
+Counters, source health and alerts.
+
+=item F</api/workers>
+
+The last multiplexor snapshot: worker list with status tags, load,
+histogram and autoscale state.
+
+=item F</api/series?range=1h|6h|24h|7d|30d>
+
+Events per time step plus multiplexor samples.
+
+=item F</api/top?dim=DIM&window=1h|24h&event=EVENT&n=N>
+
+Top values for DIM: sender, sender_domain, rcpt, rcpt_domain, value1 or
+value2.  Counts are approximate when there are many distinct values.
+
+=item F</api/events?q=TEXT&event=EVENT&id=ID&limit=N>
+
+Recent events, newest first.
+
+=item F</api/scores?window=24h|7d>
+
+Spam score and ML confidence histograms.
+
+=item F</api/stream>
+
+Server-Sent Events: B<events> (new events) and B<tick> (summary).
+
+=item F</api/export?what=events|series&fmt=csv|json>
+
+Download events or series.
+
+=item F</metrics>
+
+Prometheus text format.
+
+=back
+
+=head1 SECURITY
+
+The dashboard listens on 127.0.0.1 by default and is read-only.  When it
+listens on a loopback address only C<localhost>, C<127.0.0.1> and C<::1>
+are accepted as HTTP Host, which defeats DNS rebinding; add names with
+B<--allow-host>.  It has no authentication of its own: to reach it from
+other hosts, put it behind a reverse proxy that handles TLS and
+authentication.  Subjects and addresses are shown; use B<--anonymize> where
+that is not acceptable.
+
+=head1 SIGNALS
+
+B<SIGTERM> and B<SIGINT> save the state file and exit.  B<SIGHUP> saves
+the state file.
+
+=head1 SEE ALSO
+
+mimedefang-filter(5), mimedefang-multiplexor(8), md-mx-ctrl(8)
+
+=cut
+
+__DATA__
+@@ logo.png base64
+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
+@@ favicon.png base64
+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
+RU5ErkJggg==
+@@ apple-touch-icon.png base64
+iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAAu5UlEQVR42u2d2Y8k13Xmf+dGZNa+
+9L5UV+8rm+IuLiYpyTIpiRIlD2yPMTAGhmHAsAeiBvbAMDzA/AnG+EESYMCAB6MZ+MEQMCN7JEoi
+JYraKYmkKIoUu9nsfe/qvfaMuGcezo2MqOqq3iozK6s7LpAgu6s6I+LGFyfO8p3vCE1YquoAJyLJ
+rL/fCmwB/hhwwFrgGUABoVxLeWX38GXgNOCBrwCHROTgLBzEgBcR3+iTkCYAWUQkDX+uAA8BnwKe
+Be4BlpX3/q5aF4F3gZeAbwJviEgt4CMCtJHAliYBeRvwF8BzwN45nmRfOL4r7/kdtXy4x4R7Oxtj
+7wAvAv8gIh80GtjSADDHmWuhqruBLwSXorfwa0nh4krX4u5zRTIjFhf+fjS4JF8UkfdmY6nlgC5a
+5eAb/zXwp0BHCeJy3QK4p4B/Av5ORA4u1FpLA6zynwF/D/QUgByVIC7XTYA7LQB7DPgrEfnHhVhr
+uV0wB6v834HfLYFcrgYC+2vAfwnW+pZBLbcJ5ueAL2MpuFo4mRLI5VoosBOgAhwCPi8iL94qqN0t
+gLkSwPwC8I0A5uwESjCXqxEJikrA1BbgG6r6QsBcpaEWOoC5pqqfB75UCPjKlFu5aFLqLwscXxCR
+L2cYXDCgC2B+Afhi8HdcaZXL1QIXxIe47Asi8qWbAbXcpM9ctMxl4FeuxQgYM0t9XZ/a3QSYXwhg
+Tkswl2sR/OooYO9LBZ86viULXQDzs8C3S8tcrjay1J8QkZfms9QyTwVQQ6T5MrDpVjMi5SpXkwJF
+gCMYQ/NQqFT7G7kcWcD3xQBqLcFcrjZYRUP7xfmIbW6ekvafAJ/GiiZRuZflapMVBUx+GviTufxp
+mcPV2Ay8hXEzSmJRudqV4DQG3A8cLroeRQstIqLA3wB9lF0k5WrfzIcGjP5NwKzMsNAF67wR6y7o
+LK1zuZaAlZ7EuqCOZlY6Llhnr6p/C3Rjabq4rc5er/27W3mkRdrr6fR669dQbNxb6PXMtafzNQm2
+296F00oDVv9WRP5TMMpIwTrvAN4srXO5lqCVfhB4H5A4RI4J1m3SNta56BhdmIAjF2FsOnAMPaTh
+g4DotSbbOaiFn6/rg02D0N8BkQuWqdVWJ1hkERivwb6zcPoqiAMXzkVn9WhoOEFRqMYQCUynsKwb
+Ni+DZV32fbe6oapwZcr2dGQU4sj2xat9nxPb2+kElvfYsQa7ihmEtjB3RSv9p8B/BaK4UNL+XDsV
+ULzmN/rQBfiXt+HkuP2slsBUDaZ9+J3ZgBaIBSa8ok64dxV8ejs8vhG6sxvHLYChgeZEgJNX4F9+
+Db88bUCKwnX6WdehhTvXU4VKDKM12LUS/v1e6O+067wZjBW/y3s7h3/dB2+egq4KVB0kadi7yIzG
+1SnYuxr+8N7cGNBe2YIMq58D/huQxsF3fgDYGaoxbQFo9aDOQHfiMrxy2HMqcUQx+Br4NFiwefxA
+p0rqBCpw8LKS1pRdKx3dAzmgXYvuSpo9eAJXJuFnJ+E7J+HoBFQS23U/H0rC9VUie59OObicwkc2
+GwBjV/CF5eZoaKnCyDi8fg5euwxVBZfY35Pti4PJCMYEPjYGu9LwdqOtnFEXMLsTuE9E3ohVVYA/
+KLgerl0cpGxdmVQ+OA8XXCG1fiMz4YPZqwKp8OIHyvN7zP3IghzV5ltp1QDoyI7569Pw1V/B62fA
+V4HxYvR1HVfBh2upQmfNrKfq7Z/XeA0OX4RTY+G7JwsltDRQ7Tuh15t7QnuXxGPgD1T1zVhEVFV/
+uxnCM40SWOjrhPU9cOWiIiKIz33S6z0RDpAaTFVgZMrx4yOwcwVsGLSfJ2qvbGkyoAnuzXQKrx2D
+nxwDnYLKFEh6M8BMiQQ0FaYnHf0robuSuwC36kM7B50VGHAgY4bdKFWSmgdxxCJ4help6F8F3bH9
+G9o3Lw3w2yKiLojCbG9nzoaIbahqwRlV+/O8n8zKp6ApXJ6Clw/AmyfzoFBbEAcgeSB6/Ar84gyc
+mTaXyCUe729wHQqqEq5XUF8w5rKAhyzbA83/rF7QVOrUevVLoryWZem2q+q2OIB5ZTufeqow5e1N
+6Av+iMqNrZIDXGrW+Jcj8NoJ+Ng2C3Jci+hhsTPf+dVD8PYZC1RR+3kiN8gcKKAOxdeb3mp663ns
+OV2hYMK8t4xQoq6eO9CQ/0pZmGvTwsrhSmC7A/5oljxXG56x4ApdX3ULpTf4ZD08ISi7ksKbp2Hf
+ObuJkRgwUm1yagM4cgm+/hvPgQsarJ+g15jIOT7hS4rXK004USkoeNULKe0N5Lnkx/4oixLv+CJK
+VvF/5xy8dADOjduNUzVwNyuP7sSs39tn4BenhInUEaWW1vCUq8GW2jtgQ9sFhI12WUIa0Hk4OQrf
+OgAHLuT+eaMzHaqWUnPOvISD5+HHx+DslICz8zCzUhZjGxwYbnAY+/+O7khRDNGR9yTAuyNWUBir
+mdvhxNwObUIRZTKBHxyGHxyByezFqEVXo1wNLLA845aUp3QT2ZC50rkaIkhJ7RcuJfD9Q/DWqbwi
+6RuEr+wrsqLNyAT88Iiy/4K5PVEIbvUaE6PhQ0mjWcD233n6GjLfFQleBUkNUK+dhFc+MCtNAyP5
+LFUXO5hKrbz91lllMrg8Ts3V0OJJagj7nKBSgnkhd/+OcjPq+ec5QO2x4mEUgHX8Krx2HE5csZ9H
+UgDkQgDt84fj8AXlW/uVo1elXqRVr/O8FLOsR/ZMtpLweOfozrs7xSo7Bz0VpSdSonm8KK8g3qpz
+3sG+i/DTo5YjzoofCwV0kTv89hl45ZByeVpwqX23n515AYiFSgT9FeiJ80pBue4iQGtBhQQHlSps
+Xa7sXe1Z2+2pxgqBP1EHTpbeDag6NQYv7of3zuUPhi7g7eDVHgwnRnl9/aRw4LIjDb6zapbZEPPp
+EZyY9V7TD09shM2DBbcpO/GisZZZ5YRGu2pzHasEdCvdZQ8RRFUYGhQe22CfFX1AB4hTXIH44QNo
+4xTGEvjRMXjrdIGuepvZDk/O4ptK4IeHlZ8eV6aK2CyAJStdq7Of3bMCPrEd1vdD6gJPunnznUoL
+3b6ZDatvKxBHwn1rhed3O4YHzPIZMPIqWJbNcN5AeGoSfnHSyO6ouS7+dlyPwoMwMg7f3Advn1Oc
+BhdHr9W3ysrL67rgqWF4eAh6q9TPO8KsOCrG5yi+QhpBVJhRWZXwmaviqkvGCXJLPcOcVYcTD5cn
+YU2v8DvbYdeATe9QFxLNxeFMWQnZmy/9i1Pw8gHl6lQhhXerzQguDyw/OA8/PyGcn3C41I6TFtKC
+dYsdQWcHPLUZPrYVVnRZBqZsgLvbg0KFNIHRSTMyw4Pw0BpY2WE8ZB9Lbu0yqXhVJDXfdt9F5eUD
+yrlxbqsTNwOrE8ua/OAIHBsPljajuhZISBIkUxToieDj2+DB9fY947Xb6AIu150H6CwwG5+2/39i
+Ezw5bEFa6gQnDidasKqCU2PijU0Lb4043j1rlj6axZa7me7pLEb7xXHlpQ+Uy8msPsHMdw6OtlYM
+7Ft64KG10NthVcXJWgnmEtChMufEArJaCvetg2e2QV+WA3OKzvYFNfgCEZyZhJcPGhMvS70lN3A9
+MjBn7VXjNXj9hPDGKWE6gch7vKZ4cl8jEg+ipBEMD1ggODxgP675mQWesjJ+FwMa8s7lxFvj50Pr
+YPcyqEoIwByW8Sj4vl494pWxGnz3oPKzY1rvzr5RLJTRMaLQYf7OGXjzDFwNAxXEZ1mVUDBRbww/
+Z8/SfavgM7thsNPatFTbujOkBPRiZDycaJ1HMTwAn9oOmwcgja36EhWKoxkLOEqNHbdvBN44qVyY
+yKmf1xNk8YUg79wovLgP3j0PEoUHwYcmSAlgVkVjwYvQBzy8Bu5bY+1QiS/U67RM1JWAnqOIu6bX
+LOB9q0ATC8xMCs3XAa3qkNSyDrVIeHtEeO24aYBEMn/1cDbIj10yl+XYVfPLCZyRfKMdzglpLHRV
+4bEN8OgG6w2crfBUpp5LQOep2QK/uRrDnjXwyHpYHiK9NDIrLgWlClVrvBUH+y4K33gPzoyGBoA5
+vI4M5NmxxqbhrTOw/5K5HlFKvcUqM+UiijiHqrC8U/nMHnhgff79kSu4OeUqAT1fz1xHBI8MwZOb
+oLvTXA9HIeMhAXjetCnOXIUfHoFDF2dpyhXyyJppbQQy0hsn4HtH4GqYDzZTJ8McGxU1D2Ra2dqj
+PD1sVUFfyJKUqwT0dUlCSWqgfmAdfHonrOgIvGgnwUJrbknVLKtGcHQcfn7CwJ1911x9h5k0wQ8O
+20NQS8Clivc+ZFSMNRepmP8Sw/p+4amNwqbBnJ1Hi1WcSkAv5UkzHlb0wBPDsKPf/FsfqfnThUxz
+ZoEFmPDw3UPwk6M5x6MofaBB20IxaYKfnTDf2afgEiWHcwZWR+oEFXh8E3xyt9DbkfvmpZdRAvrW
+9CeAoX54aiNsGjDys0aW8SiqCHhvgK/V4KfHzOqO1Wa6A5mljhyMjMGrh2H/ZSA28j4qKFFwwD1C
+CrG9BrpTz2NrlUeGoBqZv31dJnKRdZeVHKWBbDuZfQy9lnUnJaDbi40XrGpfJ3xyJzy8LoA3CtTN
+oi8tIIlh52oCvzwL75+3Qk09x53m333oAnz9PWsWcJkeX0EsJJuDl8ZQjZX7V9nxeyq5u+GkdDdK
+QN+i4pL3ZhEfXAePD0FvCAI1svF3Ipp3umR8iwocvGKSB6ev5m5HRnJLPbxz1tyNq1MQFUUX6w+U
+AxfhRRjqh8/tFXatLuRX5PYE3Mt1lwK6Lk8ZtDc6Kwbqh9dCdxWSyII2KaQZVPMq34nLViw5cD4H
+YCUyML93zvoSz2d6rWld5ChwNkBRe2hS2N4vPLtdWNsXdK21nJVXAvp2xBoKr3RV2L0ant8Da7pB
+RRBx+SZoKFWrWdxpD2+PWI55tGZ/H4uRiF45aKKLaXBv1Qcr64p8Z0UdrKzCo2th6zJrnvXkmnfl
+KgF9y6mOrBSeqsnpPrMNdgyQT2F0aqVpco47iT0Io970nH950lJ0AGfH4PtH4DfnQGshc1I4XlZw
+8bGjWhGe3gwf3WpVwRlzS0rfuQT07aTussAr04PePAiPrYe1vUBF8LELpKXc9fBYV4sK/OCw8urB
+PBX31mn49XmoOYhCciB7EKTAd8ZDr8DHtsCHNwaQ+7wRoGTTlYBuCMC7KmYxf2sYogi8k/pYiGJT
+CyGNd/yq8Npx5dKkjXJ49TCcnggkfZ09DyW0eoU03q4B4zsPdha6W0qaRtNWfNc8uSHhm3VmPzZs
+kmDfPwIjqUmUSOB0ZO11kQ/CeFU4eFV49TCMTViOemzSfubTgrK2mO6zij0km/stVbh1+SyuUYnm
+EtCNSuNlpebeDnhwrfGlfzZtAKRmVjUtVg8DqE9dEf7XGzA+Be+PQFILqb+5fOfIRNb3roBP77ZK
+ZepbP6ioBPRdIlGZrc3L4BM74OQkHAq0zyKgfVaNq5ke3ncOBtJTmrsY2RAdyXzuisOLdco8vAbu
+XWUEqenEUn7lKn3oxrseobN7TR88txN2Dwa+dJAPuKbiGwomtaC4f83kAAlCXuJJI+iqwtOb4MnN
+0FEpWPEys1ECuim9hyGFV3GwZ5UVWgYrAehujqAtWOBIQ1ZD5imzB+rosio8t8v4zr7QplViuQR0
+04Udu6o2kPPxDdARB9WiOSZjZWy8uWR3nTfnOI0EUtjWayX2VT25eKMr0VwCuqnijpKz8R7dCJ/c
+AQNZ4cOF2rV4rhnkodda5kg8RIpWhOEByztvHLg2IC1XCeimBYdRNr1MYWW35aS39Qf95lA9dLPR
+q/M35/oQ8D06BJ/aaVO26l3cJZhLQLcihVfUo9s4AE9vhg395kerONwNkCj1STUO9cIAnsfWKw+u
+s37GJJ/EVq4S0C2ilwY3YlmXtWk9sIY6lVSC1v68mxfK3GlF6IyVh9YID601v5zC6OXS3SgB3dIG
+gBQLCB8esmBuIMqpoNam5eee7SdmglVgba/w2T3C7tVS97PLQLAEdOsttHVK4dU40g+uMyvd1SGk
+sUPEEc1hYusc6giowZY++PhWWNdfUEEqAV0CerGAnSkk3bsGntsBK6qgzuGyVq3ZQaUqGlmX+Oou
+eGIINg3mcrxCKetVAnoRiy0SMh5D/fDxLbClx0MtaGlgpCMpam2IBYNRZMHk72w3Fl9dF6+0ziWg
+F7UcHqqHIsaOe2SDsKonMPQk2yirqoiqdY5760/8yEZ4ZEOYHV42vpaAbqcgURX6qvDMDnhkvZnu
+NIJKLEQiVPDEEfiqIxbYu9xYe/0d1PnOZZm7BHR7iDwG/7cSwZMbhaeHoTvjaERh7omYCpLGsGm5
+9SduW36joZ/lKgG9WBmPYGUHOk0ddNeg/d1kFWoRTIpjuiL4BHYOGoF/Va8VUSgM8CwXJR+6XaqH
+2dqxAn53D0zug5PjUBWPdMI0jv4YProRdq0wi15Lc8ZduUpAc8M5JteIslir0wzNOb/wcWcZxwOF
+tX3wH+6Hnavh1ChUQvrCK6zoNHpoR5xLgzUi76yzJLi0yGyShQ0HveZYftaehuNkTMRGHqsE9CyQ
+VcVqGFHW5oTgUJyDKe+pxo6O2JpeF3IXMuqoqqktbV9hkwAmEnAidUHHzoppbEDjiigOqARaXyRQ
+qXeHe2JRVB1pYn+/UM6TE7s+jChILEGbTBzVkNlJEzufpVQgWhKA9j705AWmj9ZHpQX90KDsmao0
+TBpACsPsO+LcEl9PxX9Bxwtcay95HtvrLEuNIuFaVRfw3BaPVZ9xnlWDFC9Sp9HOV/gvAX27w7yx
+6VLnJiGpEoRhimiPoBsmPVyYhNFpZgxbbcC0ODNcxQyGNm6QqxTmtUwlMKagPVBTqE1md8iRJMF8
+V2EMU2/y/vYaKj0mmjPqQbtMBbU26aBqv5ek+bHGHUzVwrGiEtALtpBg7LW1vZDWII5sxl/dPVBI
+KobxNT1Kd4X6gM2FFjdk9hxvnQlEWWC+eXYXeEdsfY6D49CBzS9PtODbO5gQ24uuauHf3qK0rmC9
+jmt7YXACqgrxPMda02MV0KWSj4zbuhwd9nDbcvjDey0wc0VNuFDZmwrVuU39pl2X+Xz1uSUNSOfN
+BRhpUMMugfextg+e3QxruqxTvBqEIcFigzSF0QS2DZrOddZFflN4LrwOogjW98Gzm2BdN3TGUHWF
+Yzmrmo5Ow45lMDwgxNHM4lO74ltU21+QanQKzozB2FReAKEQ+NdSA15vh7KyB/o6pH6Tl1JaeLxm
+YzAujRuo4giK41q8mhxCX6eBv6/j9l2d8WkbjHRp3B6MyM19rP5wrN6OpbGHSwLQ5SrXHVdY0RtF
+eXJnqGwpN+5hRBpznXfini6dwsqN0lRa0IO+A+QVbpTiawSb76b3dAl1rZcuR7koyUnlKlcJ6HKV
+qwR0ucrVfkFhxjG+Xf6D0H5tTV5njnC76Y6YQrFGFnh8Lc4Jb6fB9wURH5cVpu60oFAbMPVUllIa
+8RZK+4tx/FaCW8osR7nK1cYux3gNjlyyEvXEdD5XO/EFS6XX8hzSoKa/qsc4yb0dBQL+IiT8M2mv
+xMOh83DqSj6XUOZ6CxVOsOLs3BMPPR2wYdAGCd3s6zjjTwjGlDs7BufHjKGXvda9to8aVS2F1Cvr
+BoR1fcYXWfKA9oH4fvoq/O83YSyF85M2f6SWGKmoPm571s2IBaZUSUTYsRw+uQWe3GTcAh9+v5WD
+K4tjkc+OwlffgZ8ezxpn6woH83KCugKneiyF4X74vb3w8HojIRUflhu5GCJweRK+dxB+fgouTkGs
+xuxM26jZeCqFyRp8fIvyuT3C+v47ANDZ/T03Cv/3N57J2HE+BZkGnyipSG7E9FohxFSMKvr6aeXS
+qLJ1uaO/s/Xz/TIlJAmknjdOwdcOwq8uQexB0sAXvg4gKw6iGCYi2HrZJMc+tKoA6Bu8cbTwS1cm
+4bVjyjeOwvlUiGomZe3bJMioRJBEylQCnbHwkS0mkSZ3istR88r5MWU8Uq46gWlsWMn1LKzPxlbB
+uML3j8K/O6dsX2nvXdEbW7VGPZRJasw3J3DoAnxjH7wzAhMOmLSpszckv2v4nS4YGTeCvt5mI4IP
+1M5z43BVsP2cbiMigwKd5htemlASLy2jPrZkC6oRrO6B81MwOhasmt6gtSe4K1ECk1Xh7KTwk6Nw
+3xqbXiWBvxs1O4rWme7wL0/Bdz6AsXGzupKElqbrvu+9qfx7x3Ti6O439yO+zQ6QOILBLqE/grEx
+iFKbqZhOt0ebUSSQTECK0t9hvZetSrnGrRijJmKk8jpRXucJombtTf3HKUx4+N4hUwYdHrQOIaW5
+VjrL9Wa++tkxeP00HBw11X5X83iimyL54ARRyX3hBe2r6ey5bPacVwRF5/E5lNbl+FzoR8QXpuve
+KVkOLQBjOhWmvbX2JD5csLv+05CqfUhNVf/X5+GHx+DZXTZGQlrB8sMszEQNfnoUfnHSvCXBzi25
+GbUkdaiqPdCxeShebz8WULUswnTYF7ziE0/q4jkdb9fChLXX0MwcmSaDV21pujxuTX+g2GcWzfNm
+bqjHXBR1MA788iy8ezaf060B9M1QLCrqU5wbU76+D94+bVZRii3TN2lVswn3jTjVmf2Itr8zkJO1
+diEFfWttzfyaQgUzQlpa4Y2XCMk1mxHBB5fgW+/D5kHYOJiXoKOoCd5gQWZ334jwk6PKpWmIRK31
+v20VJ3PtAR+BjynUx1vwSlag087h8pQF1a1qh1siBP8g8JIoI1749gF4arMBuhkcBsXcojgUTY5f
+gR8dgWOjpnbjEo9XMXeozcvOsYNqxeIA32xUad5k6ysG5O7qwnkrd57QjNoIiAhPIhH7LsAbJ+CJ
+Yau2SehSdg3srFAftKEVfn4MvnsIrvrsZ4K2XQuu1PP3iqmlxsDmPnh42IYijdWa232SyTw4Z/79
+tJp29mDnXepyZGKJUhwcXzDA4s0PH/Xw42Pw+DB8ZHMQSwyFjahBb00XrPPlKfjxUeWts6AqNqCe
+DNDXZh40hGGLxRySQArWCKpO2btK+I8fgg0DcHW6uQqpxQellpgx2LAMlnffzT50IQc/J2S8nfWb
+Z+DlA3D/WljZQ8MIHtnXxCHP/e5ZeOO0cqUmJtrkLUuhyKwUY6FQpItrFLxk7oayrl95ZINjbZ+5
+ANIiOqfO0gq8KwF9PQGTLM5x3tJ4p8eNS3HksgG6OCdlITcsk9dyzjgo335f2X8hEBQSO8lrOUhB
+b66QZ6dVmYX68SwPqFlqRp3p1SH1/RDJ3zytcYC4S7u+Axg7I7N7Uymkc2yJx5Qyxdsr9cAlyw1v
+GbTXmtcw46RBGY/3z8NLB+DMRHA1/ExGWx2ykbk6nSGNOKWLQRSa8TSF2EOYTKzMDjCZmkGIWyiT
+6xqkYLVkAB2pzTCJIhjuVwYqyqmrcG7SMaXmYkixEpflyiJj7n3rfbhnFfz2tsKA+duwEJlhy+R6
+x2vw5ml45zzUVKgEV8MX5ECL/upgh5GNLo7Db84FWa2ifFNRh04abf9mKUkWtP0il8v+VoKGdaun
+DLQyD+0Wnztr3EdXgXWDjkeGhMc3CGsGBKrgnBKprxsfH8AXp2bJXztl1bvp4vSp25Ca1cIUrMTD
+6yeUHx5RRtNZD1Lh9V2vP3vYOgif3AFbl4XqYZSNgpNFHcBSLMC4zOWQ1n64e5pkLV+QASNysGeV
+4/k9ju0rDBSScUDQa3xpBc5Owesn4eB5A3okt19Wzv7N2DS8/D787IRlNiTNOdh1zq9SH7w52GGD
+N58YDq6PA4mtSleX5VeZ6fMughyT0nrqLXdb17cGc5oqXJqAwS4bYnnvchs57MOEeSkgQTOCU3it
+v33O8+33lfPjMwf/3Eqeu5jOOnoJXjsunBg1dydKr1UZcmoOW1yFD2+AZ7ZhJPbAYxDKWYV3r4yB
+gk9gdNKs74YBeHgdDHWG4fKRXJP+ScnHKRy+InxrP5y4cnuHT4NFjxxcGIcfH4X9l0Cd2EOjBfJ8
+RvaPzOhWBZ7eBE9utodpbGqRrHC52gHQMyXxM5nX1MNDQ/CRTZY58JHgxM1Ix6UhU+VSGK8Jb48I
+vz5rFSpXkIS91Y70d87AN95XzgXp3hlRpphlFqy0SwrrKvDIOnM1plNzV2b72+W6i3zouo8plk6q
+hV60nassyFpRtXSZjUsrsG4U1HvEe3BwvgbfOwy/Ph3ox4Gmej1Qq+YDfyJnCva/OgM/O27AdF7x
+mpIWaEiOFMSTRkZhfWYrbF+edeYU9EcorTR3s/qoAFGkKGKd0RE8tN586bPjkMahi2UWSL1XnFdq
+Krx6SPnQSti7RuhwN69q6sTeCh9csIzJ2Wnz2KMUathwoiJC1Qmamrr9Z++BdX0F1p9rr0KVzzjl
+2DVqyDxoi6YvlFJgaH145doeC7Z2LofUgcZCpFJwVJyRkrySJgbInx9Xzo7NHEo/X2SvBXWfy5Pw
+7f3WkeIlFG805N9EEBSn1vOlIlQVHlgNjwyZvELi87axxTYNOVNU53wjNf1TWuiZfYQZKAa74Lld
+8OsReOeCFTUi58Ou5Y1IEjgKaSy8exFeOwYDHTayIctbR3KDzvQx+M5BOHDB+vMIb4Is2yYKkTjS
+is0buX85/NZGY7Exq26y2G86XyBYdcTZ0J/8v6XL0eKqkhSaQXethseG4Jv74fQ0aAxSq0/tq092
+xYNU4Mio8PV9sGslfGhtAOYcTdmZ2+LCjJZ3zllVcCINHTLeZBQy02ZTrwQvMFBRPrlTeGw4LwZG
+rs1edwqiwlRi6dDeqrWRSRMrhRkXpyMOQz3vdkDPJsylgWR//zoj9H/7KFyZdkSJvdeSQlUwyxdf
+GIMfHIbP7g6AnmOuoGroGA8IfPeM8Z3PTQcPI8lbr1Cr+CGKdxFMK+v7PE9vjNi2PH/N1iuHurib
+Vy8AqWVdDl9SXjlouhhXJnPL3YxcVS21Pb1nNexZZbRer62dAhC3/QRZgd2rDKBvjxg/WZwUBlXn
+ndRRYjMLT05bcPfoBpvgFEkgLRWClcx3Tj387Bh854ClDC2zoXXrXyeuR0Iaw/IIfmtY2LXC/n3N
+kiy5v77YRqHQglVT4d0R+B9vmfxYRlJqKLA0f5tOhVmOv78Dti43QCt3MX10tnyBD50jg13mr+5Z
+BvvPW58cqkiqoadZQhovjHlT+OFRIwv97l7oruSj37LvzQB4dsxK3PsvGhii1PQkNKQSTdrKkYab
+c9864TN7hBU9eQCk7Th0yFuV9fSEcPpM8K20SS+R0C2knaBTsKtfLUguQlnuYoL/XHdoTQ88scEU
+iw6OQqoOl1qgWBxh7GoGtDdOwneXGQuvuzJHmdtZZuNHR83y+9iKNOJDx4kIktXYneAR4kR5aLXy
+5CZHT8Wsc0aYzzIpMuf1ZGNopUGMd50VdNQZLtce3FsvZhHJTcNWTXBe6Yh00RJocZv3eNZzpp0V
++Pg2eHcEDr8HiRMbFqkaLKUFbFmGYgx46yy8N2JVvEy1tBb4wBJEJL/+nvGqnZhGnRbavV14f/uq
+EKPs6vM8OuRY2W3gSL0FP07alPSjSqRibMVmBp8CcSRMTgqxWAAqi9Rz6dq9azkDixO4bx08tQkG
+oyBUE9j+gvkaGtxe9UAFjo/DyweNbFT3cX1urN6/YLyN8+NmnS0jIrOyLo5UYFmX8Pw9jgfWS71e
+KW0z8242Lzr/pECirmmfFPvvtDp8oN7WFrEd3rW9hS6Mf6hEpm33yFqzAmlsv+GCv4vkUb7zMDIG
+39xn/IxA2rNxwwJHLsJrx+FUltmohVgq+6p6pGmcjeEe+MR2YcvymW4L7S4AIUokkn9o8Cd8byWk
+A2MHUSRlHvp6eWkt8CM2L4Pn98DhMXj3IkQiOFEr74YeWqcQ1aDm4N0LJn/7sW3QW7GujakEfnzY
+tPImffCb/UzCvlPLeftI6RPhkbWwZ6W5GFl6KpJ2p2uISa+55qcUE0Cr4GuWLVqs99eSmIKVqVd6
+bw2xz2yDvcttFzUyv0RI6/pTGuh4AkwAb5yBX5zIdSmuTFkw+MZJSKbBJTmpjgI3WmNBIuHhITvm
+YBfXlgWl/cfwZv0F9RS1NPBToIyFjjm8yqI96PFSogUmgfyzcRk8uh5+egJOTQV/tjbTpdSC6MrP
+T8C39yv3rxHosJ6/N8/BuISm2zn4zoQ0XRfw5DA8tcWsc+pzQZt2DATrhtiZt7ShD+5dCwOdgdra
+pAJH5KCG4lT48HBeKZQWG+slA2gKAo8VB09sgrdG4P98AGMqVGqCL4xlSEOblkvhzKjyk2PK+Qmh
+I4ZXD8GRUbt6mSqAQKywUm8q8KY89OH1OaMu9Xb8tmOHhnSQC3GAOhOaeWAtfP4JYdMyC34zGZxG
+i3ES5NMcMDSQTyaQu76wcgMr7UOa6MEheOYSvHoExiZAnKt3l0CBVJQCVeHYuKkt9cbwgyNwaTy4
+LOlMPRCHR0XwkbC6E57dbmXcGaw9ubGOyKKm8UMsEEfK6h7hntUw1A8TAyG+cM2JczLxncgxQwuk
+dDnm2TRXyHh0V+CBtXDPcqv2pQ60Fip9WUUwa5b1cGFc+Je3zXT/6jRMTobWqmLza0h8S2R85639
+8Jk91hK2VDIbOkOhQ3HOAmcFqs4Eye/kXsclZaFlVqQ+1GfB2tExeO9SmEilhSmr2a/XYDSBVw4a
+uKf9rPkmWarOg1YcPoJqCvevhIfWmYJmLbVAcSnNkvbezjsJufdsjF5cEvzbj17q1bjIn9ppwNPE
+/MY5K8tBUWnKw9Q8vq9g6qY+iN48MgQf3WLB1Iyxa7IU5IfnIvvPWXdpzqccXn+LgA7jKiIHu1ZZ
+0LayGvLQbv59jYI6qVxHD1ax9q9P7IAnNhf08tzSa3rN9iEqCM2ELKftRZM+i+nSLD1Ak5fDfch4
+PDwET220wkkamevh5nkFz9Ui5ILf4eMIEhjugseHYONA/u8iKZu4y67vJvtpmXjifevg+d2wMgzl
+FAdSTHnMEny8dhNSJFJ8BVb1wtMbYeeK+pjEOkmuXCWgm7aikJry3nzpJ4Zh12CQCHOgTgOoZ7UI
+zeFAi7MytwL3rrbMxqrAd3alvEYJ6FYGh1m+eX2fMfG2LDO9Oe+cTWC6wQgF+44Ir0JHanznx4et
+wyP1uaZyuUpAt67LWaGnakWQx4ZCot9JmM/nb5zbrhhfZO8K5bEhYUV3/r1yB/jOMucouBLQ7Vls
+CQFiHMED6+GpYVgWa32wp2QKp8ylfOpxonhng22e2+V4cH0u9nin3HwtNNDWA2O9M3U64qVueUSM
+tORD98iH1sBDa4UfnYTxmo2xciozFfU1dFQ4RWMHNRgahN/ZBpuX52MplnRmI7DsEoXpwK2dDn2V
+FWndjMXsHsWuNSI8MXfKCtWvHSvh0zvg4CV4/4oQORsnMaOJQtRSdU7wEfQLfHgd7FphG19Lc3Hw
+Jf36dUJnUWgmbpELJSzazJU7ItzJnnzvYU2vWdqdA2rt31FwTQojmQXzr32YoPPwEDy3u8B3vgP8
+ZWtfE9xc5U1p8mcGr4CWczl0qWemQpOJVQ+BTYPwyHrl9TMwUhPjMKeBWqq5P6EKHd7U95/eZJTH
+1C9+tWtBQjMEoop3JKly9JLy/UOO9f0wOpXPXWk6J9vbGLmuDuiswu6VJs3WZLBpfEekWSUfLKQK
+nbHy0a3C2yPw/w7BdAQdaZ4SEQGtOpyH7X2m75zlnZOM77xEd8XXB8bAlFfePqf8z7dgoMukwFph
+vqJgXGoKy7ugrwL/+fEA6OYG2xIDLwPPzCPssKQyHlmPXyTCo8PwzAh8/yiMpOBisxrOWa6uFgtr
+Os3VuHdNAQyyVMGseZUoFElTEU6MCedO2Kg736JIUIIsh6/AMoHOBP7oQxbfaPOeYwe8HAPHacMG
+jNttA8qokj1VY8zdsxy+fxomOjCx58RBNXRyd5u66fCyMIaNdpDDbZwGDUFrO5nKlZNa9pqI7b+x
+Up+h04KrPh63+FJbek83DsBn98DlxLrEY1FcrCSRowN4aj18aDV0xoXMxh2S8anHF6kSeW/TblsY
+02jqqE3DQA+s7DJF0iZnOxR7EfPPwB83092YnWDXQn9g/f8l94FlgRyP7HgruuH37oHhATh82fKv
+gpAo9Fctu5FlNqIGzdXTYotW/c+ST0suTHhbqLbM7GPNtXE+iLZLi6P/IOFNOmuqrjbvGRLgn2Pg
+ADACrGj0NUshrVZ1oQVIc06yIkYyUiXCxkjEC3znFwEZOVPBHOq3jmdxUq+adcW51VBtTM5ZCDJj
+obul4jKtPE8kiqiQJEKs+Wzy201TVuKwnx4iNHy/nwdc0nIxdhHj0bjmF1SyZ2QEOBCLyAeqegBY
+GZqlo2YcMs3anqKCdqHL4xgTiZGGSAOIzHwzdBTAOyf7ThqrnCqFh0Pqqp8yg4a6sOvM90nq4jjz
+OxWtVslwKniRupGoNyI356HyAVUHROSDWO3xfQV4vNFvhKwreiKBo5dhogK+F/x0NpcNY+R32++f
+GocLE4WhQLpwYGeNsnLtFLkZHTAL7UpVNf3lSwn4HuucScYz8+CoZXF4N1zyJnqT3GbWYTqFc6Nw
+tgZpH6TT5q+ySKr580KsA85NwehErk3dhE757Fa+oqoSi4iq6leBv2m4Hx1OvLtioyWmYruZLsm0
+4+y/acV+d7hio9Ia2QJf18abpeBPaOFa0DFmNe12VmDLctg4GaTCOnP/0QVrPRnBxg5Y1p1v9s2o
+dBWpstXIptbuXgGXgtC7pPYQtUVMGohhPobBPuhICpLG0hT/OQW+KiIaq6oDfgXsB/Y0Mh+dfcnK
+Hnh+F4zW4NKk+ZaRC716YlpzCAz1KXtWmzRrNjphoaAWmcOHk8bsrStcpIgVER5dZ9sbOQN4MR2o
+ClemTc1o8wBUK7fGdcj2s68KHx6yabYXJgzgFWl6auyWfPzUm3TxYCf0VpSVPXaVrjn5598Av1JV
+F4eXQwL8a6MBnd2k1b3w+3thOoGpWrCMLpfJTVKzUL0dwupeJXaFdvjmcGUazsERMR3qj2+xyQEi
++YyRohjLVGLKqRsGcwWmm3kbFUlFfZ3wxEbYscJe5ZlwpNf2EthMU+ioQDU2DDThXmRY/ddgpWMJ
+FlqBHcCbQOdSrpeV665ZWUg/CTwIvA9ILCJeVSMR2a+qXwH+IljsuKGPkt76WLelSqbXFlznYg+4
+vF1GZANXGjD6lYDdSERMNKtgpTcC75ZWulxLyDrfAxy11LdYXCzWHu1E5AjwlQIjs1zlok1JhS5Y
+5yMBuzPnbhWs9GbgLaCntNLlamPrPAbcDxzOrPOMjpXwF5GIHAL+MtMYL/evXG22koDNvwxYjaQg
+wHKtrqFqIP7xb8Cnm1YOL1e5bi8QjIBvAJ8NrkZy3RRtwfXYgpH/N91J/YflWtJ+M8ARrCHlUNHV
+YD6QFlyPg8CfFwJELfe0XIvoN2eB4J8HbEazwTyv1RWRRFVjEXkJ+AL1/oMS1OVaNDDHwBdE5KWA
+zeSWZAwKoP4S8AL1EZQlqMvVUjBnfvMLIvKl64H5hn5xAHVFRL5cWupyLbJl/nLAYrJg3k74opqq
+fh74UiF1UgaK5WpWAJiB+YUCmGs0iohWAPULwBfJc4Jxuf/lorF55gxTXwhuxk2B+ZbZfJn/oqrP
+AV/GUnu1cAJlRbFcC3UxEqCCpeQ+LyIv3shnXpC2XSFQfBHLBX4tnIBk88vL+1Ku2wSyBCx9DXjm
+dsB823zr4oFU9c+Av8e4H9krIyotdrluMoORuRdjwF+JyD/OxlhLmjlCRVFEJFXVrcBfA38KdMyq
+uZcEp3LNJhb5ApCngH8C/k5EDqpqBOhcRZOWdCfNsta7Q3rvj4HeOQglJbhLEGdrFKMqf1FE3luI
+VW54u13RWoc/b8M6X54D9s6TXyyMWS8Xd1bKTWcpGhXXO8CLwD+IyAcBLwuyyk3rH50D2BXgIeBT
+wLNYd8Gy8p7fVesi1gX1EvBN4I0sBddIIDe1IToA+xpqX/C1txS09NaGbImWrsgd4VoIxtA8HSz1
+V4BDgUx0DUW5kUDO1v8HW58Piu5OtQIAAAAASUVORK5CYII=
+@@ index.html
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MIMEDefang Dashboard</title>
+<link rel="icon" href="/favicon.png" type="image/png" sizes="64x64">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><img src="/logo.png" alt="MIMEDefang" width="152" height="76"><span>Dashboard</span></div>
+    <nav class="nav" aria-label="Views">
+      <a href="#overview" data-view="overview">Overview</a>
+      <a href="#flow" data-view="flow">Flow</a>
+      <a href="#live" data-view="live">Live log</a>
+      <a href="#workers" data-view="workers">Workers</a>
+      <a href="#scores" data-view="scores">Scores</a>
+    </nav>
+    <div class="sources" id="sources" aria-live="polite"></div>
+  </aside>
+  <main class="main">
+    <header class="top">
+      <h1 id="title">Overview</h1>
+      <div class="top-r">
+        <span class="live" id="live-dot" title="Live connection"><i></i><span>connecting</span></span>
+        <button class="btn ghost" id="theme" type="button" aria-label="Toggle theme">Theme</button>
+      </div>
+    </header>
+    <div id="alerts" class="alerts" aria-live="polite"></div>
+
+    <section class="view" id="v-overview">
+      <div class="tiles" id="kpis"></div>
+      <div class="card">
+        <div class="card-h"><h2>Events</h2><div class="seg" data-range-for="overview"></div></div>
+        <div class="chart" id="ov-events"></div>
+        <div class="legend" id="ov-legend"></div>
+      </div>
+      <div class="grid3">
+        <div class="card"><div class="card-h"><h3>Messages scanned</h3></div><div class="chart sm" id="ov-msgs"></div></div>
+        <div class="card"><div class="card-h"><h3>Busy workers (avg)</h3></div><div class="chart sm" id="ov-busy"></div></div>
+        <div class="card"><div class="card-h"><h3>Scan time (ms)</h3></div><div class="chart sm" id="ov-ams"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Event mix, last hour</h2></div>
+        <div id="ov-mix"></div>
+      </div>
+    </section>
+
+    <section class="view" id="v-flow" hidden>
+      <div class="filters">
+        <label>Event <select id="fl-event"></select></label>
+        <label>Group by <select id="fl-dim">
+          <option value="sender_domain">Sender domain</option>
+          <option value="sender">Sender</option>
+          <option value="rcpt_domain">Recipient domain</option>
+          <option value="rcpt">Recipient</option>
+          <option value="value1">Value 1</option>
+          <option value="value2">Value 2</option>
+        </select></label>
+        <label>Top <select id="fl-window"><option value="1h">last hour</option><option value="24h">last 24 hours</option></select></label>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2 id="fl-chart-title">Events</h2><div class="seg" data-range-for="flow"></div></div>
+        <div class="chart" id="fl-chart"></div>
+        <div class="legend" id="fl-legend"></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2 id="fl-top-title">Top</h2><span class="hint">Select a row to see its events</span></div>
+        <div id="fl-top"></div>
+      </div>
+    </section>
+
+    <section class="view" id="v-live" hidden>
+      <div class="filters">
+        <input type="search" id="lv-q" placeholder="Filter: address, subject, value, queue id" aria-label="Filter events">
+        <button class="btn" id="lv-pause" type="button" aria-pressed="false">Pause</button>
+        <span class="hint" id="lv-count"></span>
+        <span class="spacer"></span>
+        <a class="btn ghost" href="/api/export?what=events&amp;fmt=csv">CSV</a>
+        <a class="btn ghost" href="/api/export?what=events&amp;fmt=json">JSON</a>
+      </div>
+      <div class="chips" id="lv-chips"></div>
+      <div class="msgpanel" id="lv-msg" hidden></div>
+      <div class="card flush">
+        <div class="tablewrap">
+          <table class="log">
+            <thead><tr><th>Time</th><th>Event</th><th>Value 1</th><th>Value 2</th><th>Sender</th><th>Recipient</th><th>Subject</th></tr></thead>
+            <tbody id="lv-body"></tbody>
+          </table>
+        </div>
+        <p class="empty" id="lv-empty">No events yet. Events appear here as soon as the filter sends them; see <code>md_graphdefang_feed_enable</code>.</p>
+      </div>
+    </section>
+
+    <section class="view" id="v-workers" hidden>
+      <div class="tiles" id="wk-tiles"></div>
+      <div class="card">
+        <div class="card-h"><h2>Workers</h2><div class="legend inline" id="wk-legend"></div></div>
+        <div class="workers" id="wk-grid"></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-h"><h2>Load</h2></div>
+          <div class="tablewrap"><table class="num" id="wk-load"></table></div>
+          <div class="tablewrap"><table class="num" id="wk-hload"></table></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>Busy workers per request</h2></div>
+          <div class="chart sm" id="wk-histo"></div>
+          <div class="kv" id="wk-autoscale"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="v-scores" hidden>
+      <div class="filters">
+        <label>Window <select id="sc-window"><option value="24h">last 24 hours</option><option value="7d">last 7 days</option></select></label>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2 id="sc-spam-title">Spam score</h2></div>
+        <div class="chart sm" id="sc-spam"></div>
+      </div>
+      <div class="grid3" id="sc-ml"></div>
+      <div class="card">
+        <div class="card-h"><h2>ML verdicts over time</h2><div class="seg" data-range-for="scores"></div></div>
+        <div class="chart" id="sc-series"></div>
+        <div class="legend" id="sc-legend"></div>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="tip" id="tip" role="tooltip" hidden></div>
+<script src="/app.js"></script>
+</body>
+</html>
+@@ app.css
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --raised: #ffffff;
+  --ink: #0b0b0b;
+  --ink2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --hover: rgba(11, 11, 11, 0.04);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --other: #a8a69f;
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --accent: #2a78d6;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .brand img { filter: invert(1) hue-rotate(180deg); }
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --raised: #20201f;
+    --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10); --hover: rgba(255, 255, 255, 0.05);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --other: #6f6e69;
+    --accent: #3987e5;
+  }
+}
+:root[data-theme="dark"] .brand img { filter: invert(1) hue-rotate(180deg); }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --raised: #20201f;
+  --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835;
+  --border: rgba(255, 255, 255, 0.10); --hover: rgba(255, 255, 255, 0.05);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; --other: #6f6e69;
+  --accent: #3987e5;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--ink); font: 14px/1.45 var(--sans); }
+a { color: var(--accent); }
+code { font-family: var(--mono); font-size: 12.5px; }
+[hidden] { display: none !important; }
+
+.app { display: grid; grid-template-columns: 208px minmax(0, 1fr); min-height: 100vh; }
+.side { border-right: 1px solid var(--border); padding: 18px 12px; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 0; height: 100vh; }
+.brand { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 0 8px; }
+.brand img { display: block; width: 120px; height: auto; }
+.brand span { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding-left: 2px; }
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav a { color: var(--ink2); text-decoration: none; padding: 7px 10px; border-radius: 6px; font-weight: 500; }
+.nav a:hover { background: var(--hover); color: var(--ink); }
+.nav a[aria-current="page"] { background: var(--raised); color: var(--ink); box-shadow: inset 0 0 0 1px var(--border); }
+.sources { margin-top: auto; display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: var(--ink2); padding: 0 8px; }
+.src { display: flex; align-items: center; gap: 8px; }
+.src b { font-weight: 600; color: var(--ink); }
+.src small { display: block; color: var(--muted); }
+
+.main { padding: 18px 28px 40px; min-width: 0; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.top h1 { font-size: 20px; margin: 0; letter-spacing: -0.015em; }
+.top-r { display: flex; align-items: center; gap: 10px; }
+.live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.live.on i { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
+.live.off i { background: var(--critical); }
+
+.btn { font: inherit; font-size: 13px; color: var(--ink); background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 5px 11px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+.btn:hover { background: var(--hover); }
+.btn.ghost { background: transparent; }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--page); }
+select, input[type="search"] { font: inherit; font-size: 13px; color: var(--ink); background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; }
+input[type="search"] { min-width: 0; width: 340px; max-width: 100%; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.alerts { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.alerts:empty { display: none; }
+.alert { display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); font-size: 13px; }
+.alert .ic { flex: none; width: 18px; height: 18px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 12px; display: grid; place-items: center; }
+.alert.warning .ic { background: var(--warning); color: #0b0b0b; }
+.alert.serious .ic { background: var(--serious); color: #0b0b0b; }
+.alert.critical .ic { background: var(--critical); }
+.alert .lv { font-weight: 600; text-transform: capitalize; margin-right: 4px; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.tile .k { font-size: 12px; color: var(--ink2); }
+.tile .v { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-top: 2px; }
+.tile .v small { font-size: 13px; color: var(--muted); font-weight: 500; margin-left: 3px; }
+.tile .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; min-width: 0; }
+.card.flush { padding: 0; overflow: hidden; }
+.card-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.card h2 { font-size: 14px; margin: 0; font-weight: 600; }
+.card h3 { font-size: 13px; margin: 0; font-weight: 600; color: var(--ink2); }
+.hint { font-size: 12px; color: var(--muted); }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.grid2 > .card, .grid3 > .card { margin-bottom: 0; }
+.grid2, .grid3 { margin-bottom: 14px; }
+
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; padding: 2px; gap: 2px; background: var(--page); }
+.seg button { font: inherit; font-size: 12px; border: 0; background: transparent; color: var(--ink2); padding: 3px 9px; border-radius: 5px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--raised); color: var(--ink); box-shadow: 0 0 0 1px var(--border); }
+
+.chart { height: 240px; position: relative; }
+.chart.sm { height: 150px; }
+.chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.chart .nodata { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+.ax text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.ax line { stroke: var(--grid); stroke-width: 1; shape-rendering: crispEdges; }
+.ax .base { stroke: var(--axis); }
+.xh { stroke: var(--ink2); stroke-width: 1; shape-rendering: crispEdges; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; font-size: 12px; color: var(--ink2); }
+.legend.inline { margin-top: 0; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend b { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.sw { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
+
+.tip { position: fixed; z-index: 10; pointer-events: none; background: var(--raised); color: var(--ink); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.14); min-width: 140px; max-width: 320px; }
+.tip .th { color: var(--ink2); margin-bottom: 4px; }
+.tip .tr { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+.tip .tr span:first-child { display: inline-flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tip .tr b { font-variant-numeric: tabular-nums; }
+.tip .tt { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
+
+.mix { display: flex; height: 14px; border-radius: 4px; overflow: hidden; gap: 2px; background: var(--surface); }
+.mix div { min-width: 2px; }
+
+.filters { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 14px; font-size: 13px; color: var(--ink2); }
+.filters label { display: inline-flex; align-items: center; gap: 6px; }
+.spacer { flex: 1; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.chip { font: inherit; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--ink2); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.chip[aria-pressed="true"] { color: var(--ink); background: var(--raised); box-shadow: inset 0 0 0 1px var(--ink2); }
+.chip b { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th { text-align: left; font-weight: 600; color: var(--ink2); font-size: 12px; padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+table.num td, table.num th { text-align: right; font-variant-numeric: tabular-nums; }
+table.num td:first-child, table.num th:first-child { text-align: left; }
+table.num + table.num, .tablewrap + .tablewrap { margin-top: 14px; }
+table.log { font-family: var(--mono); font-size: 12px; }
+table.log td { white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+table.log td.subj { white-space: normal; min-width: 220px; max-width: 420px; font-family: var(--sans); font-size: 12.5px; }
+table.log tbody tr { cursor: pointer; }
+table.log tbody tr:hover { background: var(--hover); }
+table.log tr.new td { animation: flash 1.2s ease-out; }
+@keyframes flash { from { background: color-mix(in srgb, var(--accent) 14%, transparent); } to { background: transparent; } }
+.evt { display: inline-flex; align-items: center; gap: 6px; }
+.empty { color: var(--muted); padding: 22px 16px; margin: 0; font-size: 13px; }
+.msgpanel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; font-size: 13px; }
+.msgpanel h3 { margin: 0 0 8px; font-size: 13px; }
+.msgpanel h3 code { font-weight: 500; }
+.msgpanel .btn { float: right; }
+
+.top-list { display: grid; grid-template-columns: minmax(0, 1fr) 64px; gap: 2px 12px; font-size: 13px; }
+.top-row { display: contents; cursor: pointer; }
+.top-row > div { padding: 5px 6px; border-radius: 5px; }
+.top-row:hover > div { background: var(--hover); }
+.top-k { position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12.5px; }
+.top-k .bar { position: absolute; left: 0; top: 3px; bottom: 3px; border-radius: 0 4px 4px 0; opacity: 0.22; }
+.top-k span { position: relative; }
+.top-c { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.workers { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 8px; }
+.wk { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; background: var(--page); min-width: 0; }
+.wk .h { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
+.wk .st { display: inline-flex; align-items: center; gap: 5px; font-weight: 500; color: var(--ink2); }
+.wk .tag { font-family: var(--mono); color: var(--ink); margin: 4px 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.4em; }
+.wk .m { color: var(--muted); font-variant-numeric: tabular-nums; }
+.wk.busy { border-color: color-mix(in srgb, var(--s1) 55%, var(--border)); background: color-mix(in srgb, var(--s1) 7%, var(--surface)); }
+.wk.stopped { opacity: 0.6; }
+.wk.killed { border-color: var(--critical); }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+.dot.idle { background: var(--good); }
+.dot.busy { background: var(--s1); }
+.dot.stopped { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+.dot.killed { background: var(--critical); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 12.5px; margin-top: 12px; }
+.kv dt { color: var(--ink2); }
+.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1100px) { .grid3 { grid-template-columns: 1fr; } }
+@media (max-width: 860px) {
+  .app { grid-template-columns: 1fr; }
+  .side { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 12px 16px; gap: 10px; }
+  .brand { flex-direction: row; align-items: center; gap: 10px; padding: 0; }
+  .brand img { width: 84px; }
+  .nav { flex-direction: row; overflow-x: auto; }
+  .nav a { white-space: nowrap; }
+  .sources { flex-direction: row; flex-wrap: wrap; gap: 6px 14px; margin-top: 0; padding: 0; }
+  .main { padding: 14px 16px 32px; }
+  .grid2 { grid-template-columns: 1fr; }
+  .chart { height: 200px; }
+}
+@media (forced-colors: active) {
+  .sw, .dot, .mix div { forced-color-adjust: none; }
+}
+@@ app.js
+'use strict';
+(function () {
+  // ---------- helpers ----------
+  const $ = (id) => document.getElementById(id);
+  const SVGNS = 'http://www.w3.org/2000/svg';
+
+  function h(tag, attrs, ...kids) {
+    const el = document.createElement(tag);
+    for (const k in attrs || {}) {
+      const v = attrs[k];
+      if (v == null || v === false) continue;
+      if (k === 'class') el.className = v;
+      else if (k === 'text') el.textContent = v;
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? '' : v);
+    }
+    for (const c of kids.flat()) {
+      if (c == null || c === false) continue;
+      el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+    }
+    return el;
+  }
+  function s(tag, attrs) {
+    const el = document.createElementNS(SVGNS, tag);
+    for (const k in attrs || {}) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+  const fmt = new Intl.NumberFormat();
+  function num(v, d) {
+    if (v == null || Number.isNaN(v)) return '–';
+    if (d != null) return Number(v).toFixed(d);
+    return fmt.format(v);
+  }
+  function compact(v) {
+    if (v == null) return '–';
+    const a = Math.abs(v);
+    if (a >= 1e6) return (v / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M';
+    if (a >= 1e4) return (v / 1e3).toFixed(a >= 1e5 ? 0 : 1) + 'k';
+    return Math.round(v * 100) / 100 + '';
+  }
+  function dur(sec) {
+    if (sec == null || sec < 0) return '–';
+    if (sec < 60) return Math.round(sec) + 's';
+    if (sec < 3600) return Math.floor(sec / 60) + 'm ' + Math.round(sec % 60) + 's';
+    if (sec < 86400) return Math.floor(sec / 3600) + 'h ' + Math.floor((sec % 3600) / 60) + 'm';
+    return Math.floor(sec / 86400) + 'd ' + Math.floor((sec % 86400) / 3600) + 'h';
+  }
+  function tclock(t) {
+    return new Date(t * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+  async function api(path) {
+    const r = await fetch(path, { cache: 'no-store' });
+    if (!r.ok) throw new Error(path + ': ' + r.status);
+    return r.json();
+  }
+  function store(k, v) {
+    try {
+      if (v === undefined) return localStorage.getItem('mdd.' + k);
+      localStorage.setItem('mdd.' + k, v);
+    } catch (e) { /* storage unavailable */ }
+    return null;
+  }
+
+  // ---------- color: stable slot per event ----------
+  let slots = {};
+  function color(ev) {
+    const n = slots[ev];
+    return n && n <= 7 ? 'var(--s' + n + ')' : 'var(--other)';
+  }
+  function swatch(c) {
+    const el = h('i', { class: 'sw' });
+    el.style.background = c;
+    return el;
+  }
+  // At most 7 named series; the rest fold into "Other"
+  function foldSeries(names, ev, n) {
+    const out = [];
+    let other = null;
+    for (const name of names) {
+      const sl = slots[name];
+      if (sl && sl <= 7) out.push({ name, color: color(name), data: ev[name] });
+      else {
+        if (!other) other = { name: 'Other', color: 'var(--other)', data: new Array(n).fill(0), members: [] };
+        other.members.push(name);
+        ev[name].forEach((v, i) => { other.data[i] += v; });
+      }
+    }
+    out.sort((a, b) => slots[a.name] - slots[b.name]);
+    if (other) out.push(other);
+    return out;
+  }
+
+  // ---------- tooltip ----------
+  const tip = $('tip');
+  function showTip(x, y, head, rows, total) {
+    tip.replaceChildren(h('div', { class: 'th', text: head }));
+    for (const r of rows) {
+      tip.append(h('div', { class: 'tr' },
+        h('span', null, r.color ? swatch(r.color) : null, r.name),
+        h('b', { text: r.value })));
+    }
+    if (total != null) tip.append(h('div', { class: 'tr tt' }, h('span', { text: 'Total' }), h('b', { text: total })));
+    tip.hidden = false;
+    const w = tip.offsetWidth, ht = tip.offsetHeight;
+    let left = x + 14, top = y + 14;
+    if (left + w > window.innerWidth - 8) left = x - w - 14;
+    if (top + ht > window.innerHeight - 8) top = y - ht - 14;
+    tip.style.left = Math.max(8, left) + 'px';
+    tip.style.top = Math.max(8, top) + 'px';
+  }
+  function hideTip() { tip.hidden = true; }
+
+  // ---------- charts ----------
+  // Axis maximum split into 4 round steps; integer steps unless frac
+  function niceMax(v, frac) {
+    if (!(v > 0)) return frac ? 1 : 4;
+    const raw = v / 4;
+    const p = Math.pow(10, Math.floor(Math.log10(raw)));
+    let step = 10 * p;
+    for (const m of [1, 2, 2.5, 5, 10]) {
+      if (m * p >= raw && (frac || p >= 10 || m !== 2.5)) { step = m * p; break; }
+    }
+    if (!frac) step = Math.max(1, Math.round(step));
+    return step * 4;
+  }
+  function timeLabel(t, step, span) {
+    const d = new Date(t * 1000);
+    if (span > 2 * 86400) return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + (step < 86400 && span <= 8 * 86400 ? ' ' + d.toLocaleTimeString([], { hour: '2-digit' }) : '');
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  function rangeLabel(t, step) {
+    const a = new Date(t * 1000), b = new Date((t + step) * 1000);
+    const o = { hour: '2-digit', minute: '2-digit' };
+    const day = step >= 3600 ? a.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' ' : '';
+    return day + a.toLocaleTimeString([], o) + '–' + b.toLocaleTimeString([], o);
+  }
+
+  // Shared frame: axes and hover overlay.  Returns geometry helpers.
+  function frame(el, opt) {
+    el.replaceChildren();
+    const W = Math.max(el.clientWidth, 240), H = Math.max(el.clientHeight, 120);
+    const m = { l: 40, r: 8, t: 8, b: 22 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': opt.label || 'chart' });
+    const ymax = niceMax(opt.ymax, opt.frac);
+    const ax = s('g', { class: 'ax' });
+    for (let k = 0; k <= 4; k++) {
+      const v = ymax * k / 4, y = m.t + ih - ih * k / 4;
+      ax.append(s('line', { x1: m.l, x2: m.l + iw, y1: y, y2: y, class: k === 0 ? 'base' : '' }));
+      const t = s('text', { x: m.l - 6, y: y + 3.5, 'text-anchor': 'end' });
+      t.textContent = compact(v);
+      ax.append(t);
+    }
+    if (opt.xticks) {
+      for (const xt of opt.xticks(iw)) {
+        const t = s('text', { x: m.l + xt.x, y: H - 5, 'text-anchor': 'middle' });
+        t.textContent = xt.label;
+        ax.append(t);
+      }
+    }
+    svg.append(ax);
+    el.append(svg);
+    return { svg, W, H, m, iw, ih, ymax, y: (v) => m.t + ih - (v / ymax) * ih };
+  }
+  function timeTicks(d) {
+    return (iw) => {
+      const span = d.n * d.step, want = Math.max(2, Math.floor(iw / 90));
+      const every = Math.max(1, Math.ceil(d.n / want));
+      const out = [];
+      for (let i = 0; i < d.n; i += every) {
+        out.push({ x: (i + 0.5) * iw / d.n, label: timeLabel(d.start + i * d.step, d.step, span) });
+      }
+      return out;
+    };
+  }
+  function noData(el, text) {
+    el.replaceChildren(h('div', { class: 'nodata', text: text || 'No data in this range' }));
+  }
+
+  // Stacked bars (kind 'bar') or stacked area (kind 'area') over time
+  function stacked(el, d, series, kind, label) {
+    const n = d.n;
+    const totals = new Array(n).fill(0);
+    series.forEach((se) => se.data.forEach((v, i) => { totals[i] += v || 0; }));
+    if (!series.length || !totals.some((v) => v > 0)) return noData(el);
+    const f = frame(el, { ymax: Math.max(...totals), xticks: timeTicks(d), label });
+    const bw = f.iw / n;
+    const g = s('g');
+    if (kind === 'area') {
+      const base = new Array(n).fill(0);
+      const x = (i) => f.m.l + (i + 0.5) * bw;
+      for (const se of series) {
+        const top = base.map((b, i) => b + (se.data[i] || 0));
+        let dpath = 'M' + x(0) + ',' + f.y(top[0]);
+        for (let i = 1; i < n; i++) dpath += 'L' + x(i) + ',' + f.y(top[i]);
+        for (let i = n - 1; i >= 0; i--) dpath += 'L' + x(i) + ',' + f.y(base[i]);
+        const p = s('path', { d: dpath + 'Z' });
+        p.style.fill = se.color;
+        p.style.fillOpacity = '0.88';
+        p.style.stroke = 'var(--surface)';
+        p.style.strokeWidth = '1.5';
+        g.append(p);
+        top.forEach((v, i) => { base[i] = v; });
+      }
+    } else {
+      const gap = bw > 6 ? Math.min(2, bw * 0.2) : 0.5;
+      for (let i = 0; i < n; i++) {
+        let acc = 0;
+        series.forEach((se, k) => {
+          const v = se.data[i] || 0;
+          if (!v) return;
+          const y0 = f.y(acc), y1 = f.y(acc + v);
+          const r = s('rect', { x: f.m.l + i * bw + gap / 2, width: Math.max(0.5, bw - gap), y: y1, height: Math.max(0.5, y0 - y1 - (acc > 0 ? 1 : 0)) });
+          if (k === series.length - 1 || acc + v === totals[i]) r.setAttribute('rx', Math.min(2, bw / 4));
+          r.style.fill = se.color;
+          g.append(r);
+          acc += v;
+        });
+      }
+    }
+    f.svg.append(g);
+    hover(f, d, (i) => ({
+      head: rangeLabel(d.start + i * d.step, d.step),
+      rows: series.filter((se) => se.data[i]).map((se) => ({ name: se.name, color: se.color, value: num(se.data[i]) })).reverse(),
+      total: series.length > 1 ? num(totals[i]) : null,
+    }));
+  }
+
+  // Single series line with gaps for missing samples
+  function line(el, d, data, colorVar, fmtv, label) {
+    const vals = data.filter((v) => v != null);
+    if (!vals.length) return noData(el, 'No multiplexor samples');
+    const f = frame(el, { ymax: Math.max(...vals), xticks: timeTicks(d), label, frac: true });
+    const bw = f.iw / d.n;
+    let p = '', pen = false;
+    data.forEach((v, i) => {
+      if (v == null) { pen = false; return; }
+      p += (pen ? 'L' : 'M') + (f.m.l + (i + 0.5) * bw) + ',' + f.y(v);
+      pen = true;
+    });
+    const path = s('path', { d: p, fill: 'none', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
+    path.style.stroke = colorVar;
+    f.svg.append(path);
+    hover(f, d, (i) => ({ head: rangeLabel(d.start + i * d.step, d.step), rows: [{ name: label, color: colorVar, value: data[i] == null ? 'no sample' : fmtv(data[i]) }] }), (i) => data[i]);
+  }
+
+  function hover(f, d, info, yOf) {
+    const bw = f.iw / d.n;
+    const xh = s('line', { class: 'xh', y1: f.m.t, y2: f.m.t + f.ih });
+    xh.style.display = 'none';
+    const dot = s('circle', { r: 4 });
+    dot.style.display = 'none';
+    dot.style.fill = 'var(--ink)';
+    dot.style.stroke = 'var(--surface)';
+    dot.style.strokeWidth = '2';
+    const ov = s('rect', { x: f.m.l, y: f.m.t, width: f.iw, height: f.ih, fill: 'transparent' });
+    f.svg.append(xh, dot, ov);
+    const move = (ev) => {
+      const r = f.svg.getBoundingClientRect();
+      const px = (ev.clientX - r.left) * (f.W / r.width) - f.m.l;
+      const i = Math.min(d.n - 1, Math.max(0, Math.floor(px / bw)));
+      const x = f.m.l + (i + 0.5) * bw;
+      xh.setAttribute('x1', x); xh.setAttribute('x2', x);
+      xh.style.display = '';
+      if (yOf && yOf(i) != null) {
+        dot.setAttribute('cx', x); dot.setAttribute('cy', f.y(yOf(i)));
+        dot.style.display = '';
+      } else dot.style.display = 'none';
+      const t = info(i);
+      showTip(ev.clientX, ev.clientY, t.head, t.rows.length ? t.rows : [{ name: 'No events', value: '' }], t.total);
+    };
+    ov.addEventListener('pointermove', move);
+    ov.addEventListener('pointerleave', () => { xh.style.display = 'none'; dot.style.display = 'none'; hideTip(); });
+  }
+
+  // Histogram: categorical x labels, one series
+  function bars(el, labels, values, colorVar, label, fmtx) {
+    if (!values.some((v) => v > 0)) return noData(el);
+    const n = labels.length;
+    const want = (iw) => Math.max(2, Math.floor(iw / 44));
+    const f = frame(el, {
+      ymax: Math.max(...values), label,
+      xticks: (iw) => {
+        const every = Math.max(1, Math.ceil(n / want(iw)));
+        const out = [];
+        for (let i = 0; i < n; i += every) out.push({ x: (i + 0.5) * iw / n, label: labels[i] });
+        return out;
+      },
+    });
+    const bw = f.iw / n, gap = Math.min(2, bw * 0.25);
+    values.forEach((v, i) => {
+      if (!v) return;
+      const r = s('rect', { x: f.m.l + i * bw + gap / 2, width: Math.max(1, bw - gap), y: f.y(v), height: f.y(0) - f.y(v), rx: Math.min(3, bw / 4) });
+      r.style.fill = colorVar;
+      f.svg.append(r);
+    });
+    hover(f, { n }, (i) => ({ head: fmtx(i), rows: [{ name: label, color: colorVar, value: num(values[i]) }] }));
+  }
+
+  function legend(el, series) {
+    el.replaceChildren();
+    if (series.length < 2) return;
+    for (const se of series) {
+      const tot = se.data.reduce((a, b) => a + (b || 0), 0);
+      const name = se.members ? 'Other (' + se.members.join(', ') + ')' : se.name;
+      el.append(h('span', null, swatch(se.color), name, h('b', { text: num(tot) })));
+    }
+  }
+
+  function rangeSeg(view, onChange) {
+    const el = document.querySelector(`[data-range-for="${view}"]`);
+    const key = 'range.' + view;
+    let cur = store(key) || '1h';
+    el.replaceChildren();
+    for (const r of ['1h', '6h', '24h', '7d', '30d']) {
+      el.append(h('button', {
+        type: 'button', text: r, 'aria-pressed': r === cur ? 'true' : 'false',
+        onclick: () => {
+          cur = r; store(key, r);
+          for (const b of el.children) b.setAttribute('aria-pressed', b.textContent === r ? 'true' : 'false');
+          onChange(r);
+        },
+      }));
+    }
+    return () => cur;
+  }
+
+  // ---------- global state ----------
+  const S = { summary: null, view: 'overview', events: [], paused: false, evFilter: new Set(), lastLive: 0 };
+  const MAXLIVE = 1000;
+
+  // ---------- sources / alerts / kpis ----------
+  function renderChrome(sum) {
+    S.summary = sum;
+    slots = sum.slots || slots;
+    const src = $('sources');
+    src.replaceChildren();
+    const mx = sum.mx, fd = sum.feed;
+    const row = (state, name, detail) => h('div', { class: 'src' }, h('i', { class: 'dot ' + state }), h('div', null, h('b', { text: name }), h('small', { text: detail })));
+    if (mx.enabled) {
+      src.append(row(mx.up ? 'idle' : 'killed', 'Multiplexor', mx.up ? 'v' + (mx.version || '?') + (mx.legacy ? ' (text protocol)' : '') + ' · up ' + dur(mx.uptime) : 'unreachable'));
+    }
+    if (fd.enabled) {
+      const age = fd.last_event_age;
+      src.append(row(age != null && age < 600 ? 'idle' : 'stopped', 'Event feed', age == null ? 'no events yet' : num(fd.received) + ' events · last ' + dur(age) + ' ago'));
+    }
+    const al = $('alerts');
+    al.replaceChildren();
+    const icon = { warning: '!', serious: '!', critical: '×' };
+    for (const a of sum.alerts || []) {
+      al.append(h('div', { class: 'alert ' + a.level, role: 'status' }, h('span', { class: 'ic', 'aria-hidden': 'true', text: icon[a.level] || 'i' }), h('div', null, h('span', { class: 'lv', text: a.level + ':' }), a.text)));
+    }
+  }
+
+  function tile(k, v, unit, sub) {
+    return h('div', { class: 'tile' }, h('div', { class: 'k', text: k }), h('div', { class: 'v' }, v, unit ? h('small', { text: unit }) : null), sub ? h('div', { class: 's', text: sub }) : null);
+  }
+
+  function renderKpis() {
+    const sum = S.summary;
+    if (!sum) return;
+    const mx = sum.mx, l = mx.load || {};
+    const ws = mx.worker_states || {};
+    const ev1 = sum.events_1h || {};
+    const total1h = Object.values(ev1).reduce((a, b) => a + b, 0);
+    const k = $('kpis');
+    k.replaceChildren(
+      tile('Scanned / min', mx.up ? num(l.msgs_1) : '–', null, mx.up ? num(l.msgs_10) + ' in 10 min' : 'multiplexor not available'),
+      tile('Avg scan time', mx.up && l.msgs_1 ? num(l.ams_1, 0) : '–', mx.up && l.msgs_1 ? 'ms' : null, mx.up ? '10 min: ' + (l.msgs_10 ? num(l.ams_10, 0) + ' ms' : '–') : null),
+      tile('Busy workers', mx.up ? num(ws.busy) : '–', mx.up ? '/ ' + ws.max : null, mx.up ? num(ws.idle) + ' idle · ' + num(ws.stopped) + ' stopped' : null),
+      tile('Queue', mx.up ? num(mx.queued) : '–', mx.up ? '/ ' + mx.queue_size : null, mx.up ? (mx.queue_size ? 'queueing enabled' : 'queueing disabled') : null),
+      tile('Events, 1 h', num(total1h), null, num(Object.values(sum.events_24h || {}).reduce((a, b) => a + b, 0)) + ' in 24 h'),
+    );
+    // event mix (sorted by count, colors by slot)
+    const mix = $('ov-mix');
+    mix.replaceChildren();
+    const names = Object.keys(ev1).sort((a, b) => ev1[b] - ev1[a]);
+    if (!total1h) { mix.append(h('p', { class: 'hint', text: 'No events in the last hour.' })); return; }
+    const bar = h('div', { class: 'mix', role: 'img', 'aria-label': 'Event mix' });
+    const leg = h('div', { class: 'legend' });
+    for (const n of names) {
+      const seg = h('div');
+      seg.style.flex = String(ev1[n]);
+      seg.style.background = color(n);
+      seg.addEventListener('pointermove', (e) => showTip(e.clientX, e.clientY, 'Last hour', [{ name: n, color: color(n), value: num(ev1[n]) + ' · ' + (100 * ev1[n] / total1h).toFixed(1) + '%' }]));
+      seg.addEventListener('pointerleave', hideTip);
+      bar.append(seg);
+      leg.append(h('span', null, swatch(color(n)), n, h('b', { text: num(ev1[n]) }), h('span', { class: 'hint', text: (100 * ev1[n] / total1h).toFixed(1) + '%' })));
+    }
+    mix.append(bar, leg);
+  }
+
+  // ---------- overview ----------
+  const ovRange = rangeSeg('overview', () => loadOverview());
+  async function loadOverview() {
+    const d = await api('/api/series?range=' + ovRange());
+    const series = foldSeries(d.events, d.ev, d.n);
+    stacked($('ov-events'), d, series, d.n > 100 ? 'area' : 'bar', 'Events over time');
+    legend($('ov-legend'), series);
+    line($('ov-msgs'), d, d.mx.msgs, 'var(--s1)', num, 'Messages');
+    line($('ov-busy'), d, d.mx.busy, 'var(--s1)', (v) => num(v, 2), 'Busy workers');
+    line($('ov-ams'), d, d.mx.ams, 'var(--s1)', (v) => num(v, 0) + ' ms', 'Scan time');
+    renderKpis();
+  }
+
+  // ---------- flow ----------
+  const flRange = rangeSeg('flow', () => loadFlow());
+  function fillEventSelect(sel, withAll) {
+    const cur = sel.value;
+    const names = Object.keys(slots).sort((a, b) => slots[a] - slots[b]);
+    sel.replaceChildren();
+    if (withAll) sel.append(h('option', { value: '', text: 'All events' }));
+    for (const n of names) sel.append(h('option', { value: n, text: n }));
+    if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
+  }
+  async function loadFlow() {
+    const ev = $('fl-event').value, dim = $('fl-dim').value, win = $('fl-window').value;
+    const [d, top] = await Promise.all([
+      api('/api/series?range=' + flRange()),
+      api('/api/top?dim=' + encodeURIComponent(dim) + '&window=' + win + '&n=25&event=' + encodeURIComponent(ev)),
+    ]);
+    let series;
+    if (ev) series = d.ev[ev] ? [{ name: ev, color: color(ev), data: d.ev[ev] }] : [];
+    else series = foldSeries(d.events, d.ev, d.n);
+    $('fl-chart-title').textContent = ev ? 'Event: ' + ev : 'All events';
+    stacked($('fl-chart'), d, series, 'bar', 'Events over time');
+    legend($('fl-legend'), series);
+
+    const dimName = $('fl-dim').selectedOptions[0].textContent;
+    $('fl-top-title').textContent = 'Top ' + dimName.toLowerCase() + (ev ? ' for ' + ev : '') + ', ' + (win === '1h' ? 'last hour' : 'last 24 hours');
+    const box = $('fl-top');
+    box.replaceChildren();
+    if (!top.items.length) { box.append(h('p', { class: 'hint', text: 'Nothing to show for this selection.' })); return; }
+    const max = top.items[0].count;
+    const list = h('div', { class: 'top-list', role: 'list' });
+    for (const it of top.items) {
+      const bar = h('i', { class: 'bar' });
+      bar.style.width = (100 * it.count / max) + '%';
+      bar.style.background = ev ? color(ev) : 'var(--s1)';
+      list.append(h('div', {
+        class: 'top-row', role: 'listitem', tabindex: '0', title: it.key,
+        onclick: () => { goLive(it.key, ev); },
+        onkeydown: (e) => { if (e.key === 'Enter') goLive(it.key, ev); },
+      }, h('div', { class: 'top-k' }, bar, h('span', { text: it.key })), h('div', { class: 'top-c', text: num(it.count) })));
+    }
+    box.append(list);
+  }
+  function goLive(q, ev) {
+    $('lv-q').value = q;
+    S.evFilter = new Set(ev ? [ev] : []);
+    location.hash = '#live';
+  }
+
+  // ---------- live ----------
+  function evRow(e, isNew) {
+    const tr = h('tr', { class: isNew ? 'new' : null, tabindex: '0' },
+      h('td', { text: tclock(e.t) }),
+      h('td', null, h('span', { class: 'evt' }, swatch(color(e.event)), e.event)),
+      h('td', { text: e.values[0] || '', title: e.values[0] || '' }),
+      h('td', { text: e.values[1] || '', title: e.values[1] || '' }),
+      h('td', { text: e.sender, title: e.sender }),
+      h('td', { text: e.rcpt || (e.rcpts > 1 ? e.rcpts + ' recipients' : ''), title: e.rcpt }),
+      h('td', { class: 'subj', text: e.subject }));
+    tr.addEventListener('click', () => showMessage(e.id));
+    tr.addEventListener('keydown', (k) => { if (k.key === 'Enter') showMessage(e.id); });
+    return tr;
+  }
+  function matches(e) {
+    if (S.evFilter.size && !S.evFilter.has(e.event)) return false;
+    const q = $('lv-q').value.trim().toLowerCase();
+    if (!q) return true;
+    return [e.id, e.event, ...e.values, e.sender, e.rcpt, e.subject].join('\u0000').toLowerCase().includes(q);
+  }
+  function renderLive() {
+    const body = $('lv-body');
+    const rows = [];
+    for (let i = S.events.length - 1; i >= 0 && rows.length < 500; i--) {
+      if (matches(S.events[i])) rows.push(evRow(S.events[i], false));
+    }
+    body.replaceChildren(...rows);
+    $('lv-empty').hidden = S.events.length > 0;
+    $('lv-count').textContent = rows.length + ' shown · ' + S.events.length + ' buffered' + (S.paused ? ' · paused' : '');
+    renderChips();
+  }
+  function renderChips() {
+    const counts = {};
+    for (const e of S.events) counts[e.event] = (counts[e.event] || 0) + 1;
+    const box = $('lv-chips');
+    box.replaceChildren();
+    for (const n of Object.keys(counts).sort((a, b) => (slots[a] || 99) - (slots[b] || 99))) {
+      box.append(h('button', {
+        class: 'chip', type: 'button', 'aria-pressed': S.evFilter.has(n) ? 'true' : 'false',
+        onclick: () => { S.evFilter.has(n) ? S.evFilter.delete(n) : S.evFilter.add(n); renderLive(); },
+      }, swatch(color(n)), n, h('b', { text: num(counts[n]) })));
+    }
+  }
+  function addLive(list) {
+    for (const e of list) S.events.push(e);
+    if (S.events.length > MAXLIVE) S.events.splice(0, S.events.length - MAXLIVE);
+    if (S.view !== 'live' || S.paused) { if (S.view === 'live') $('lv-count').textContent = S.events.length + ' buffered · paused'; return; }
+    const body = $('lv-body');
+    for (const e of list) if (matches(e)) body.prepend(evRow(e, true));
+    while (body.children.length > 500) body.lastChild.remove();
+    $('lv-empty').hidden = true;
+    $('lv-count').textContent = body.children.length + ' shown · ' + S.events.length + ' buffered';
+  }
+  async function showMessage(id) {
+    const p = $('lv-msg');
+    const d = await api('/api/events?limit=200&id=' + encodeURIComponent(id));
+    const tbl = h('table', { class: 'log' }, h('tbody', null, d.events.slice().reverse().map((e) => h('tr', null,
+      h('td', { text: tclock(e.t) }), h('td', null, h('span', { class: 'evt' }, swatch(color(e.event)), e.event)),
+      h('td', { text: e.values.filter((v) => v !== '').join(' · ') }), h('td', { text: e.rcpt || (e.rcpts > 1 ? e.rcpts + ' recipients' : '') })))));
+    p.replaceChildren(h('button', { class: 'btn ghost', type: 'button', text: 'Close', onclick: () => { p.hidden = true; } }),
+      h('h3', null, 'Message ', h('code', { text: id }), ' · ' + d.events.length + ' event(s)'),
+      d.events[0] ? h('p', { class: 'hint', text: d.events[0].sender + (d.events[0].subject ? ' — ' + d.events[0].subject : '') }) : null,
+      h('div', { class: 'tablewrap' }, tbl));
+    p.hidden = false;
+    p.scrollIntoView({ block: 'nearest' });
+  }
+  async function loadLive() {
+    if (!S.events.length) {
+      const d = await api('/api/events?limit=1000');
+      S.events = d.events.slice().reverse();
+    }
+    renderLive();
+  }
+
+  // ---------- workers ----------
+  async function loadWorkers() {
+    const d = await api('/api/workers');
+    const tiles = $('wk-tiles');
+    if (!d.up) {
+      tiles.replaceChildren();
+      $('wk-grid').replaceChildren(h('p', { class: 'hint', text: 'Multiplexor not available' + (d.error ? ': ' + d.error : '.') }));
+      return;
+    }
+    const ws = d.worker_states || {};
+    tiles.replaceChildren(
+      tile('Busy', num(ws.busy), '/ ' + ws.max),
+      tile('Idle', num(ws.idle)),
+      tile('Stopped', num(ws.stopped), null, 'min ' + (ws.min != null ? ws.min : '–')),
+      tile('Killed', num(ws.killed)),
+      tile('Messages', num(d.msgs), null, 'since start'),
+      tile('Activations', num(d.activations), null, 'up ' + dur(d.uptime)),
+    );
+    const leg = $('wk-legend');
+    leg.replaceChildren(...['idle', 'busy', 'stopped', 'killed'].map((st) => h('span', null, h('i', { class: 'dot ' + st }), st)));
+    $('wk-grid').replaceChildren(...(d.workers || []).map((w) => h('div', { class: 'wk ' + w.state },
+      h('div', { class: 'h' }, h('span', { text: '#' + w.id }), h('span', { class: 'st' }, h('i', { class: 'dot ' + w.state }), w.state)),
+      h('div', { class: 'tag', text: w.status_tag || (w.state === 'busy' ? 'working' : ''), title: w.status_tag || '' }),
+      w.pid > 0 ? h('div', { class: 'm', text: 'pid ' + w.pid + ' · ' + num(w.scans) + ' scans · ' + num(w.requests) + ' req' }) : h('div', { class: 'm', text: 'not running' }),
+      w.pid > 0 ? h('div', { class: 'm', text: 'age ' + dur(w.age) + ' · in state ' + dur(w.state_age) }) : null)));
+
+    const wins = [['0', '10 s'], ['1', '1 min'], ['5', '5 min'], ['10', '10 min']];
+    const names = { scan: 'Scan', relayok: 'Relay', senderok: 'Sender', recipok: 'Recipient' };
+    const lt = $('wk-load');
+    lt.replaceChildren(h('thead', null, h('tr', null, h('th', { text: 'Requests / s' }), wins.map((w) => h('th', { text: w[1] })))),
+      h('tbody', null, Object.keys(names).filter((k) => d.load && d.load[k]).flatMap((k) => [
+        h('tr', null, h('td', { text: names[k] }), wins.map((w) => h('td', { text: num(d.load[k]['mps_' + w[0]], 2) }))),
+        h('tr', null, h('td', { class: 'hint', text: '  avg ms' }), wins.map((w) => h('td', { class: 'hint', text: d.load[k]['msgs_' + w[0]] ? num(d.load[k]['ams_' + w[0]], 0) : '–' }))),
+      ])));
+    const ht = $('wk-hload');
+    const hw = [['1', '1 h'], ['4', '4 h'], ['12', '12 h'], ['24', '24 h']];
+    if (d.hload) {
+      ht.replaceChildren(h('thead', null, h('tr', null, h('th', { text: 'Requests' }), hw.map((w) => h('th', { text: w[1] })))),
+        h('tbody', null, Object.keys(names).filter((k) => d.hload[k]).map((k) =>
+          h('tr', null, h('td', { text: names[k] }), hw.map((w) => h('td', { text: num(d.hload[k]['msgs_' + w[0]]) }))))));
+    } else ht.replaceChildren();
+    const histo = d.histo || [];
+    if (histo.some((v) => v > 0)) bars($('wk-histo'), histo.map((_, i) => String(i + 1)), histo, 'var(--s1)', 'Requests', (i) => (i + 1) + ' busy worker' + (i ? 's' : ''));
+    else noData($('wk-histo'), 'No requests handled yet');
+    const as = $('wk-autoscale');
+    as.replaceChildren();
+    if (d.autoscale) {
+      const a = d.autoscale;
+      const kv = [['Autoscaling', a.enabled ? 'enabled' : 'disabled'], ['Busy ratio (EMA)', num(a.ema_busy, 2)], ['Scale out / in at', num(a.scale_out, 2) + ' / ' + num(a.scale_in, 2)], ['Cooldown out / in', a.out_cool + ' / ' + a.in_cool], ['Interval', a.interval + ' s']];
+      for (const [k, v] of kv) as.append(h('dt', { text: k }), h('dd', { text: v }));
+    }
+  }
+
+  // ---------- scores ----------
+  const scRange = rangeSeg('scores', () => loadScores());
+  async function loadScores() {
+    const win = $('sc-window').value;
+    const [d, ser] = await Promise.all([api('/api/scores?window=' + win), api('/api/series?range=' + scRange())]);
+    const spam = d.scores[d.spam_event] || [];
+    $('sc-spam-title').textContent = 'Spam score (' + d.spam_event + ' events)';
+    if (spam.length) {
+      const lo = Math.min(...spam.map((b) => b.bin)), hi = Math.max(...spam.map((b) => b.bin));
+      const labels = [], vals = [];
+      const byBin = Object.fromEntries(spam.map((b) => [b.bin, b.count]));
+      for (let b = lo; b <= hi; b++) { labels.push(String(b)); vals.push(byBin[b] || 0); }
+      bars($('sc-spam'), labels, vals, color(d.spam_event), 'Messages', (i) => 'Score ' + labels[i] + ' to ' + (Number(labels[i]) + 1));
+    } else noData($('sc-spam'), 'No numeric scores for “' + d.spam_event + '”');
+
+    const ml = $('sc-ml');
+    ml.replaceChildren();
+    for (const e of d.ml_events) {
+      const bins = d.scores[e] || [];
+      const box = h('div', { class: 'chart sm' });
+      ml.append(h('div', { class: 'card' }, h('div', { class: 'card-h' }, h('h3', { text: e + ' confidence' })), box));
+      const labels = [], vals = [];
+      const byBin = Object.fromEntries(bins.map((b) => [b.bin.toFixed(1), b.count]));
+      for (let k = 0; k < 10; k++) { const key = (k / 10).toFixed(1); labels.push(key); vals.push(byBin[key] || 0); }
+      if (bins.length) bars(box, labels, vals, color(e), 'Events', (i) => 'Confidence ' + labels[i] + '–' + ((i + 1) / 10).toFixed(1));
+      else noData(box, 'No events');
+    }
+    const names = ser.events.filter((n) => d.ml_events.includes(n));
+    const series = names.map((n) => ({ name: n, color: color(n), data: ser.ev[n] }));
+    stacked($('sc-series'), ser, series, 'bar', 'ML verdicts over time');
+    legend($('sc-legend'), series);
+  }
+
+  // ---------- router ----------
+  const loaders = { overview: loadOverview, flow: loadFlow, live: loadLive, workers: loadWorkers, scores: loadScores };
+  const titles = { overview: 'Overview', flow: 'Flow', live: 'Live log', workers: 'Workers', scores: 'Scores' };
+  function route() {
+    const v = (location.hash || '#overview').slice(1);
+    S.view = loaders[v] ? v : 'overview';
+    for (const sec of document.querySelectorAll('.view')) sec.hidden = sec.id !== 'v-' + S.view;
+    for (const a of document.querySelectorAll('.nav a')) a.toggleAttribute('aria-current', a.dataset.view === S.view) && a.setAttribute('aria-current', 'page');
+    $('title').textContent = titles[S.view];
+    document.title = titles[S.view] + ' · MIMEDefang';
+    if (S.view === 'flow') fillEventSelect($('fl-event'), true);
+    refresh();
+  }
+  let refreshing = false;
+  async function refresh() {
+    if (refreshing) return;
+    refreshing = true;
+    try { await loaders[S.view](); } catch (e) { console.error(e); } finally { refreshing = false; }
+  }
+
+  // ---------- live connection ----------
+  function connect() {
+    const dot = $('live-dot');
+    const es = new EventSource('/api/stream');
+    es.addEventListener('open', () => { dot.className = 'live on'; dot.lastChild.textContent = 'live'; });
+    es.addEventListener('error', () => { dot.className = 'live off'; dot.lastChild.textContent = 'reconnecting'; });
+    es.addEventListener('tick', (m) => {
+      const t = JSON.parse(m.data);
+      if (S.summary) { t.events_1h = S.summary.events_1h; t.events_24h = S.summary.events_24h; }
+      renderChrome(t);
+      if (S.view === 'overview') renderKpis();
+    });
+    es.addEventListener('events', (m) => addLive(JSON.parse(m.data)));
+  }
+
+  async function loadSummary() {
+    try { renderChrome(await api('/api/summary')); } catch (e) { console.error(e); }
+  }
+
+  // ---------- wiring ----------
+  $('theme').addEventListener('click', () => {
+    const root = document.documentElement;
+    const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = dark ? 'light' : 'dark';
+    store('theme', root.dataset.theme);
+  });
+  const th = store('theme');
+  if (th === 'light' || th === 'dark') document.documentElement.dataset.theme = th;
+
+  for (const id of ['fl-event', 'fl-dim', 'fl-window']) $(id).addEventListener('change', () => { store(id, $(id).value); loadFlow(); });
+  for (const id of ['fl-dim', 'fl-window']) { const v = store(id); if (v) $(id).value = v; }
+  $('sc-window').addEventListener('change', loadScores);
+  let qt;
+  $('lv-q').addEventListener('input', () => { clearTimeout(qt); qt = setTimeout(renderLive, 150); });
+  $('lv-pause').addEventListener('click', (e) => {
+    S.paused = !S.paused;
+    e.currentTarget.setAttribute('aria-pressed', S.paused ? 'true' : 'false');
+    e.currentTarget.textContent = S.paused ? 'Resume' : 'Pause';
+    renderLive();
+  });
+  let rt;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(refresh, 200); });
+  window.addEventListener('hashchange', route);
+
+  // Periodic refresh of the aggregated views; the live log is pushed.
+  setInterval(() => { if (S.view !== 'live' && !document.hidden) refresh(); }, 10000);
+  setInterval(() => { if (!document.hidden) loadSummary(); }, 30000);
+
+  loadSummary().then(() => { route(); connect(); });
+})();

@@ -1581,6 +1581,20 @@ single line is output for each message.  If you omit $enum_recips,
 it defaults to 1.
 
 .TP
+.B md_graphdefang_feed_enable($path, $enum_recips)
+Sends every md_graphdefang_log event to the live dashboard,
+\fBmimedefang-dashboard\fR(1), over a UNIX datagram socket.  $path
+defaults to \fB@SPOOLDIR@/mimedefang-dashboard.sock\fR and must be an
+absolute path (unlike the first argument of md_graphdefang_log_enable, it
+is not a syslog facility: a relative value is ignored with a warning and
+the default is used); $enum_recips has
+the same meaning as for md_graphdefang_log_enable.  The feed works with
+or without md_graphdefang_log_enable: if only the feed is enabled, the
+events go to the dashboard and nothing is written to syslog.  Sending
+never blocks; when the dashboard is not running the events are simply
+dropped.
+
+.TP
 .B md_graphdefang_log($event, $v1, $v2, $utf8_decode, $per_message)
 Logs an event with up to two optional additional parameters.  The log
 message has a specific format useful for graphing tools; the

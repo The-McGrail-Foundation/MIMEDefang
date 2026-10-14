@@ -15,6 +15,7 @@
 #include "config.h"
 #include "event_tcp.h"
 #include "mimedefang.h"
+#include "json_out.h"
 
 #ifdef HAVE_GETOPT_H
 #include <getopt.h>
@@ -318,6 +319,7 @@ static void doLoad(EventSelector *es, int fd, int cmd);
 static void doLoad1(EventSelector *es, int fd, int back);
 static void doHourlyLoad(EventSelector *es, int fd, int cmd);
 static void doHistogram(EventSelector *es, int fd);
+static int doJson(EventSelector *es, int fd, char const *what, int unpriv);
 
 static void doWorkerCommand(EventSelector *es, int fd, char *cmd);
 static void doWorkerCommandAux(EventSelector *es, int fd, char *cmd, int queueable);
@@ -1925,6 +1927,13 @@ handleCommand(EventSelector *es,
 
     if (len > 11 && !strncmp(buf, "workerinfo ", 11)) {
 	doWorkerInfo(es, fd, buf);
+	return;
+    }
+
+    /* Native JSON commands.  jsonstatus/jsonload* are reformatted by
+       md-mx-ctrl itself and are not answered here. */
+    if (len > 4 && !strncmp(buf, "json", 4) &&
+	doJson(es, fd, buf+4, (data != NULL))) {
 	return;
     }
 
@@ -4027,6 +4036,11 @@ doHelp(EventSelector *es, int fd, int unpriv)
 	"busyworkers      -- Display busy workers with process-IDs\n"
         "workerinfo n     -- Display information about a particular worker\n"
 	"autoscale        -- Display autoscaling configuration and runtime state\n"
+	"jsonworkers      -- Display all workers in JSON format\n"
+	"jsonhisto        -- Display histogram of busy workers in JSON format\n"
+	"jsonmsgs         -- Display message and activation counters in JSON format\n"
+	"jsonhload        -- Display hourly load in JSON format (also -relayok etc.)\n"
+	"jsonsnapshot     -- Display counters, load, histogram and workers in JSON format\n"
 	"(Analogous hload commands provide hourly information)\n");
     } else {
 	reply_to_mimedefang(es, fd,
@@ -4054,6 +4068,12 @@ doHelp(EventSelector *es, int fd, int unpriv)
 	"busyworkers      -- Display busy workers with process-IDs\n"
 	"workerinfo n     -- Display information about a particular worker\n"
 	"autoscale        -- Display autoscaling configuration and runtime state\n"
+	"jsonworkers      -- Display all workers in JSON format\n"
+	"jsonhisto        -- Display histogram of busy workers in JSON format\n"
+	"jsonmsgs         -- Display message and activation counters in JSON format\n"
+	"jsonhload        -- Display hourly load in JSON format (also -relayok etc.)\n"
+	"jsonsnapshot     -- Display counters, load, histogram and workers in JSON format\n"
+	"jsonautoscale    -- Display autoscaling state in JSON format\n"
 	"scan /path       -- Run a scan (do not invoke using md-mx-ctrl)\n"
 	"(Analogous hload commands provide hourly information)\n");
     }
@@ -4139,72 +4159,61 @@ doLoad1(EventSelector *es, int fd, int back)
 *
 * NOTE: Activations and reaps (aN, rN) are only valid if cmd == SCAN_CMD
 ***********************************************************************/
+/* Load figures for the 10s/1m/5m/10m windows (index 0..3) */
+typedef struct {
+    int msgs[4];
+    double avg[4];   /* Average busy workers per command */
+    double ams[4];   /* Average milliseconds per command */
+    int act[4];      /* Worker activations (SCAN_CMD only) */
+    int reap[4];     /* Worker reaps (SCAN_CMD only) */
+} LoadStats;
+
+static void
+compute_load(int cmd, time_t now, LoadStats *ls)
+{
+    /* Tricky... get slices of history so as not to overlap */
+    static int const start[4] = {0, 10, 1*60, 5*60};
+    static int const back[4] = {10, 1*60-10, 5*60-1*60, 10*60-5*60};
+    int workers[4];
+    BIG_INT ms[4];
+    int i;
+
+    for (i=0; i<4; i++) {
+	get_history_totals(cmd, now-start[i], back[i], &ls->msgs[i],
+			   &workers[i], &ms[i], &ls->act[i], &ls->reap[i]);
+	/* Accumulate partial sums */
+	if (i > 0) {
+	    ls->msgs[i] += ls->msgs[i-1];
+	    workers[i] += workers[i-1];
+	    ms[i] += ms[i-1];
+	    ls->act[i] += ls->act[i-1];
+	    ls->reap[i] += ls->reap[i-1];
+	}
+	if (!ls->msgs[i]) {
+	    ls->avg[i] = 1.0;
+	    ls->ams[i] = 0.0;
+	} else {
+	    ls->avg[i] = (double) workers[i] / (double) ls->msgs[i];
+	    ls->ams[i] = (double) ms[i] / (double) ls->msgs[i];
+	}
+    }
+}
+
 static void
 doLoad(EventSelector *es, int fd, int cmd)
 {
     char ans[1024];
     time_t now = time(NULL);
-    int msgs_0, msgs_1, msgs_5, msgs_10, worker_0, worker_1, worker_5, worker_10;
-    BIG_INT ms_0, ms_1, ms_5, ms_10;
-    int a0, a1, a5, a10; /* Activations */
-    int r0, r1, r5, r10; /* Reaps */
-    double ams_0, ams_1, ams_5, ams_10;
-    double avg_0, avg_1, avg_5, avg_10;
+    LoadStats ls;
 
-    /* Tricky... get slices of history so as not to overlap */
-
-    /*                       start     go_back_by  results....                 */
-    get_history_totals(cmd, now,      10,         &msgs_0,  &worker_0,  &ms_0,  &a0,  &r0);
-    get_history_totals(cmd, now-10,   1*60-10,    &msgs_1,  &worker_1,  &ms_1,  &a1,  &r1);
-    get_history_totals(cmd, now-1*60, 5*60-1*60,  &msgs_5,  &worker_5,  &ms_5,  &a5,  &r5);
-    get_history_totals(cmd, now-5*60, 10*60-5*60, &msgs_10, &worker_10, &ms_10, &a10, &r10);
-
-    /* Accumulate partial sums */
-    msgs_1 += msgs_0;
-    worker_1 += worker_0;
-    ms_1 += ms_0;
-    a1 += a0;
-    r1 += r0;
-
-    msgs_5 += msgs_1;
-    worker_5 += worker_1;
-    ms_5 += ms_1;
-    a5 += a1;
-    r5 += r1;
-
-    msgs_10 += msgs_5;
-    worker_10 += worker_5;
-    ms_10 += ms_5;
-    a10 += a5;
-    r10 += r5;
-
-    if (!msgs_0) avg_0 = 1.0;
-    else avg_0 = (double) worker_0 / (double) msgs_0;
-
-    if (!msgs_1) avg_1 = 1.0;
-    else avg_1 = (double) worker_1 / (double) msgs_1;
-
-    if (!msgs_5) avg_5 = 1.0;
-    else avg_5 = (double) worker_5 / (double) msgs_5;
-
-    if (!msgs_10) avg_10 = 1.0;
-    else avg_10 = (double) worker_10 / (double) msgs_10;
-
-    if (!msgs_0) ams_0 = 0.0;
-    else ams_0 = (double) ms_0 / (double) msgs_0;
-
-    if (!msgs_1) ams_1 = 0.0;
-    else ams_1 = (double) ms_1 / (double) msgs_1;
-
-    if (!msgs_5) ams_5 = 0.0;
-    else ams_5 = (double) ms_5 / (double) msgs_5;
-
-    if (!msgs_10) ams_10 = 0.0;
-    else ams_10 = (double) ms_10 / (double) msgs_10;
+    compute_load(cmd, now, &ls);
 
     snprintf(ans, sizeof(ans), "%d %d %d %d %f %f %f %f %f %f %f %f %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n",
-	     msgs_0, msgs_1, msgs_5, msgs_10, avg_0, avg_1, avg_5, avg_10,
-	     ams_0, ams_1, ams_5, ams_10, a0, a1, a5, a10, r0, r1, r5, r10,
+	     ls.msgs[0], ls.msgs[1], ls.msgs[2], ls.msgs[3],
+	     ls.avg[0], ls.avg[1], ls.avg[2], ls.avg[3],
+	     ls.ams[0], ls.ams[1], ls.ams[2], ls.ams[3],
+	     ls.act[0], ls.act[1], ls.act[2], ls.act[3],
+	     ls.reap[0], ls.reap[1], ls.reap[2], ls.reap[3],
 	     WorkerCount[STATE_BUSY],
 	     WorkerCount[STATE_IDLE],
 	     WorkerCount[STATE_STOPPED],
@@ -4231,59 +4240,48 @@ doLoad(EventSelector *es, int fd, int cmd)
 *    ams_1 ams_4 ams_12 ams_24      - Avg ms/cmd last N hours
 *    secs_1 secs_4 secs_12 secs_24  - Total elapsed seconds in output
 ***********************************************************************/
+/* Hourly load figures for the 1h/4h/12h/24h windows (index 0..3) */
+typedef struct {
+    int msgs[4];
+    double avg[4];
+    double ams[4];
+    int secs[4];
+} HourlyLoadStats;
+
+static int const HourlyWindows[4] = {1, 4, 12, 24};
+
+static void
+compute_hourly_load(int cmd, time_t now, HourlyLoadStats *hs)
+{
+    int workers;
+    BIG_INT ms;
+    int i;
+
+    for (i=0; i<4; i++) {
+	get_hourly_history_totals(cmd, now, HourlyWindows[i], &hs->msgs[i],
+				  &workers, &ms, &hs->secs[i]);
+	if (hs->msgs[i]) {
+	    hs->avg[i] = ((double) workers) / ((double) hs->msgs[i]);
+	    hs->ams[i] = ((double) ms) / ((double) hs->msgs[i]);
+	} else {
+	    hs->avg[i] = 0.0;
+	    hs->ams[i] = 0.0;
+	}
+    }
+}
+
 static void
 doHourlyLoad(EventSelector *es, int fd, int cmd)
 {
-    int msgs_1, msgs_4, msgs_12, msgs_24;
-    double ams_1, ams_4, ams_12, ams_24;
-    double avg_1, avg_4, avg_12, avg_24;
-    int secs_1, secs_4, secs_12, secs_24;
-    int workers;
-    BIG_INT ms;
-
+    HourlyLoadStats hs;
     char ans[1024];
-    time_t now = time(NULL);
 
-    get_hourly_history_totals(cmd, now, 1, &msgs_1, &workers, &ms, &secs_1);
-    if (msgs_1) {
-	avg_1 = ((double) workers) / ((double) msgs_1);
-	ams_1 = ((double) ms) / ((double) msgs_1);
-    } else {
-	avg_1 = 0.0;
-	ams_1 = 0.0;
-    }
-
-    get_hourly_history_totals(cmd, now, 4, &msgs_4, &workers, &ms, &secs_4);
-    if (msgs_4) {
-	avg_4 = ((double) workers) / ((double) msgs_4);
-	ams_4 = ((double) ms) / ((double) msgs_4);
-    } else {
-	avg_4 = 0.0;
-	ams_4 = 0.0;
-    }
-
-    get_hourly_history_totals(cmd, now, 12, &msgs_12, &workers, &ms, &secs_12);
-    if (msgs_12) {
-	avg_12 = ((double) workers) / ((double) msgs_12);
-	ams_12 = ((double) ms) / ((double) msgs_12);
-    } else {
-	avg_12 = 0.0;
-	ams_12 = 0.0;
-    }
-
-    get_hourly_history_totals(cmd, now, 24, &msgs_24, &workers, &ms, &secs_24);
-    if (msgs_24) {
-	avg_24 = ((double) workers) / ((double) msgs_24);
-	ams_24 = ((double) ms) / ((double) msgs_24);
-    } else {
-	avg_24 = 0.0;
-	ams_24 = 0.0;
-    }
+    compute_hourly_load(cmd, time(NULL), &hs);
     snprintf(ans, sizeof(ans), "%d %d %d %d %f %f %f %f %f %f %f %f %d %d %d %d\n",
-	     msgs_1, msgs_4, msgs_12, msgs_24,
-	     avg_1, avg_4, avg_12, avg_24,
-	     ams_1, ams_4, ams_12, ams_24,
-	     secs_1, secs_4, secs_12, secs_24);
+	     hs.msgs[0], hs.msgs[1], hs.msgs[2], hs.msgs[3],
+	     hs.avg[0], hs.avg[1], hs.avg[2], hs.avg[3],
+	     hs.ams[0], hs.ams[1], hs.ams[2], hs.ams[3],
+	     hs.secs[0], hs.secs[1], hs.secs[2], hs.secs[3]);
     reply_to_mimedefang(es, fd, ans);
 }
 
@@ -4332,6 +4330,243 @@ doHistogram(EventSelector *es, int fd)
   }
   reply_to_mimedefang(es, fd, ans);
   free(ans);
+}
+
+/**********************************************************************
+* JSON control commands
+*
+* These are answered by the multiplexor itself (unlike the jsonstatus
+* and jsonload* commands of md-mx-ctrl, which reformat the text output
+* on the client side), so that any client of the control socket, such
+* as mimedefang-dashboard, can consume them directly.
+***********************************************************************/
+
+static void
+json_add_load(json_writer *jw, char const *key, int cmd, time_t now)
+{
+    static char const *const suffix[4] = {"0", "1", "5", "10"};
+    static double const secs[4] = {10.0, 60.0, 5*60.0, 10*60.0};
+    char name[16];
+    LoadStats ls;
+    int i;
+
+    compute_load(cmd, now, &ls);
+    json_obj_begin(jw, key);
+    for (i=0; i<4; i++) {
+	snprintf(name, sizeof(name), "msgs_%s", suffix[i]);
+	json_int(jw, name, ls.msgs[i]);
+    }
+    for (i=0; i<4; i++) {
+	snprintf(name, sizeof(name), "mps_%s", suffix[i]);
+	json_dbl(jw, name, (double) ls.msgs[i] / secs[i], 2);
+    }
+    for (i=0; i<4; i++) {
+	snprintf(name, sizeof(name), "ams_%s", suffix[i]);
+	json_dbl(jw, name, ls.ams[i], 1);
+    }
+    for (i=0; i<4; i++) {
+	snprintf(name, sizeof(name), "avg_%s", suffix[i]);
+	json_dbl(jw, name, ls.avg[i], 2);
+    }
+    if (cmd == SCAN_CMD) {
+	for (i=0; i<4; i++) {
+	    snprintf(name, sizeof(name), "activated_%s", suffix[i]);
+	    json_int(jw, name, ls.act[i]);
+	}
+	for (i=0; i<4; i++) {
+	    snprintf(name, sizeof(name), "reaped_%s", suffix[i]);
+	    json_int(jw, name, ls.reap[i]);
+	}
+    }
+    json_obj_end(jw);
+}
+
+static void
+json_add_hload(json_writer *jw, char const *key, int cmd, time_t now)
+{
+    char name[16];
+    HourlyLoadStats hs;
+    int i;
+
+    compute_hourly_load(cmd, now, &hs);
+    json_obj_begin(jw, key);
+    for (i=0; i<4; i++) {
+	snprintf(name, sizeof(name), "msgs_%d", HourlyWindows[i]);
+	json_int(jw, name, hs.msgs[i]);
+    }
+    for (i=0; i<4; i++) {
+	snprintf(name, sizeof(name), "avg_%d", HourlyWindows[i]);
+	json_dbl(jw, name, hs.avg[i], 2);
+    }
+    for (i=0; i<4; i++) {
+	snprintf(name, sizeof(name), "ams_%d", HourlyWindows[i]);
+	json_dbl(jw, name, hs.ams[i], 1);
+    }
+    for (i=0; i<4; i++) {
+	snprintf(name, sizeof(name), "secs_%d", HourlyWindows[i]);
+	json_int(jw, name, hs.secs[i]);
+    }
+    json_obj_end(jw);
+}
+
+static void
+json_add_counts(json_writer *jw, time_t now)
+{
+    json_int(jw, "time", (long) now);
+    json_int(jw, "uptime", (long) (now - TimeOfProgramStart));
+    json_int(jw, "msgs", NumMsgsProcessed);
+    json_int(jw, "activations", Activations);
+    json_int(jw, "queue_size", Settings.requestQueueSize);
+    json_int(jw, "queued", NumQueuedRequests);
+    json_obj_begin(jw, "worker_states");
+    json_int(jw, "max", Settings.maxWorkers);
+    json_int(jw, "min", Settings.minWorkers);
+    json_int(jw, "busy", WorkerCount[STATE_BUSY]);
+    json_int(jw, "idle", WorkerCount[STATE_IDLE]);
+    json_int(jw, "stopped", WorkerCount[STATE_STOPPED]);
+    json_int(jw, "killed", WorkerCount[STATE_KILLED]);
+    json_obj_end(jw);
+}
+
+static void
+json_add_workers(json_writer *jw)
+{
+    int i;
+    Worker *s;
+
+    json_arr_begin(jw, "workers");
+    for (i=0; i<Settings.maxWorkers; i++) {
+	s = &AllWorkers[i];
+	json_obj_begin(jw, NULL);
+	json_int(jw, "id", i);
+	json_str(jw, "state", state_name_lc(s->state));
+	json_int(jw, "pid", (long) s->pid);
+	json_int(jw, "requests", s->numRequests);
+	json_int(jw, "scans", s->numScans);
+	json_int(jw, "age", worker_age(s));
+	json_int(jw, "first_req_age", worker_request_age(s));
+	json_int(jw, "state_age", (long) (time(NULL) - s->lastStateChange));
+	json_str(jw, "status_tag", s->status_tag);
+	json_obj_end(jw);
+    }
+    json_arr_end(jw);
+}
+
+static void
+json_add_histo(json_writer *jw)
+{
+    int i;
+
+    json_arr_begin(jw, "histo");
+    for (i=0; i<Settings.maxWorkers; i++) {
+	json_int(jw, NULL, (long) AllWorkers[i].histo);
+    }
+    json_arr_end(jw);
+}
+
+static void
+json_add_autoscale(json_writer *jw)
+{
+    json_obj_begin(jw, "autoscale");
+    json_bool(jw, "enabled", Settings.autoscaling);
+    json_int(jw, "interval", Settings.autoscaleInterval);
+    json_dbl(jw, "ema_busy", EMABusyRatio, 4);
+    json_dbl(jw, "scale_out", Settings.scaleOutBusyRatio, 2);
+    json_dbl(jw, "scale_in", Settings.scaleInBusyRatio, 2);
+    json_int(jw, "out_cool", Settings.scaleOutCooldown);
+    json_int(jw, "in_cool", Settings.scaleInCooldown);
+    json_dbl(jw, "ema_alpha", Settings.emaAlpha, 4);
+    json_obj_end(jw);
+}
+
+/**********************************************************************
+* %FUNCTION: doJson
+* %ARGUMENTS:
+*  es -- event selector
+*  fd -- socket
+*  what -- command name without the "json" prefix
+*  unpriv -- true on the unprivileged socket
+* %RETURNS:
+*  1 if the command was answered, 0 if it is not a known JSON command
+*  (it is then handled like any other command)
+* %DESCRIPTION:
+*  Answers the json* control commands: jsonworkers, jsonhisto,
+*  jsonmsgs, jsonautoscale, jsonhload[-relayok|-senderok|-recipok]
+*  and jsonsnapshot.  Autoscale data, like the "autoscale" command,
+*  is only available on the privileged socket.
+***********************************************************************/
+static int
+doJson(EventSelector *es, int fd, char const *what, int unpriv)
+{
+    json_writer jw;
+    char const *ans;
+    time_t now = time(NULL);
+
+    json_init(&jw);
+    json_obj_begin(&jw, NULL);
+
+    if (!strcmp(what, "workers")) {
+	json_int(&jw, "time", (long) now);
+	json_int(&jw, "max_workers", Settings.maxWorkers);
+	json_add_workers(&jw);
+    } else if (!strcmp(what, "histo")) {
+	json_int(&jw, "time", (long) now);
+	json_add_histo(&jw);
+    } else if (!strcmp(what, "msgs")) {
+	json_int(&jw, "time", (long) now);
+	json_int(&jw, "msgs", NumMsgsProcessed);
+	json_int(&jw, "activations", Activations);
+	json_int(&jw, "uptime", (long) (now - TimeOfProgramStart));
+    } else if (!strcmp(what, "autoscale") && !unpriv) {
+	json_int(&jw, "time", (long) now);
+	json_add_autoscale(&jw);
+    } else if (!strcmp(what, "hload")) {
+	json_add_hload(&jw, "hload", SCAN_CMD, now);
+    } else if (!strcmp(what, "hload-relayok")) {
+	json_add_hload(&jw, "hload", RELAYOK_CMD, now);
+    } else if (!strcmp(what, "hload-senderok")) {
+	json_add_hload(&jw, "hload", SENDEROK_CMD, now);
+    } else if (!strcmp(what, "hload-recipok")) {
+	json_add_hload(&jw, "hload", RECIPOK_CMD, now);
+    } else if (!strcmp(what, "snapshot")) {
+	json_str(&jw, "version", VERSION);
+	json_add_counts(&jw, now);
+	json_obj_begin(&jw, "load");
+	json_add_load(&jw, "scan", SCAN_CMD, now);
+	json_add_load(&jw, "relayok", RELAYOK_CMD, now);
+	json_add_load(&jw, "senderok", SENDEROK_CMD, now);
+	json_add_load(&jw, "recipok", RECIPOK_CMD, now);
+	json_obj_end(&jw);
+	json_obj_begin(&jw, "hload");
+	json_add_hload(&jw, "scan", SCAN_CMD, now);
+	json_add_hload(&jw, "relayok", RELAYOK_CMD, now);
+	json_add_hload(&jw, "senderok", SENDEROK_CMD, now);
+	json_add_hload(&jw, "recipok", RECIPOK_CMD, now);
+	json_obj_end(&jw);
+	json_add_histo(&jw);
+	json_add_workers(&jw);
+	if (!unpriv) {
+	    json_add_autoscale(&jw);
+	}
+    } else {
+	json_free(&jw);
+	if (!strcmp(what, "autoscale")) {
+	    reply_to_mimedefang(es, fd, "error: Attempt to use privileged command on unprivileged socket\n");
+	    return 1;
+	}
+	return 0;
+    }
+
+    json_obj_end(&jw);
+    ans = json_finish(&jw);
+    if (ans) {
+	/* EventTcp_WriteBuf copies the buffer */
+	reply_to_mimedefang(es, fd, ans);
+    } else {
+	reply_to_mimedefang(es, fd, "error: Out of memory\n");
+    }
+    json_free(&jw);
+    return 1;
 }
 
 

@@ -63,6 +63,8 @@ examples/suggested-minimum-filter-for-windows-clients
 examples/example-filter-with-async-checks
 examples/example-filter-with-ml
 gen_id.c
+json_out.c
+json_out.h
 gen-ip-validator.pl
 install-sh
 LICENSE
@@ -121,6 +123,7 @@ redhat/mimedefang-sysconfig.in
 rm_r.c
 script/mimedefang-test-mail
 script/mimedefang-util.in
+script/mimedefang-dashboard.in
 script/ml-servers/README.md
 script/ml-servers/mimedefang-gliclass-server
 script/ml-servers/mimedefang-laya-server
@@ -132,6 +135,7 @@ systemd-units/mimedefang-multiplexor.service
 systemd-units/mimedefang.service
 systemd-units/mimedefang-gliclass-server.service
 systemd-units/mimedefang-laya-server.service
+systemd-units/mimedefang-dashboard.service
 t/c_unit.t
 t/actions.t
 t/antispam.t
@@ -141,6 +145,7 @@ t/authres.t
 t/autoscale.t
 t/bimi.t
 t/core.t
+t/dashboard.t
 t/critic.t
 t/c_unit.t
 t/data/arc1.eml
@@ -190,6 +195,7 @@ t/sender.t
 t/smtp.t
 t/spf.t
 t/test_safe_append_header.c
+t/test_json_out.c
 t/tlspolicy.t
 t/utils.t
 utils.c

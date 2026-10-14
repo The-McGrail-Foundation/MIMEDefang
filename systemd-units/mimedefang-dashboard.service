@@ -1,0 +1,38 @@
+[Unit]
+Description=MIMEDefang live mail-flow dashboard
+Documentation=man:mimedefang-dashboard(1)
+After=network.target mimedefang-multiplexor.service
+
+[Service]
+Type=simple
+Restart=on-failure
+# Never run as root: the dashboard refuses to start as root.  The
+# MIMEDefang user can read the multiplexor socket and create the feed
+# socket in the spool directory.
+User=defang
+StateDirectory=MIMEDefang/dashboard
+# DASHBOARD_OPTIONS: extra options, e.g. "--listen 127.0.0.1:8689
+#   --anonymize --allow-host mail.example.com".  To reach the dashboard
+#   from other hosts put a reverse proxy with TLS and authentication in
+#   front of it.
+Environment=DASHBOARD_OPTIONS=
+EnvironmentFile=-/etc/default/mimedefang-dashboard
+EnvironmentFile=-/etc/sysconfig/mimedefang-dashboard
+ExecStart=/usr/bin/mimedefang-dashboard --state /var/lib/MIMEDefang/dashboard/state.json $DASHBOARD_OPTIONS
+ExecReload=/bin/kill -HUP $MAINPID
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+ReadWritePaths=/var/spool/MIMEDefang
+
+[Install]
+WantedBy=multi-user.target

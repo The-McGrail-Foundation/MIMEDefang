@@ -9,6 +9,7 @@
 xs_init.c
 script/mimedefang-util.1
 script/mimedefang-test-mail.1
+^script/mimedefang-dashboard(\.1)?$
 ^watch-mimedefang$
 redhat/mimedefang.spec
 ^MYMETA.(json|yml)$

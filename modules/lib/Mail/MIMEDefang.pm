@@ -40,6 +40,7 @@ require Exporter;
 
 use Carp;
 use Errno qw(ENOENT EACCES);
+use Fcntl qw(F_GETFL F_SETFL O_NONBLOCK);
 use File::Spec;
 use IO::File;
 use MIME::Entity;
@@ -77,7 +78,7 @@ our $VERSION = '3.7.1';
       $ValidateIPHeader
       $QuarantineSubject $SALocalTestsOnly $NotifyNoPreamble
       %Actions %Stupidity @FlatParts @Recipients @Warnings %Features
-      $SyslogFacility $GraphDefangSyslogFacility
+      $SyslogFacility $GraphDefangSyslogFacility $GraphDefangFeedSocket
       $MaxMIMEParts $InMessageContext $InFilterContext $PrivateMyHostName
       $EnumerateRecipients $InFilterEnd $FilterEndReplacementEntity
       $AddApparentlyToForSpamAssassin $WarningCounter
@@ -92,6 +93,7 @@ our $VERSION = '3.7.1';
       init_globals print_and_flush detect_and_load_perl_modules
       init_status_tag push_status_tag pop_status_tag
       signal_changed signal_unchanged md_syslog md_graphdefang_log md_graphdefang_log_array
+      md_graphdefang_feed_enable
       write_result_line in_message_context in_filter_context in_filter_wrapup
       in_filter_end percent_decode percent_encode percent_encode_for_graphdefang
       send_mail send_multipart_mail send_quarantine_notifications signal_complete send_admin_mail
@@ -417,7 +419,7 @@ C<md_graphdefang_log('spam',$hits, undef, 1);>
 #***********************************************************************
 sub md_graphdefang_log
 {
-    return unless defined($GraphDefangSyslogFacility);
+    return unless defined($GraphDefangSyslogFacility) || defined($GraphDefangFeedSocket);
     return if (!in_message_context("md_graphdefang_log"));
 
     my $event = shift;
@@ -474,7 +476,7 @@ C<md_graphdefang_log_array('spam',1,\@info);>
 #***********************************************************************
 sub md_graphdefang_log_array
 {
-    return unless defined($GraphDefangSyslogFacility);
+    return unless defined($GraphDefangSyslogFacility) || defined($GraphDefangFeedSocket);
     return if (!in_message_context("md_graphdefang_log"));
 
     my $event = shift;
@@ -527,17 +529,142 @@ sub md_graphdefang_log_array
     if ($enumerate || scalar(@Recipients) == 1) {
 	    foreach my $recipient (@Recipients) {
 	      my $lcrecipient = percent_encode_for_graphdefang(lc($recipient));
-	      md_syslog("$GraphDefangSyslogFacility|info","MDLOG,$id," .
+	      _graphdefang_emit("MDLOG,$id," .
 	                "$event," . join(",", @info) . ",$lcsender," .
 	                "$lcrecipient,$subj");
 	  }
   } else {
 	  my $lcrecipient = "rcpts=" . scalar(@Recipients);
 	  $lcrecipient = percent_encode_for_graphdefang($lcrecipient);
-	  md_syslog("$GraphDefangSyslogFacility|info","MDLOG,$id," .
+	  _graphdefang_emit("MDLOG,$id," .
 	          "$event," . join(",", @info) . ",$lcsender," .
 		        "$lcrecipient,$subj");
   }
+}
+
+#***********************************************************************
+# %PROCEDURE: _graphdefang_emit
+# %ARGUMENTS:
+#  line -- a complete MDLOG line
+# %RETURNS:
+#  Nothing
+# %DESCRIPTION:
+#  Sends an MDLOG line to syslog and/or to the dashboard feed socket,
+#  depending on which of them is enabled.
+#***********************************************************************
+sub _graphdefang_emit
+{
+    my $line = shift;
+
+    md_syslog("$GraphDefangSyslogFacility|info", $line)
+      if defined($GraphDefangSyslogFacility);
+    _graphdefang_feed_send($line) if defined($GraphDefangFeedSocket);
+    return;
+}
+
+# Per-process datagram socket used by _graphdefang_feed_send
+my $FeedSock;
+my $FeedWarned = 0;
+
+#***********************************************************************
+# %PROCEDURE: _graphdefang_feed_send
+# %ARGUMENTS:
+#  line -- a complete MDLOG line
+# %RETURNS:
+#  1 if the datagram was sent, 0 otherwise
+# %DESCRIPTION:
+#  Fire-and-forget delivery of an MDLOG line to the UNIX datagram socket
+#  of mimedefang-dashboard.  The socket is non-blocking; if the dashboard
+#  is not running or cannot keep up the line is dropped, so mail flow is
+#  never delayed.
+#***********************************************************************
+sub _graphdefang_feed_send
+{
+    my $line = shift;
+    my $addr = eval { pack_sockaddr_un($GraphDefangFeedSocket) };
+    return 0 unless defined($addr);
+
+    if (!$FeedSock) {
+      my $sock;
+      if (!socket($sock, PF_UNIX, SOCK_DGRAM, 0)) {
+        _graphdefang_feed_warn("socket: $!");
+        return 0;
+      }
+      my $flags = fcntl($sock, F_GETFL, 0);
+      fcntl($sock, F_SETFL, $flags | O_NONBLOCK) if defined($flags);
+      $FeedSock = $sock;
+    }
+    my $sent = send($FeedSock, $line, 0, $addr);
+    if (!defined($sent)) {
+      # A missing or busy dashboard is normal; anything else is worth a note
+      _graphdefang_feed_warn("send to $GraphDefangFeedSocket: $!");
+      return 0;
+    }
+    return 1;
+}
+
+sub _graphdefang_feed_warn
+{
+    my $msg = shift;
+    return if $FeedWarned++;
+    md_syslog('info', "md_graphdefang_log: cannot reach dashboard feed ($msg); further errors are not logged");
+    return;
+}
+
+=item md_graphdefang_feed_enable
+
+Sends every event logged with C<md_graphdefang_log> and
+C<md_graphdefang_log_array> to the UNIX datagram socket of
+C<mimedefang-dashboard>, which shows them live.  It can be used together
+with C<md_graphdefang_log_enable> or on its own, in which case nothing
+is written to syslog.
+
+C<md_graphdefang_feed_enable();>
+
+C<md_graphdefang_feed_enable('/var/spool/MIMEDefang/mimedefang-dashboard.sock', 1);>
+
+The first optional argument is the absolute path of the socket; the
+default is F<mimedefang-dashboard.sock> in the spool directory.  It is
+not a syslog facility: a relative path such as C<'mail'> is ignored, with
+a warning, and the default is used.  The second optional
+argument has the same meaning as the second argument of
+C<md_graphdefang_log_enable>: whether to send one line per recipient.
+
+Delivery never blocks: if the dashboard is not running the events are
+dropped.
+
+=cut
+
+#***********************************************************************
+# %PROCEDURE: md_graphdefang_feed_enable
+# %ARGUMENTS:
+#  path -- (optional) path of the dashboard datagram socket
+#  enum_recips -- (optional) one line per recipient (default 1)
+# %RETURNS:
+#  Nothing
+#***********************************************************************
+sub md_graphdefang_feed_enable
+{
+    my ($path, $enum_recips) = @_;
+
+    my $default = File::Spec->catfile($Features{'Path:SPOOLDIR'} // '.',
+                                      'mimedefang-dashboard.sock');
+    # mimedefang.pl works inside per-message directories, so a relative
+    # path never reaches the dashboard.  A common slip is to pass a
+    # syslog facility, as for md_graphdefang_log_enable('mail', 1).
+    if (defined($path) && $path ne '' && !File::Spec->file_name_is_absolute($path)) {
+      md_syslog('warning', "md_graphdefang_feed_enable: '$path' is not an absolute socket path, using $default");
+      $path = undef;
+    }
+    $path = $default unless defined($path) && $path ne '';
+    $GraphDefangFeedSocket = $path;
+    if (defined($enum_recips)) {
+      $EnumerateRecipients = $enum_recips;
+    } elsif (!defined($EnumerateRecipients)) {
+      $EnumerateRecipients = 1;
+    }
+    $FeedWarned = 0;
+    return;
 }
 
 =item detect_and_load_perl_modules

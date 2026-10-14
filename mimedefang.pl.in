@@ -121,6 +121,7 @@ $CachedTimezone = "";
 # Syslog facility is "mail"
 $SyslogFacility = "mail";
 undef $GraphDefangSyslogFacility;
+undef $GraphDefangFeedSocket;
 
 $URL = 'https://mimedefang.org/enduser/';
 $CSSHost    = "127.0.0.1:7777:local";

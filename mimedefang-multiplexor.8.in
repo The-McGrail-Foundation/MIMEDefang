@@ -569,11 +569,51 @@ file without stopping and restarting Sendmail.
 If you send the \fBmimedefang-multiplexor\fR process a SIGTERM signal
 (kill \fIpid\fR), it terminates all workers and exits immediately.
 
+.SH JSON STATUS COMMANDS
+Besides the text commands listed by \fBmd-mx-ctrl help\fR, the
+multiplexor answers the following commands on its control socket with a
+single line of JSON.  They are read-only and, except for
+\fBjsonautoscale\fR, also available on the unprivileged socket
+(\fB\-a\fR).  They can be sent with \fBmd-mx-ctrl\fR, e.g.
+\fBmd-mx-ctrl jsonsnapshot\fR.  To keep the answers intact even when a
+client percent-decodes them, a "%" inside a JSON string is written as
+\fB\\u0025\fR.
+
+.TP
+.B jsonworkers
+One object per worker: \fBid\fR, \fBstate\fR (idle, busy, stopped,
+killed), \fBpid\fR, \fBrequests\fR, \fBscans\fR, \fBage\fR,
+\fBfirst_req_age\fR, \fBstate_age\fR (seconds) and \fBstatus_tag\fR.
+
+.TP
+.B jsonhisto
+The busy-worker histogram of the \fBhisto\fR command, as an array.
+
+.TP
+.B jsonmsgs
+Messages processed, worker activations and uptime.
+
+.TP
+.B jsonhload\fR, \fBjsonhload-relayok\fR, \fBjsonhload-senderok\fR, \fBjsonhload-recipok
+The hourly load figures of the corresponding \fBhload\fR commands.
+
+.TP
+.B jsonautoscale
+The autoscaling configuration and state of the \fBautoscale\fR
+command.  Privileged socket only.
+
+.TP
+.B jsonsnapshot
+Everything above in one answer: counters, worker states, queue, load and
+hourly load for the scan, relayok, senderok and recipok commands,
+histogram and workers, plus autoscale on the privileged socket.  This is
+what \fBmimedefang-dashboard\fR(1) polls.
+
 .SH AUTHOR
 \fBmimedefang-mulitplexor\fR was written by Dianne Skoll <dfs@roaringpenguin.com>.
 The \fBmimedefang\fR home page is \fIhttps://www.mimedefang.org/\fR.
 
 .SH SEE ALSO
-mimedefang.pl(8), mimedefang-filter(5), mimedefang(8), mimedefang-protocol(7)
+mimedefang.pl(8), mimedefang-filter(5), mimedefang(8), mimedefang-protocol(7), md-mx-ctrl(8), mimedefang-dashboard(1)
 
 

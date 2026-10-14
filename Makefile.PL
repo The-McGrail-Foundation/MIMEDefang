@@ -599,6 +599,7 @@ WriteMakefile(
         'mimedefang-release.8',
         'script/mimedefang-util.1',
         'script/mimedefang-test-mail.1',
+        'script/mimedefang-dashboard.1',
         'modules/man',
         'redhat/mimedefang.spec',
     )},
@@ -662,6 +663,7 @@ MAKE
             mimedefang-multiplexor.o
             drop_privs.o
             dynbuf.o
+            json_out.o
             event.o
             event_tcp.o
             gen_id.o
@@ -753,7 +755,7 @@ md-mx-ctrl: $ctrl_objs
 # ============================================================
 # pod2man: generate man pages from POD in scripts and modules
 # ============================================================
-pod2man: mimedefang-release.8 script/mimedefang-util.1 script/mimedefang-test-mail.1 md_module_manpages
+pod2man: mimedefang-release.8 script/mimedefang-util.1 script/mimedefang-test-mail.1 script/mimedefang-dashboard.1 md_module_manpages
 
 mimedefang-release.8: mimedefang-release.pl
 \t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=8 --perm_rw=644 \\
@@ -773,6 +775,12 @@ script/mimedefang-test-mail.1: script/mimedefang-test-mail
 \t\t--center="MIMEDefang Documentation" \\
 \t\t--release=\$(MD_VERSION) \\
 \t\tscript/mimedefang-test-mail script/mimedefang-test-mail.1
+
+script/mimedefang-dashboard.1: script/mimedefang-dashboard
+\t\$(FULLPERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=1 --perm_rw=644 \\
+\t\t--center="MIMEDefang Documentation" \\
+\t\t--release=\$(MD_VERSION) \\
+\t\tscript/mimedefang-dashboard script/mimedefang-dashboard.1
 
 md_module_manpages:
 \t\$(MKPATH) modules/man
@@ -929,6 +937,8 @@ install_scripts:
 \t    \$(MD_INSTALL_PROGRAM) script/mimedefang-util \$(DESTDIR)\$(BINDIR)/mimedefang-util || true
 \ttest -f script/mimedefang-test-mail && \\
 \t    \$(MD_INSTALL_PROGRAM) script/mimedefang-test-mail \$(DESTDIR)\$(BINDIR)/mimedefang-test-mail || true
+\ttest -f script/mimedefang-dashboard && \\
+\t    \$(MD_INSTALL_PROGRAM) script/mimedefang-dashboard \$(DESTDIR)\$(BINDIR)/mimedefang-dashboard || true
 \tif test "\$(MD_ML_SERVERS)" = "yes"; then \\
 \t    for s in mimedefang-laya-server mimedefang-gliclass-server; do \\
 \t        \$(MD_INSTALL_PROGRAM) script/ml-servers/\$\$s \$(DESTDIR)\$(BINDIR)/\$\$s; \\
@@ -942,6 +952,8 @@ install_man: pod2man
 \t    \$(MD_INSTALL_DATA) script/mimedefang-util.1 \$(DESTDIR)\$(INSTALLMAN1DIR)/mimedefang-util.1 || true
 \ttest -f script/mimedefang-test-mail.1 && \\
 \t    \$(MD_INSTALL_DATA) script/mimedefang-test-mail.1 \$(DESTDIR)\$(INSTALLMAN1DIR)/mimedefang-test-mail.1 || true
+\ttest -f script/mimedefang-dashboard.1 && \\
+\t    \$(MD_INSTALL_DATA) script/mimedefang-dashboard.1 \$(DESTDIR)\$(INSTALLMAN1DIR)/mimedefang-dashboard.1 || true
 \tfor m in \\
 \t    Mail::MIMEDefang.$MAN3EXT \\
 \t    Mail::MIMEDefang::Actions.$MAN3EXT \\

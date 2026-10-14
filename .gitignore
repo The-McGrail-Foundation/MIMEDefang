@@ -28,6 +28,8 @@ redhat/mimedefang-sysconfig
 redhat/mimedefang.spec
 __pycache__
 script/mimedefang-util
+script/mimedefang-dashboard
+script/mimedefang-dashboard.1
 script/mimedefang-util.1
 script/mimedefang-test-mail.1
 watch-mimedefang

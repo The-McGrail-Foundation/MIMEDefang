@@ -55,8 +55,8 @@ INSTALL_STRIP_FLAG=-s
 
 all: mimedefang mimedefang-multiplexor md-mx-ctrl pod2man
 
-mimedefang-multiplexor: mimedefang-multiplexor.o event.o event_tcp.o drop_privs_nothread.o notifier.o syslog-fac.o dynbuf.o utils.o $(EMBPERLOBJS)
-	$(CC) $(CFLAGS) -o mimedefang-multiplexor mimedefang-multiplexor.o event.o event_tcp.o drop_privs_nothread.o syslog-fac.o notifier.o dynbuf.o utils.o $(EMBPERLOBJS) $(LIBS_WITHOUT_PTHREAD) $(EMBPERLLDFLAGS) $(EMBPERLLIBS)
+mimedefang-multiplexor: mimedefang-multiplexor.o event.o event_tcp.o drop_privs_nothread.o notifier.o syslog-fac.o dynbuf.o json_out.o utils.o $(EMBPERLOBJS)
+	$(CC) $(CFLAGS) -o mimedefang-multiplexor mimedefang-multiplexor.o event.o event_tcp.o drop_privs_nothread.o syslog-fac.o notifier.o dynbuf.o json_out.o utils.o $(EMBPERLOBJS) $(LIBS_WITHOUT_PTHREAD) $(EMBPERLLDFLAGS) $(EMBPERLLIBS)
 
 embperl.o: embperl.c
 	$(CC) $(CFLAGS) $(EMBPERLCFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o embperl.o $(srcdir)/embperl.c
@@ -99,7 +99,7 @@ drop_privs_threaded.o: drop_privs.c
 event.o: event.c
 	$(CC) $(CFLAGS) $(DEFS) $(MINCLUDE) -c -o event.o $(srcdir)/event.c
 
-mimedefang-multiplexor.o: mimedefang-multiplexor.c
+mimedefang-multiplexor.o: mimedefang-multiplexor.c json_out.h
 	$(CC) $(CFLAGS) $(DEFS) $(MINCLUDE) -c -o mimedefang-multiplexor.o $(srcdir)/mimedefang-multiplexor.c
 
 mimedefang: mimedefang.o drop_privs_threaded.o utils.o rm_r.o syslog-fac.o dynbuf.o milter_cap.o gen_id.o
@@ -117,13 +117,16 @@ milter_cap.o: milter_cap.c mimedefang.h
 dynbuf.o: dynbuf.c dynbuf.h
 	$(CC) $(CFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o dynbuf.o $(srcdir)/dynbuf.c
 
+json_out.o: json_out.c json_out.h dynbuf.h
+	$(CC) $(CFLAGS) $(DEFS) $(MINCLUDE) -c -o json_out.o $(srcdir)/json_out.c
+
 gen_id.o: gen_id.c mimedefang.h
 	$(CC) $(CFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o gen_id.o $(srcdir)/gen_id.c
 
 clean:: FORCE
 	rm -f *~ *.o mimedefang mimedefang-multiplexor md-mx-ctrl xs_init.c INPUTMSG
 
-pod2man:: script/mimedefang-util.1 script/mimedefang-test-mail.1 lib/manpages
+pod2man:: script/mimedefang-util.1 script/mimedefang-test-mail.1 script/mimedefang-dashboard.1 lib/manpages
 
 
 script/mimedefang-util.1: script/mimedefang-util
@@ -137,6 +140,12 @@ script/mimedefang-test-mail.1: script/mimedefang-test-mail
 		--center="MIMEDefang Documentation" \
 		--release=$(VERSION) \
 		script/mimedefang-test-mail script/mimedefang-test-mail.1
+
+script/mimedefang-dashboard.1: script/mimedefang-dashboard
+	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=1 --perm_rw=644 \
+		--center="MIMEDefang Documentation" \
+		--release=$(VERSION) \
+		script/mimedefang-dashboard script/mimedefang-dashboard.1
 
 lib/manpages:
 	$(PERL) "-MExtUtils::Command::MM" -e pod2man "--" --section=8 --perm_rw=644 \
@@ -269,12 +278,13 @@ lib/manpages:
 distclean:: clean
 	rm -f config.log config.status Makefile config.cache config.h mimedefang.pl \
 	mimedefang-release.pl examples/init-script \
-	script/mimedefang-util \
+	script/mimedefang-util script/mimedefang-dashboard \
 	mimedefang-filter.5 mimedefang-multiplexor.8 mimedefang-protocol.7 \
 	mimedefang-notify.7 \
 	mimedefang.8 mimedefang.pl.8 mimedefang-release.8 md-mx-ctrl.8 watch-mimedefang \
 	redhat/mimedefang-init redhat/mimedefang.spec redhat/mimedefang-sysconfig \
-	script/mimedefang-util.1 script/mimedefang-test-mail.1 modules/man/*.3
+	script/mimedefang-util.1 script/mimedefang-test-mail.1 script/mimedefang-dashboard.1 \
+	modules/man/*.3
 	rm -rf autom4te.cache
 	rm -f Mail-MIMEDefang-*.tar.gz Mail-MIMEDefang-*.tar.gz.sig
 
@@ -379,6 +389,8 @@ install: all
 	fi
 	$(INSTALL) -m 755 script/mimedefang-test-mail   $(DESTDIR)$(prefix)/bin/mimedefang-test-mail
 	$(INSTALL) -m 644 script/mimedefang-test-mail.1 $(DESTDIR)$(MANDIR)/man1/mimedefang-test-mail.1
+	$(INSTALL) -m 755 script/mimedefang-dashboard   $(DESTDIR)$(prefix)/bin/mimedefang-dashboard
+	$(INSTALL) -m 644 script/mimedefang-dashboard.1 $(DESTDIR)$(MANDIR)/man1/mimedefang-dashboard.1
 	$(INSTALL) -m 644 modules/man/Mail::MIMEDefang*.3 $(DESTDIR)$(MANDIR)/man3/
 	$(INSTALL) -m 644 mimedefang.8             $(DESTDIR)$(MANDIR)/man8/mimedefang.8
 	$(INSTALL) -m 644 mimedefang-release.8     $(DESTDIR)$(MANDIR)/man8/mimedefang-release.8

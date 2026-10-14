@@ -61,6 +61,9 @@ $SALocalTestsOnly = 0;
 #***********************************************************************
 md_graphdefang_log_enable('mail', 1);
 
+# Uncomment to show the same events live in mimedefang-dashboard(1)
+# md_graphdefang_feed_enable();
+
 #***********************************************************************
 # Uncomment this to block messages with more than 50 parts.  This will
 # *NOT* work unless you're using Roaring Penguin's patched version

@@ -2,6 +2,21 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2026-10-14 Giovanni Bechis <g.bechis@snb.it>
+
+        * add `mimedefang-dashboard`, a live web console for the mail flow
+          (throughput by event, top senders/recipients/domains, live event
+          log, workers, spam and ML score distributions, Prometheus
+          `/metrics`).  It runs its own HTTP server, keeps data in memory
+          (optionally saved with `--state`), never reads the mail log and
+          refuses to run as root; a systemd unit is in `systemd-units/`.
+        * add `md_graphdefang_feed_enable()`: `md_graphdefang_log` events
+          are sent to the dashboard over a non-blocking UNIX datagram
+          socket, with or without syslog logging.
+        * mimedefang-multiplexor answers new JSON commands: `jsonworkers`,
+          `jsonhisto`, `jsonmsgs`, `jsonautoscale`, `jsonhload*` and
+          `jsonsnapshot`.
+
 2026-10-07 Giovanni Bechis <g.bechis@snb.it>
 
         * add `Mail::MIMEDefang::ML`, a provider-neutral ham/spam/phishing

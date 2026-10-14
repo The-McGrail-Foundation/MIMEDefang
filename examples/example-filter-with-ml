@@ -85,6 +85,9 @@ $Mail::MIMEDefang::ML::Config{backend} = 'Laya';
 
 md_graphdefang_log_enable('mail', 1);
 
+# Uncomment to show the same events live in mimedefang-dashboard(1)
+# md_graphdefang_feed_enable();
+
 # Set various stupid things your mail client does below.
 $Stupidity{"NoMultipleInlines"} = 0;
 
