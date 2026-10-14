@@ -35,6 +35,8 @@ use Pod::Usage;
 use Socket qw(SOCK_DGRAM SOCK_STREAM PF_UNIX pack_sockaddr_un);
 use Time::HiRes qw(time);
 
+use Mail::MIMEDefang ();
+
 our $VERSION = '@VERSION@';
 my $DEFANGUSER = '@DEFANGUSER@';
 
@@ -73,8 +75,7 @@ my $RCPT_RE  = qr/^(?:rcpts=\d+|[^\s,]*\@[^\s,]*|<[^>]*>|)$/;
 sub pct_decode {
   my ($s) = @_;
   return '' unless defined $s;
-  $s =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/ge;
-  return decode('UTF-8', $s);
+  return decode('UTF-8', Mail::MIMEDefang::percent_decode($s));
 }
 
 # RFC 2047 encoded-words (=?UTF-8?B?...?=), as logged when the filter
@@ -652,6 +653,10 @@ sub new {
 sub log_msg {
   my ($self, $msg) = @_;
   return if $self->{opt}{quiet};
+  if (defined $self->{opt}{syslog}) {
+    Mail::MIMEDefang::md_syslog('info', $msg);
+    return;
+  }
   my @t = localtime();
   printf STDERR "%04d-%02d-%02d %02d:%02d:%02d mimedefang-dashboard: %s\n",
     $t[5] + 1900, $t[4] + 1, @t[3, 2, 1, 0], $msg;
@@ -1317,7 +1322,7 @@ sub main {
     'listen|l=s', 'mx-socket|s=s', 'feed|f=s', 'feed-mode=s', 'interval|i=i',
     'history=i', 'state=s', 'state-interval=i', 'stale=i', 'spam-event=s',
     'ml-events=s', 'events=s', 'top-cap=i', 'anonymize', 'allow-host=s' => \@allow,
-    'pidfile|p=s', 'daemon|d', 'quiet|q', 'help|h', 'man', 'version|v',
+    'pidfile|p=s', 'daemon|d', 'syslog:s', 'quiet|q', 'help|h', 'man', 'version|v',
   ) or pod2usage(2);
   pod2usage(-verbose => 1, -exitval => 0) if $Opt{help};
   pod2usage(-verbose => 2, -exitval => 0) if $Opt{man};
@@ -1336,6 +1341,16 @@ sub main {
     return 1;
   }
 
+  # STDERR is closed in daemon mode, so log to syslog instead
+  $Opt{syslog} //= 'mail' if $Opt{daemon};
+  if (defined $Opt{syslog}) {
+    $Opt{syslog} = 'mail' if $Opt{syslog} eq '';
+    die "Invalid --syslog facility '$Opt{syslog}'\n"
+      unless $Opt{syslog} =~ /^(?:auth|authpriv|cron|daemon|ftp|kern|lpr|mail|news|syslog|user|uucp|local[0-7])$/;
+    eval { Mail::MIMEDefang::md_openlog('mimedefang-dashboard', $Opt{syslog}); 1 }
+      or die "Cannot open syslog: $@";
+  }
+
   my $app = MDDash::App->new(%Opt);
   $app->load_state;
   $app->open_feed if $app->{feed_enabled};
@@ -1343,7 +1358,6 @@ sub main {
 
   if ($Opt{daemon}) {
     daemonize();
-    $Opt{quiet} = 1;
   }
   if ($Opt{pidfile}) {
     open(my $fh, '>', $Opt{pidfile}) or die "Cannot write $Opt{pidfile}: $!\n";
@@ -1393,7 +1407,8 @@ mimedefang-dashboard [options]
        --anonymize         drop subjects and mask local parts
        --allow-host NAME   accepted HTTP Host header (repeatable)
    -p, --pidfile FILE      write process id to FILE
-   -d, --daemon            detach from the terminal
+   -d, --daemon            detach from the terminal (implies --syslog)
+       --syslog[=FACILITY] log to syslog instead of stderr (default mail)
    -q, --quiet             no log output
    -h, --help              brief help
        --man               full documentation

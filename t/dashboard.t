@@ -69,6 +69,15 @@ sub t_parse_variants : Test(12)
   ok(!defined main::parse_mdlog('MDLOG,Q5', 1), 'truncated line is rejected');
 }
 
+sub t_pct_decode : Test(3)
+{
+  is(main::pct_decode('a%2Cb%C3%A8'), "a,b\x{e8}", 'percent-encoded UTF-8 is decoded');
+  is(main::pct_decode(undef), '', 'undef gives an empty string');
+  my $s = "x, 100%\tb\x{c3}\x{a8}";
+  is(main::pct_decode(Mail::MIMEDefang::percent_encode_for_graphdefang($s)), "x, 100%\tb\x{e8}",
+     'round trip with percent_encode_for_graphdefang');
+}
+
 sub t_anonymize : Test(3)
 {
   my $ev = main::parse_mdlog('MDLOG,Q1,spam,1,,john.doe@ex.com,<jane@lo.test>,Secret', 1);
