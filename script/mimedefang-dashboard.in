@@ -1317,15 +1317,17 @@ sub daemonize {
 
 sub main {
   my @allow;
+  # show "mimedefang-dashboard <args>" in ps instead of "perl /path/to/script ..."
+  $0 = join(' ', 'mimedefang-dashboard', @ARGV);
   Getopt::Long::Configure('no_ignore_case');
   GetOptions(\%Opt,
     'listen|l=s', 'mx-socket|s=s', 'feed|f=s', 'feed-mode=s', 'interval|i=i',
     'history=i', 'state=s', 'state-interval=i', 'stale=i', 'spam-event=s',
     'ml-events=s', 'events=s', 'top-cap=i', 'anonymize', 'allow-host=s' => \@allow,
     'pidfile|p=s', 'daemon|d', 'syslog:s', 'quiet|q', 'help|h', 'man', 'version|v',
-  ) or pod2usage(2);
-  pod2usage(-verbose => 1, -exitval => 0) if $Opt{help};
-  pod2usage(-verbose => 2, -exitval => 0) if $Opt{man};
+  ) or pod2usage(-exitval => 2, -input => __FILE__);
+  pod2usage(-verbose => 1, -exitval => 0, -input => __FILE__) if $Opt{help};
+  pod2usage(-verbose => 2, -exitval => 0, -input => __FILE__) if $Opt{man};
   if ($Opt{version}) {
     print "mimedefang-dashboard version $VERSION\n";
     return 0;
