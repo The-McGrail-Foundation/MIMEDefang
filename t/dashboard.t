@@ -149,6 +149,17 @@ sub t_store_mx_and_state : Test(7)
   ok(!$st2->from_state({ version => 999 }), 'unknown state version is ignored');
 }
 
+sub t_store_default_colors : Test(4)
+{
+  my $st = MDDash::Store->new(pinned => [qw(mail_out spam mail_in)], now => 0);
+  $st->add_event(main::parse_mdlog('MDLOG,A,virus,EICAR,,a@x.org,r@l.test,S', 1_000_000_000));
+  $st->add_event(main::parse_mdlog('MDLOG,B,mail_in,,,b@x.org,r@l.test,S', 1_000_000_001));
+  is($st->{slots}{mail_out}, 1, 'mail_out gets the first (blue) slot');
+  is($st->{slots}{spam}, 2, 'spam gets the second (orange-red) slot');
+  is($st->{slots}{mail_in}, 3, 'mail_in gets the third (green) slot');
+  is($st->{slots}{virus}, 4, 'other events follow the pinned ones');
+}
+
 sub t_store_bounded : Test(3)
 {
   my $st = MDDash::Store->new(history => 100, top_cap => 3, now => 0);
