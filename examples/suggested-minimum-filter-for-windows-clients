@@ -60,12 +60,6 @@ $SALocalTestsOnly = 0;
 # Comment this line out to disable logging.
 #***********************************************************************
 md_graphdefang_log_enable('mail', 1);
-#***********************************************************************
-# To enable syslogging of virus and spam activity, add the following
-# to the filter:
-# md_graphdefang_feed_enable();
-# Parameters syntax is the same used in md_graphdefang_log_enable();
-md_graphdefang_feed_enable('mail', 1);
 
 # Uncomment to show the same events live in mimedefang-dashboard(1)
 # md_graphdefang_feed_enable();
