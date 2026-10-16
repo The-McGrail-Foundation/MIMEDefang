@@ -31,11 +31,78 @@ F<Work> directory as a UNIX-style mbox file, which some scanners
 
 Scanner support is loaded on demand.  This module only holds the dispatch
 logic and the list of known scanners; the code that talks to each scanner
-lives in L<Mail::MIMEDefang::Antivirus::ClamAV>, L<Mail::MIMEDefang::Antivirus::NAI>
-and in the C<Mail::MIMEDefang::Antivirus::Legacy::*> modules, and is compiled the
+lives in the submodules listed below, and is compiled the
 first time that scanner is initialized or used.  The original function
 names (C<message_contains_virus_clamd>, C<interpret_nai_code>, ...) are
 still provided by this module, so filters do not need to change.
+
+=head2 Scanner modules
+
+=over 4
+
+=item L<Mail::MIMEDefang::Antivirus::ClamAV>
+
+ClamAV (clamd, clamdscan and clamscan).
+
+=item L<Mail::MIMEDefang::Antivirus::NAI>
+
+NAI/McAfee (now Trellix) uvscan.
+
+=back
+
+Legacy scanners:
+
+=over 4
+
+=item L<Mail::MIMEDefang::Antivirus::Legacy::BDC>
+
+Bitdefender bdc.
+
+=item L<Mail::MIMEDefang::Antivirus::Legacy::CarrierScan>
+
+Symantec CarrierScan.
+
+=item L<Mail::MIMEDefang::Antivirus::Legacy::CSAV>
+
+Command Anti-Virus (csav).
+
+=item L<Mail::MIMEDefang::Antivirus::Legacy::FProt>
+
+F-Prot (f-prot, fpscan, fprotd and fprotd v6).
+
+=item L<Mail::MIMEDefang::Antivirus::Legacy::FSAV>
+
+F-Secure Anti-Virus (fsav).
+
+=item L<Mail::MIMEDefang::Antivirus::Legacy::HBEDV>
+
+H+BEDV AntiVir.
+
+=item L<Mail::MIMEDefang::Antivirus::Legacy::Kaspersky>
+
+Kaspersky (AvpLinux, aveclient and kavscanner).
+
+=item L<Mail::MIMEDefang::Antivirus::Legacy::NOD32>
+
+ESET NOD32 command-line scanner.
+
+=item L<Mail::MIMEDefang::Antivirus::Legacy::NVCC>
+
+Norman Virus Control (nvcc).
+
+=item L<Mail::MIMEDefang::Antivirus::Legacy::Sophos>
+
+Sophos (sweep, savscan and the Sophie daemon).
+
+=item L<Mail::MIMEDefang::Antivirus::Legacy::Trend>
+
+Trend Micro (Filescanner and the Trophie daemon).
+
+=item L<Mail::MIMEDefang::Antivirus::Legacy::Vexira>
+
+Central Command Vexira.
+
+=back
 
 =head1 METHODS
 
