@@ -37,8 +37,6 @@ first time that scanner is initialized or used.  The original function
 names (C<message_contains_virus_clamd>, C<interpret_nai_code>, ...) are
 still provided by this module, so filters do not need to change.
 
-=back
-
 =head1 METHODS
 
 =over 4
