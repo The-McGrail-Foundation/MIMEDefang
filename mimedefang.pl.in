@@ -356,10 +356,10 @@ sub main {
 
     # In case it wasn't done in filter... won't hurt to do it again
     detect_and_load_perl_modules();
-    # Load Antivirus code only if needed
-    if (Mail::MIMEDefang::detect_antivirus_support()) {
-      use Mail::MIMEDefang::Antivirus;
-    }
+    # Always load Mail::MIMEDefang::Antivirus startup code,
+	# the code of each virus scanner is only compiled when that
+    # scanner is actually initialized or used (see Mail::MIMEDefang::Antivirus).
+    use Mail::MIMEDefang::Antivirus;
 
     # Backward-compatibility
     if (defined($Administrator)) {
