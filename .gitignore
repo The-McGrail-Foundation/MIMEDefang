@@ -22,7 +22,7 @@ mimedefang-release.8
 mimedefang-release.pl
 mimedefang.pl.8
 modules/man/*.3
-modules/man/*.3p
+modules/man/*.3pm
 redhat/mimedefang-init
 redhat/mimedefang-sysconfig
 redhat/mimedefang.spec
