@@ -97,7 +97,7 @@ if test -f "${PERL}" ; then
     fi
 fi
 
-for thing in prefix siteprefix vendorprefix vendorlib installarchlib installprivlib installbin installman1dir installman3dir installscript installsitearch installsitelib; do
+for thing in prefix siteprefix vendorprefix vendorlib installarchlib installprivlib installbin installman1dir installman3dir installsiteman1dir installsiteman3dir man3ext installscript installsitearch installsitelib; do
     AC_MSG_CHECKING([for Perl installation variable $thing])
     val=`$PERL -V:$thing | sed -e "s/^.*='//" -e "s/';$//"`
     AC_MSG_RESULT($val)
@@ -105,6 +105,30 @@ for thing in prefix siteprefix vendorprefix vendorlib installarchlib installpriv
     up=`echo $thing | tr '[[a-z]]' '[[A-Z]]'`
     eval "PERL$up=$val"
 done
+
+dnl Man page layout, taken from Perl's %Config (site install): the base
+dnl directory from installsiteman1dir (Perl's siteprefix replaced by
+dnl ${prefix}), the section 3 subdirectory and the module page extension
+dnl from installsiteman3dir and man3ext (e.g. share/man, man3, 3pm on
+dnl Linux; man, man3p, 3p on OpenBSD).  An explicit --mandir wins.
+if test "$mandir" = '${datarootdir}/man' && test -n "$PERLINSTALLSITEMAN1DIR" && test -n "$PERLSITEPREFIX" ; then
+    perl_mandir=`dirname "$PERLINSTALLSITEMAN1DIR"`
+    case "$perl_mandir" in
+        "$PERLSITEPREFIX"/*)
+            mandir='${prefix}'`echo "$perl_mandir" | sed -e "s|^$PERLSITEPREFIX||"`
+            ;;
+    esac
+fi
+MAN3SUBDIR=man3
+if test -n "$PERLINSTALLSITEMAN3DIR" ; then
+    MAN3SUBDIR=`basename "$PERLINSTALLSITEMAN3DIR"`
+fi
+MAN3EXT=3
+if test -n "$PERLMAN3EXT" ; then
+    MAN3EXT="$PERLMAN3EXT"
+fi
+AC_MSG_CHECKING([where to install Perl module man pages])
+AC_MSG_RESULT([$mandir/$MAN3SUBDIR/*.$MAN3EXT])
 
 dnl wait3
 dnl We know that wait3 works fine on Solaris 9, but autoconf
@@ -987,6 +1011,8 @@ AC_SUBST(PERLINSTALLPRIVLIB)
 AC_SUBST(PERLINSTALLBIN)
 AC_SUBST(PERLINSTALLMAN1DIR)
 AC_SUBST(PERLINSTALLMAN3DIR)
+AC_SUBST(MAN3SUBDIR)
+AC_SUBST(MAN3EXT)
 AC_SUBST(PERLINSTALLSCRIPT)
 AC_SUBST(PERLINSTALLSITEARCH)
 AC_SUBST(PERLINSTALLSITELIB)

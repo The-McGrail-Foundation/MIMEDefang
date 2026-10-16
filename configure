@@ -649,6 +649,8 @@ PERLINSTALLDATA
 PERLINSTALLSITELIB
 PERLINSTALLSITEARCH
 PERLINSTALLSCRIPT
+MAN3EXT
+MAN3SUBDIR
 PERLINSTALLMAN3DIR
 PERLINSTALLMAN1DIR
 PERLINSTALLBIN
@@ -4309,7 +4311,7 @@ printf "%s\n" "${perl_version}" >&6; }
     fi
 fi
 
-for thing in prefix siteprefix vendorprefix vendorlib installarchlib installprivlib installbin installman1dir installman3dir installscript installsitearch installsitelib; do
+for thing in prefix siteprefix vendorprefix vendorlib installarchlib installprivlib installbin installman1dir installman3dir installsiteman1dir installsiteman3dir man3ext installscript installsitearch installsitelib; do
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for Perl installation variable $thing" >&5
 printf %s "checking for Perl installation variable $thing... " >&6; }
     val=`$PERL -V:$thing | sed -e "s/^.*='//" -e "s/';$//"`
@@ -4318,6 +4320,27 @@ printf "%s\n" "$val" >&6; }
         up=`echo $thing | tr '[a-z]' '[A-Z]'`
     eval "PERL$up=$val"
 done
+
+if test "$mandir" = '${datarootdir}/man' && test -n "$PERLINSTALLSITEMAN1DIR" && test -n "$PERLSITEPREFIX" ; then
+    perl_mandir=`dirname "$PERLINSTALLSITEMAN1DIR"`
+    case "$perl_mandir" in
+        "$PERLSITEPREFIX"/*)
+            mandir='${prefix}'`echo "$perl_mandir" | sed -e "s|^$PERLSITEPREFIX||"`
+            ;;
+    esac
+fi
+MAN3SUBDIR=man3
+if test -n "$PERLINSTALLSITEMAN3DIR" ; then
+    MAN3SUBDIR=`basename "$PERLINSTALLSITEMAN3DIR"`
+fi
+MAN3EXT=3
+if test -n "$PERLMAN3EXT" ; then
+    MAN3EXT="$PERLMAN3EXT"
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking where to install Perl module man pages" >&5
+printf %s "checking where to install Perl module man pages... " >&6; }
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $mandir/$MAN3SUBDIR/*.$MAN3EXT" >&5
+printf "%s\n" "$mandir/$MAN3SUBDIR/*.$MAN3EXT" >&6; }
 
 un=`uname -s -r`
 if test "$un" = "SunOS 5.9" ; then
@@ -7230,6 +7253,8 @@ printf "%s\n" "yes" >&6; }
 
 
 CONFDIR_EVAL=`echo ${sysconfdir}${CONFSUBDIR}`
+
+
 
 
 
