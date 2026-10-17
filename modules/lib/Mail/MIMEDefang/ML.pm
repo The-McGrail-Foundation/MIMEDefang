@@ -149,8 +149,13 @@ C<question_texts> rewords the questions put to the backends that take
 free-text instructions (Laya, generative models), keyed by question; a
 question not in it keeps its default text from
 C<%Mail::MIMEDefang::ML::QUESTIONS>.  Each of these backends can have its
-own, which wins over the global one: Laya reads 512 tokens in all and
-wants short texts, a generative model can take longer ones.
+own, which wins over the global one: Laya has a small input budget and
+wants short texts, a generative model can take longer ones.  A backend
+may also have default texts of its own, used when neither sets one:
+Laya asks short questions by default, see L<Mail::MIMEDefang::ML::Laya>.
+In order, a question's text comes from the backend's C<question_texts>,
+the global C<question_texts>, the backend's default, and
+C<%Mail::MIMEDefang::ML::QUESTIONS>.
 
   $Mail::MIMEDefang::ML::Config{question_texts}{is_phishing} =
       'Is this email phishing?  ...';
@@ -402,8 +407,9 @@ my %BACKENDS = (
 );
 
 # The questions every backend answers, phrased for the ones that take
-# free-text instructions (Laya, chat LLMs): the question, what counts,
-# then what doesn't.  Keep them short, Laya reads 512 tokens in all.
+# free-text instructions (chat LLMs): the question, what counts, then
+# what doesn't.  Laya has its own shorter defaults, these overflow its
+# input.
 our %QUESTIONS = (
     is_spam     => 'Is this email spam?  Spam is mail the recipient did not ask for, '
                  . 'from a sender they have no relationship with: scams and fraud '
@@ -544,7 +550,7 @@ sub ml_build_state {
 
 # Zero-width, joiner, bidi-control and soft-hyphen characters: invisible
 # when rendered, used to break up words so that filters don't match them.
-my $INVISIBLE = qr/[\x{00AD}\x{034F}\x{061C}\x{115F}\x{1160}\x{17B4}\x{17B5}\x{180E}\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{206A}-\x{206F}\x{3164}\x{FEFF}\x{FFA0}]/;
+my $INVISIBLE = qr/[\x{00AD}\x{034F}\x{061C}\x{115F}\x{1160}\x{17B4}\x{17B5}\x{180E}\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{206A}-\x{206F}\x{2800}\x{3164}\x{FEFF}\x{FFA0}]/;
 
 my $HAVE_ENTITIES = eval { require HTML::Entities; 1 };
 
@@ -774,8 +780,9 @@ C<state_body($state, \%backend_cfg)> (the body cut to the backend's
 C<body_head_chars>/C<body_tail_chars>),
 C<state_to_text($state, \%backend_cfg)> (the state as text, with the
 signals and that body), C<active_questions(\%Config)> (the questions to
-answer, in order) and C<question_text(\%Config, $question, \%backend_cfg)>
-(the question's text, see C<question_texts>) from this package.  A backend asks the model only the
+answer, in order) and C<question_text(\%Config, $question, \%backend_cfg, \%defaults)>
+(the question's text, see C<question_texts>; C<\%defaults> holds the
+backend's own default texts, optional) from this package.  A backend asks the model only the
 questions C<active_questions> returns; answers to other questions are
 ignored.
 
@@ -805,10 +812,11 @@ sub active_questions {
 }
 
 # A question's text: the backend's question_texts, else the global
-# ones, else the default in %QUESTIONS.
+# ones, else the backend's own defaults (\%defaults), else the default
+# in %QUESTIONS.
 sub question_text {
-    my ($cfg, $key, $bcfg) = @_;
-    for my $texts (($bcfg || {})->{question_texts}, ($cfg || {})->{question_texts}) {
+    my ($cfg, $key, $bcfg, $defaults) = @_;
+    for my $texts (($bcfg || {})->{question_texts}, ($cfg || {})->{question_texts}, $defaults) {
         next unless ref($texts) eq 'HASH';
         my $t = $texts->{$key};
         return $t if defined $t && !ref($t) && length $t;

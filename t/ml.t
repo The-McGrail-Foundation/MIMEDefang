@@ -53,7 +53,7 @@ sub t_build_state : Test(7)
 sub t_normalize : Test(6)
 {
   my $text = Mail::MIMEDefang::ML::_normalize_text(
-    "Pa\x{200B}y&#x200c;Pal &amp; co&#46;\r\n\r\n\r\n\r\n" . ('-' x 50) . "\n  \x{200C}\x{A0}\x{200C} end  ");
+    "\x{2800}&nbsp;\x{2800}Pa\x{200B}y&#x200c;Pal &amp; co&#46;\r\n\r\n\r\n\r\n" . ('-' x 50) . "\n  \x{200C}\x{A0}\x{200C} end  ");
   is($text, "PayPal & co.\n\n----------\nend", 'entities decoded, invisible characters, blanks and rules collapsed');
 
   my $state = ml_build_state(From => 'a@example.com',
@@ -177,17 +177,21 @@ sub t_laya : Test(9)
   is(ml_classify(_state())->{error}, '500 Internal Server Error', 'http error passed through');
 }
 
-sub t_question_texts : Test(5)
+sub t_question_texts : Test(8)
 {
   local $Mail::MIMEDefang::ML::Config{backend} = 'laya';
-  local $Mail::MIMEDefang::ML::Config{question_texts} = { is_spam => 'Spam?', bogus => 'Bogus?' };
 
   _stub({ answers => {} });
   ml_classify(_state());
+  is_deeply({ map { $_ => $last_payload->{questions}{$_}{instructions} } qw(is_spam is_phishing) },
+            \%Mail::MIMEDefang::ML::Laya::QUESTIONS, 'Laya asks its short default questions');
+
+  local $Mail::MIMEDefang::ML::Config{question_texts} = { is_spam => 'Spam?', bogus => 'Bogus?' };
+  ml_classify(_state());
   my $q = $last_payload->{questions};
-  is($q->{is_spam}{instructions}, 'Spam?', 'configured question text sent');
-  is($q->{is_phishing}{instructions}, $Mail::MIMEDefang::ML::QUESTIONS{is_phishing},
-     'question not configured keeps its default text');
+  is($q->{is_spam}{instructions}, 'Spam?', 'global question text wins over the backend default');
+  is($q->{is_phishing}{instructions}, $Mail::MIMEDefang::ML::Laya::QUESTIONS{is_phishing},
+     'question not configured keeps the backend default text');
   ok(!exists $q->{bogus}, 'unknown questions ignored');
 
   local $Mail::MIMEDefang::ML::Config{laya}{question_texts} = { is_spam => 'Laya spam?' };
@@ -199,6 +203,11 @@ sub t_question_texts : Test(5)
   _stub({ choices => [ { message => { content => '{"is_spam": 0.1, "is_phishing": 0.1}' } } ] });
   ml_classify(_state());
   like($last_payload->{messages}[0]{content}, qr/^is_spam: Spam\?$/m, 'question text in the system prompt');
+  like($last_payload->{messages}[0]{content}, qr/^is_phishing: \Q$Mail::MIMEDefang::ML::QUESTIONS{is_phishing}\E$/m,
+       'openai keeps the long default text');
+
+  is(Mail::MIMEDefang::ML::question_text({}, 'is_spam', {}, { is_spam => '' }),
+     $Mail::MIMEDefang::ML::QUESTIONS{is_spam}, 'empty backend default ignored');
 }
 
 sub t_gliclass : Test(7)

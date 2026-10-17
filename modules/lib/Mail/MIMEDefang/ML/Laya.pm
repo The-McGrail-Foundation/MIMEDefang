@@ -46,6 +46,14 @@ non-English mail, and even English newsletters, to the wrong one),
 C<question_texts> (question wording for this backend, keep it short, see
 L<Mail::MIMEDefang::ML/CONFIGURATION>).
 
+Unless C<question_texts> rewords them, Laya is asked the short questions
+in C<%Mail::MIMEDefang::ML::Laya::QUESTIONS> ("Is this email spam?",
+"Is this email phishing?") rather than the long ones in
+C<%Mail::MIMEDefang::ML::QUESTIONS>: those take about 500 tokens, which
+together with the body can overflow Laya's input and get the questions
+themselves truncated, and they make the multilingual checkpoint answer
+"yes" to ordinary mail far more often.
+
 =cut
 
 use strict;
@@ -53,12 +61,18 @@ use warnings;
 
 use Mail::MIMEDefang::ML ();
 
+# Default question texts for Laya, see the POD above.
+our %QUESTIONS = (
+    is_spam     => 'Is this email spam?',
+    is_phishing => 'Is this email phishing?',
+);
+
 sub classify {
     my ($state, $cfg) = @_;
     my $lc = $cfg->{laya} || {};
 
     my %questions = map {
-        $_ => { type => 'noul', instructions => Mail::MIMEDefang::ML::question_text($cfg, $_, $lc) }
+        $_ => { type => 'noul', instructions => Mail::MIMEDefang::ML::question_text($cfg, $_, $lc, \%QUESTIONS) }
     } Mail::MIMEDefang::ML::active_questions($cfg);
 
     my $send = { %$state, body => Mail::MIMEDefang::ML::state_body($state, $lc) };
