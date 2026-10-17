@@ -390,24 +390,59 @@ sub t_retry : Test(4)
   is($calls, 1, 'one request');
 }
 
-sub t_live : Test(1)
+# Run against real servers, e.g. the mimedefang/laya and mimedefang/gliclass
+# images started by t/docker/dockerML.sh.  Checks the shape of the answers,
+# which catches protocol drift between the backends and the servers, not
+# the quality of the model.
+sub t_live : Test(13)
 {
   SKIP: {
     if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )
          or not defined $ENV{'ML_TEST_BACKEND'}) {
-      skip "Net test disabled or ML_TEST_BACKEND not set", 1
+      skip "Net test disabled or ML_TEST_BACKEND not set", 13
     }
     # Needs the real HTTP layer.
     { no warnings 'redefine'; *Mail::MIMEDefang::ML::http_post_json = $real_post; }
-    local $Mail::MIMEDefang::ML::Config{backend} = $ENV{'ML_TEST_BACKEND'};
+    my $backend = $ENV{'ML_TEST_BACKEND'};
+    local $Mail::MIMEDefang::ML::Config{backend} = $backend;
     local $Mail::MIMEDefang::ML::Config{openai}{model} = $ENV{'ML_TEST_MODEL'}
       if defined $ENV{'ML_TEST_MODEL'};
     local $Mail::MIMEDefang::ML::Config{openai}{base_url} = $ENV{'ML_TEST_BASE_URL'}
       if defined $ENV{'ML_TEST_BASE_URL'};
-    my $v = ml_classify(ml_build_state(From => 'winner@example.com',
-      Subject => 'You won 1,000,000 USD!!!',
-      Body => 'Click here to claim your prize, send your bank details today.'));
-    ok(!$v->{error}, 'live verdict: ' . ($v->{error} // "spam=$v->{is_spam}{confidence}"));
+    local $Mail::MIMEDefang::ML::Config{$backend}{server_url} = $ENV{'ML_TEST_SERVER_URL'}
+      if defined $ENV{'ML_TEST_SERVER_URL'} && $backend =~ /^(?:laya|gliclass)$/;
+
+    my %msg = (
+      spam => ml_build_state(From => 'winner@example.com',
+        Subject => 'You won 1,000,000 USD!!!',
+        Body => 'Click here to claim your prize, send your bank details today.',
+        SPF => 'fail', DKIM => 'none'),
+      ham => ml_build_state(From => 'anna.rossi@example.com',
+        Subject => 'Re: meeting on Thursday',
+        Body => "Hi Marco,\n\nThursday at 10 works for me. I'll bring the draft "
+              . "of the budget so we can go through it together.\n\nThanks,\nAnna",
+        SPF => 'pass', DKIM => 'pass'),
+    );
+
+    my %v;
+    for my $kind (qw(spam ham)) {
+      my $v = $v{$kind} = ml_classify($msg{$kind}, questions => [qw(is_spam is_phishing)]);
+      ok(!$v->{error}, "$kind: no error") or diag("$kind: $v->{error}");
+      is($v->{backend}, $backend, "$kind: answered by $backend");
+      for my $q (qw(is_spam is_phishing)) {
+        my $a = $v->{$q} || {};
+        # ml_classify sets confidence 0 when the backend gave no answer.
+        ok(defined $a->{confidence} && $a->{confidence} > 0 && $a->{confidence} <= 1,
+           "$kind: $q confidence in (0,1]");
+        ok(!defined $a->{answer} || $a->{answer} == 0 || $a->{answer} == 1,
+           "$kind: $q answer is 0, 1 or undef");
+        diag(sprintf('%s %s: answer=%s confidence=%.3f', $kind, $q,
+                     $a->{answer} // 'undef', $a->{confidence} // 0));
+      }
+    }
+
+    my ($s, $h) = ($v{spam}{is_spam}{answer}, $v{ham}{is_spam}{answer});
+    ok(!defined $s || !defined $h || $s >= $h, 'spam not judged less spammy than ham');
   };
 }
 

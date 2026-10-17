@@ -1,0 +1,43 @@
+# docker-compose-ml.yml
+# ---------------------
+# Laya and GLiClass inference servers, used to run the live tests of
+# Mail::MIMEDefang::ML (t/ml.t) against the published images.
+#
+# Usage:
+#   sh t/docker/dockerML.sh
+#
+# or by hand:
+#   docker compose -f t/docker/docker-compose-ml.yml --project-directory . up -d
+#   (wait until curl http://127.0.0.1:8687/health and :8688/health answer)
+#   env NET_TEST=yes ML_TEST_BACKEND=laya prove -It/lib t/ml.t
+#
+# The servers have no authentication: the ports are published on 127.0.0.1 only.
+# On the first start the models are downloaded from Hugging Face into the
+# mdml-hf volume, which is kept between runs.
+
+name: mimedefang-ml
+
+services:
+
+  laya:
+    image: mimedefang/laya:${ML_IMAGE_TAG:-latest}
+    container_name: mimedefang-ml-laya
+    environment:
+      LAYA_THREADS: "2"
+    ports:
+      - "127.0.0.1:8687:8687"
+    volumes:
+      - mdml-hf:/var/lib/MIMEDefang/ml/huggingface
+
+  gliclass:
+    image: mimedefang/gliclass:${ML_IMAGE_TAG:-latest}
+    container_name: mimedefang-ml-gliclass
+    environment:
+      GLICLASS_THREADS: "2"
+    ports:
+      - "127.0.0.1:8688:8688"
+    volumes:
+      - mdml-hf:/var/lib/MIMEDefang/ml/huggingface
+
+volumes:
+  mdml-hf:

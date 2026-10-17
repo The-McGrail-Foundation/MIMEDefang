@@ -191,8 +191,10 @@ t/data/uri-html.eml
 t/data/zip.eml
 t/dates.t
 t/dkim.t
+t/docker/docker-compose-ml.yml
 t/docker/docker-compose-postfix.yml
 t/docker/docker-compose-sendmail.yml
+t/docker/dockerML.sh
 t/docker/dockerPostfix.sh
 t/docker/dockerSendmail.sh
 t/graphdefang.t

@@ -213,6 +213,18 @@ The servers load the model before they start listening, so connections
 are refused until loading has finished. That can take a minute, longer on
 the first start while the model downloads.
 
+## Docker images
+
+Both servers are also published as images, `mimedefang/laya` and
+`mimedefang/gliclass` on Docker Hub (built from
+https://github.com/The-McGrail-Foundation/MIMEDefang-Docker). They listen
+on the same ports as above. To run the live tests of `t/ml.t` against
+them, run this from the top of the source tree:
+
+```sh
+sh t/docker/dockerML.sh
+```
+
 ## Model cache and offline use
 
 Models are stored in the Hugging Face cache, `$HF_HOME` (the units use
