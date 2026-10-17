@@ -84,7 +84,9 @@ L</TRAINING A MODEL>.
 Backends are self-hosted model servers; see L</SECURITY> for how to keep
 them safe.  C<mimedefang-laya-server> and C<mimedefang-gliclass-server>,
 with instructions for installing their Python modules and models, are in
-the F<script/ml-servers/> directory of the MIMEDefang sources.
+the F<script/ml-servers/> directory of the MIMEDefang sources.  Both
+servers are also available as Docker images, C<mimedefang/laya> and
+C<mimedefang/gliclass> on Docker Hub.
 
 The body truncation limits below are the defaults for every backend;
 each backend's section can override them.
