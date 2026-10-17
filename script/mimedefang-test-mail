@@ -259,6 +259,7 @@ $main::NotifySenderSubject = 'MIMEDefang Notification' unless defined $main::Not
 $main::NotifyAdministratorSubject = 'MIMEDefang Notification' unless defined $main::NotifyAdministratorSubject;
 $main::QuarantineSubject = 'MIMEDefang Quarantine Report' unless defined $main::QuarantineSubject;
 $main::NotifyNoPreamble = 0 unless defined $main::NotifyNoPreamble;
+$main::ValidateIPHeader = '' unless defined $main::ValidateIPHeader;
 unless (defined $main::GeneralWarning) {
     $main::GeneralWarning =
         "WARNING: This e-mail has been altered by MIMEDefang.  Following this\n" .
