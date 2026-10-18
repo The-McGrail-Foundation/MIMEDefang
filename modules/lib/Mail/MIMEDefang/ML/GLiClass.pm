@@ -23,7 +23,10 @@ L<Mail::MIMEDefang::ML>.
 
 GLiClass (L<https://github.com/Knowledgator/GLiClass>) is a zero-shot
 sequence classifier built on a bidirectional encoder (ModernBERT for the
-C<gliclass-modern-*> checkpoints).  It scores the text against every label
+C<gliclass-modern-*> checkpoints).  The default checkpoint is English; for
+other languages start the server with a multilingual one, for example
+C<knowledgator/gliclass-multilang-mini>, see F<script/ml-servers/README.md>.
+It scores the text against every label
 in a single forward pass, so, like Laya, it avoids the latency and output
 parsing of an autoregressive LLM, and it needs no fine-tuning: the labels
 are plain text.

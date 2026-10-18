@@ -153,8 +153,33 @@ default is `knowledgator/gliclass-modern-base-v2.0`, and
 `knowledgator/gliclass-modern-large-v2.0` is more accurate but slower) and
 `--device` (`cpu`, or e.g. `cuda:0`) and `--max-length` (tokens of labels
 plus message text read, default 4096; the rest is cut, the
-`gliclass-modern-*` checkpoints take up to 8192). Laya also takes `--preload`,
+`gliclass-modern-*` checkpoints take up to 8192) and `--add-prefix-space`
+(for the checkpoints whose model card loads the tokenizer with
+`add_prefix_space=True`, e.g. `gliclass-x-base`). Laya also takes `--preload`,
 `--checkpoint` and `--attach-language`.
+
+#### Multilingual GLiClass models
+
+The default GLiClass checkpoint is English. For mail in other languages use a
+multilingual one, no other change is needed: they are loaded through the same
+GLiClass classes and the labels MIMEDefang sends stay in English, the models
+score text and labels in different languages. Knowledgator's multilingual
+line is `knowledgator/gliclass-multilang-mini` and
+`knowledgator/gliclass-multilang-ultra` (trained on 20 languages), and
+`knowledgator/gliclass-x-base` is an older one on mDeBERTa. Set it with
+`--model`, with `GLICLASS_MODEL` in the sysconfig/default file of the unit or
+in the environment of the Docker image, and download it as shown in the
+installation above (`snapshot_download` with its name). Then:
+
+- check the token limit of the model card and set `--max-length` /
+  `GLICLASS_MAX_LENGTH` to it if it is lower than the default 4096 (many
+  encoders read 512 tokens; the server logs a warning when the tokenizer
+  declares fewer than `--max-length`). The head and tail of the message that
+  MIMEDefang sends are cut by `body_head_chars` and `body_tail_chars`, lower
+  them to match;
+- measure it on a sample of your own mail in the languages you receive with
+  `contrib/ml-benchmark` before acting on its verdicts, and adjust
+  `min_confidence` accordingly.
 
 ### Under systemd
 

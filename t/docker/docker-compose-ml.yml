@@ -34,6 +34,10 @@ services:
     container_name: mimedefang-ml-gliclass
     environment:
       GLICLASS_THREADS: "2"
+      # A multilingual checkpoint, e.g. knowledgator/gliclass-multilang-mini
+      # (check its token limit: GLICLASS_MAX_LENGTH=512 if it is 512).
+      GLICLASS_MODEL: ${GLICLASS_MODEL:-knowledgator/gliclass-modern-base-v2.0}
+      GLICLASS_MAX_LENGTH: ${GLICLASS_MAX_LENGTH:-4096}
     ports:
       - "127.0.0.1:8688:8688"
     volumes:

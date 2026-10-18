@@ -38,6 +38,8 @@ see script/ml-servers/README.md in the MIMEDefang sources.
         --threads 16 --torch-threads 2
     mimedefang-gliclass-server --device cuda:0 --port 8688
     mimedefang-gliclass-server --max-length 8192 --port 8688
+    mimedefang-gliclass-server --model knowledgator/gliclass-multilang-mini \\
+        --max-length 512
     mimedefang-gliclass-server --daemon --port 8688
 """
 
@@ -107,12 +109,27 @@ def daemonize():
     os.close(devnull_fd)
 
 
-def build_pipeline(model_name, device, max_length):
+def build_pipeline(model_name, device, max_length, add_prefix_space=False):
     global _pipeline, _model_name
     log.info("loading GLiClass model %s on %s, max length %d tokens",
              model_name, device, max_length)
     model = GLiClassModel.from_pretrained(model_name)
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    # Some checkpoints (gliclass-x-base, the English v1 to v3 ones) are
+    # documented with add_prefix_space=True; the others are loaded without.
+    if add_prefix_space:
+        tokenizer = AutoTokenizer.from_pretrained(model_name,
+                                                  add_prefix_space=True)
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+    # A multilingual or older checkpoint can be limited to fewer tokens than
+    # the default (512 for many encoders): the text would then be cut by the
+    # model, or fail, rather than by --max-length.
+    limit = getattr(tokenizer, "model_max_length", None)
+    if isinstance(limit, int) and 0 < limit < max_length:
+        log.warning("--max-length %d is above the %d tokens the tokenizer of "
+                    "%s declares: check the model card, and lower "
+                    "--max-length if the model cannot read that much",
+                    max_length, limit, model_name)
     # multi-label: spam and phishing are scored independently, a message
     # can be both (or neither).
     # max_length covers the labels and the text: the library default (1024
@@ -192,6 +209,10 @@ def main():
                               "the rest of the text is cut. The "
                               "gliclass-modern-* checkpoints take up to 8192; "
                               "larger is slower (default: %(default)s).")
+    parser.add_argument("--add-prefix-space", action="store_true",
+                         help="Load the tokenizer with add_prefix_space=True, "
+                              "as the model card of some checkpoints "
+                              "(e.g. gliclass-x-base) says.")
     parser.add_argument("--host", default="127.0.0.1",
                          help="Address to listen on (default: %(default)s). "
                               "This server has no authentication: if you "
@@ -237,7 +258,8 @@ def main():
 
     torch.set_num_threads(args.torch_threads)
 
-    build_pipeline(args.model, args.device, args.max_length)
+    build_pipeline(args.model, args.device, args.max_length,
+                   args.add_prefix_space)
 
     # waitress rather than Flask's dev server: this runs as a long-lived
     # local service, not a public-facing app.
