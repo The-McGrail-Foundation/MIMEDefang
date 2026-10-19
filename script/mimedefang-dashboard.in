@@ -61,7 +61,7 @@ our %Opt = (
   'state-interval' => 300,
   stale          => 900,
   'spam-event'   => 'spam',
-  'ml-events'    => 'ml_spam,ml_phishing,ml_unsure',
+  'ml-events'    => 'ml_spam,ml_not_spam,ml_phishing,ml_not_phishing,ml_unsure',
   events         => 'mail_out,spam,mail_in',
   'top-cap'      => 300,
 );
@@ -1404,7 +1404,8 @@ mimedefang-dashboard [options]
        --stale SECS        warn when no event arrived for SECS (default 900)
        --spam-event NAME   event whose first value is a spam score (default spam)
        --ml-events LIST    events whose first value is an ML confidence
-                           (default ml_spam,ml_phishing,ml_unsure)
+                           (default ml_spam,ml_not_spam,ml_phishing,
+                           ml_not_phishing,ml_unsure)
        --events LIST       events that get the first chart colors, in order
                            (default mail_out,spam,mail_in)
        --top-cap N         keys kept per top-N counter slice (default 300)
@@ -2956,7 +2957,7 @@ table.log tr.new td { animation: flash 1.2s ease-out; }
 
   // ---------- scores ----------
   const scRange = rangeSeg('scores', () => loadScores());
-  const ML_LABELS = { ml_spam: 'Spam (ML)', ml_phishing: 'Phishing (ML)', ml_unsure: 'Uncertain (ML)' };
+  const ML_LABELS = { ml_spam: 'Spam (ML)', ml_not_spam: 'Not spam (ML)', ml_phishing: 'Phishing (ML)', ml_not_phishing: 'Not phishing (ML)', ml_unsure: 'Uncertain (ML)' };
   const mlLabel = (e) => ML_LABELS[e] || e;
   async function loadScores() {
     const win = $('sc-window').value;

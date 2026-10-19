@@ -280,6 +280,8 @@ sub filter_end {
     #                                unsure: anything else, the model
     #                                        leans yes below the action
     #                                        threshold, or has no opinion
+    # A "no" answer is also logged as an ml_not_spam / ml_not_phishing
+    # event with its confidence, for mimedefang-dashboard.
     #*******************************************************************
     my %acted = (is_spam => $is_spam_verdict, is_phishing => $is_phishing_verdict);
     my $unsure = 0;
@@ -293,6 +295,8 @@ sub filter_end {
 
         my $word = $acted{$key} ? 'yes' : $sign < 0 ? 'no' : 'unsure';
         $unsure++ if $word eq 'unsure';
+        md_graphdefang_log($key eq 'is_spam' ? 'ml_not_spam' : 'ml_not_phishing',
+            $verdict->{$key}{confidence}) if $word eq 'no';
         action_change_header("X-MIMEDefang-ML-$name-Answer", $word);
     }
     if ($unsure) {

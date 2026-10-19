@@ -128,6 +128,18 @@ sub t_store_aggregates : Test(11)
             'ML confidence bins, percentages scaled');
 }
 
+sub t_store_ml_no_verdicts : Test(2)
+{
+  my $st = MDDash::Store->new(history => 100, top_cap => 3, spam_event => 'spam',
+                              ml_events => ['ml_not_spam', 'ml_not_phishing'], now => 0);
+  my $t = 1_000_000_020;
+  $st->add_event(main::parse_mdlog('MDLOG,A,ml_not_spam,0.95,,a@x.org,r@l.test,S', $t));
+  $st->add_event(main::parse_mdlog('MDLOG,B,ml_not_phishing,0.42,,b@x.org,r@l.test,S', $t + 1));
+  my $sc = $st->scores('24h', $t + 10)->{scores};
+  is_deeply($sc->{ml_not_spam}, [ { bin => 0.9, count => 1 } ], 'not-spam confidence binned');
+  is_deeply($sc->{ml_not_phishing}, [ { bin => 0.4, count => 1 } ], 'not-phishing confidence binned');
+}
+
 sub t_store_mx_and_state : Test(7)
 {
   my ($st, $t) = _store_with_events();
