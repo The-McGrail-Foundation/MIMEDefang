@@ -313,6 +313,10 @@ Makes a note for milter to delete all instances of header.
 sub action_delete_all_headers {
     my($header) = @_;
     return 0 if (!in_message_context("action_delete_all_headers"));
+    if (!defined($header) || $header eq '') {
+	md_syslog('warning', 'action_delete_all_headers called without a header name');
+	return 0;
+    }
     my($count, $len, $orig_header);
 
     $orig_header = $header;
@@ -603,6 +607,10 @@ any instance of the deleted header.
 sub action_delete_all_headers_now {
     my($header) = @_;
     return 0 if (!in_message_context("action_delete_all_headers_now"));
+    if (!defined($header) || $header eq '') {
+        md_syslog('warning', 'action_delete_all_headers_now called without a header name');
+        return 0;
+    }
 
     action_delete_all_headers($header);
 

@@ -548,4 +548,22 @@ sub t_delete_all_headers_now : Test(2)
   unlink('./HEADERS') if -f './HEADERS';
 }
 
+sub t_delete_all_headers_undef : Test(4)
+{
+  no warnings qw(redefine once);
+  local *::md_syslog = sub {};
+  use warnings qw(redefine once);
+
+  init_globals();
+  $CWD = '.';
+  $InMessageContext = 1;
+
+  my @warns;
+  local $SIG{__WARN__} = sub { push @warns, @_ };
+  is(action_delete_all_headers(undef), 0, 'action_delete_all_headers(undef) returns 0');
+  is(action_delete_all_headers(''), 0, "action_delete_all_headers('') returns 0");
+  is(action_delete_all_headers_now(undef), 0, 'action_delete_all_headers_now(undef) returns 0');
+  is(scalar(@warns), 0, 'no Perl warnings for a missing header name');
+}
+
 __PACKAGE__->runtests();
