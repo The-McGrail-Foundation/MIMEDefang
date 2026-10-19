@@ -78,6 +78,9 @@ question can cover different kinds of mail:
       'unsolicited bulk advertising for pills, replica watches, loans, dating or stock tips',
   ];
 
+Zero-shot scores depend on the wording of every label sent with the
+text.
+
 A model fine-tuned with F<contrib/ml-benchmark/gliclass-train> must be
 served with the labels it was trained on.
 
@@ -107,7 +110,10 @@ our %LABELS = (
         'scam email: fake invoice, fake order, fake prize, advance-fee or investment fraud',
         'unsolicited sales pitch or bulk advertising from an unknown company',
     ],
-    is_phishing => 'phishing: fake bank, courier, company or colleague asking for a password, payment or money transfer',
+    is_phishing => [
+        'phishing: fake bank, courier, company or colleague asking for a password, payment or money transfer',
+        'urgent request to verify account or update payment details via a link',
+    ],
 );
 
 # Scored with the question labels; the best one is weighed against each

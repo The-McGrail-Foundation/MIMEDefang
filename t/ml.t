@@ -257,7 +257,7 @@ sub t_gliclass_scores : Test(4)
   ok(!exists ml_classify(_state())->{scores}, 'no scores from a backend that reports none');
 }
 
-sub t_gliclass_label_config : Test(7)
+sub t_gliclass_label_config : Test(8)
 {
   local $Mail::MIMEDefang::ML::Config{backend} = 'gliclass';
   local $Mail::MIMEDefang::ML::Config{gliclass}{labels} = { is_spam => ['fraud', 'bulk ads'] };
@@ -268,10 +268,11 @@ sub t_gliclass_label_config : Test(7)
   my $v = ml_classify(_state());
   my $l = $last_payload->{labels};
   is($l->{'is_spam#1'}, 'bulk ads', 'configured spam labels sent');
-  is($l->{'is_phishing#0'}, $Mail::MIMEDefang::ML::GLiClass::LABELS{is_phishing},
-     'question not configured keeps its default label');
+  is_deeply([map { $l->{"is_phishing#$_"} } 0 .. 1], $Mail::MIMEDefang::ML::GLiClass::LABELS{is_phishing},
+     'question not configured keeps its default labels');
+  is(scalar(@{ $Mail::MIMEDefang::ML::GLiClass::LABELS{is_phishing} }), 2, 'two default phishing labels');
   is($l->{_ham1}, 'personal mail', 'configured ham labels sent');
-  is(scalar(keys %$l), 5, 'no default labels added');
+  is(scalar(keys %$l), 6, 'no default labels added');
   is($v->{scores}{is_spam}, 0.8, 'best spam label counts');
   is($v->{scores}{ham}, 0.2, 'best ham label counts');
   cmp_ok(abs($v->{is_spam}{confidence} - 0.8), '<', 1e-9, 'p = best s / (best s + best ham)');
@@ -355,7 +356,8 @@ sub t_questions : Test(14)
   _stub({ scores => { 'is_phishing#0' => 0.9, _ham0 => 0.1 } });
   $v = ml_classify(_state());
   is_deeply([sort keys %{ $last_payload->{labels} }],
-            [(map { "_ham$_" } 0 .. $#Mail::MIMEDefang::ML::GLiClass::HAM_LABELS), 'is_phishing#0'],
+            [(map { "_ham$_" } 0 .. $#Mail::MIMEDefang::ML::GLiClass::HAM_LABELS),
+             (map { "is_phishing#$_" } 0 .. $#{ $Mail::MIMEDefang::ML::GLiClass::LABELS{is_phishing} })],
             'gliclass sent phishing labels only');
   is($v->{is_phishing}{answer}, 1, 'gliclass phishing answered');
 
