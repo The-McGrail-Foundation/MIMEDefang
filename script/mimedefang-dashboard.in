@@ -1406,6 +1406,8 @@ mimedefang-dashboard [options]
        --ml-events LIST    events whose first value is an ML confidence
                            (default ml_spam,ml_not_spam,ml_phishing,
                            ml_not_phishing,ml_unsure)
+                           an event logged without a value is counted
+                           but gets no histogram
        --events LIST       events that get the first chart colors, in order
                            (default mail_out,spam,mail_in)
        --top-cap N         keys kept per top-N counter slice (default 300)
