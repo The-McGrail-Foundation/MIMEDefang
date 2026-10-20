@@ -13,3 +13,4 @@ script/mimedefang-test-mail.1
 ^watch-mimedefang$
 redhat/mimedefang.spec
 ^MYMETA.(json|yml)$
+^images/
