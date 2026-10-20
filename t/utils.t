@@ -6,6 +6,7 @@ use lib qw(modules/lib);
 use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
+use File::Temp ();
 use MIME::Parser;
 
 use Mail::MIMEDefang;
@@ -211,6 +212,64 @@ sub t_re_match_tar_directory : Test(2)
     }
     system('rm', '-rf', 't/tmp');
   };
+}
+
+sub t_re_match_7zip_directory : Test(6)
+{
+  ($Features{'7zip'}) = map { "$_/7za" } grep { -x "$_/7za" } split(/:/, $ENV{PATH} // '');
+
+  SKIP: {
+    skip "7za(1) is needed for this test to work", 6 unless $Features{'7zip'};
+
+    # Solid archive: only the first file of the block has a compressed
+    # size, and a directory is listed first
+    is(re_match_in_7zip_directory("t/data/multi.7z", '\.exe$'), 1, 'exe after the first entry');
+    is(re_match_in_7zip_directory("t/data/multi.7z", '^readme\.txt$'), 1, 'file without compressed size');
+    is(re_match_in_7zip_directory("t/data/multi.7z", 'c\.txt$'), 1, 'last entry');
+    is(re_match_in_7zip_directory("t/data/multi.7z", '^sub$'), 0, 'directories are skipped');
+    is(re_match_in_7zip_directory("t/data/multi.7z", '\.scr$'), 0, 'no match');
+
+    # Encrypted headers: must not prompt for a password on stdin
+    # archive protected with password "enc"
+    local $SIG{ALRM} = sub { die "timeout\n" };
+    alarm(20);
+    my $r = eval { re_match_in_7zip_directory("t/data/enc.7z", '\.exe$') };
+    alarm(0);
+    is($r, 0, 'encrypted headers fail without hanging');
+  };
+}
+
+sub t_re_match_rar_directory : Test(3)
+{
+  # Fake unrar(1) printing a real "unrar l" listing
+  my $dir = File::Temp::tempdir(CLEANUP => 1);
+  open(my $fh, '>', "$dir/unrar") or die "$dir/unrar: $!";
+  print $fh <<'EOS';
+#!/bin/sh
+cat <<'EOF'
+
+UNRAR 7.00 freeware      Copyright (c) 1993-2024 Alexander Roshal
+
+Archive: test.rar
+Details: RAR 5
+
+ Attributes      Size     Date    Time   Name
+----------- ---------  ---------- -----  ----
+ -rw-r--r--         6  2026-10-20 22:39  readme.txt
+ -rw-r--r--         4  2026-10-20 22:39  pay load.exe
+----------- ---------  ---------- -----  ----
+                   10                    2
+ -rw-r--r--         4  2026-10-20 22:39  after.scr
+EOF
+EOS
+  close($fh);
+  chmod(0755, "$dir/unrar");
+  local $ENV{PATH} = "$dir:$ENV{PATH}";
+  local $Features{'unrar'} = "$dir/unrar";
+
+  is(re_match_in_rar_directory("t/data/multi.7z", '\.exe$'), 1, 'exe after the first entry');
+  is(re_match_in_rar_directory("t/data/multi.7z", '\.doc$'), 0, 'no match');
+  is(re_match_in_rar_directory("t/data/multi.7z", '\.scr$'), 0, 'stops at the closing separator');
 }
 
 sub t_gen_mx_id : Test(1)
