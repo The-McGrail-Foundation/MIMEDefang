@@ -13,17 +13,17 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
+  # Build with both build systems and run the test suite on the runner,
+  # including the network and author (Perl::Critic) tests.
   build:
-    # The type of runner that the job will run on
     strategy:
+      fail-fast: false
       matrix:
         platform: [ubuntu-latest]
+        build: [autoconf, makemaker]
     runs-on: ${{ matrix.platform }}
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -33,12 +33,51 @@ jobs:
           sudo apt-get -y install libmail-spf-perl libmail-dkim-perl libio-socket-ssl-perl libio-stringy-perl \
               libmailtools-perl libmime-tools-perl libnet-smtp-ssl-perl libnet-ssleay-perl libtimedate-perl \
               libunix-syslog-perl libhtml-parser-perl libarchive-zip-perl libtest-class-most-perl spamassassin \
-              libunix-syslog-perl libwww-perl sendmail libmilter-dev cpanminus
+              libwww-perl libjson-perl libnet-dns-perl libanyevent-perl libhtml-format-perl \
+              libtest-perl-critic-perl sendmail libmilter-dev cpanminus 7zip
       - name: Install extra modules
         run: |
-          sudo cpanm -n Mail::BIMI
-      - name: build MIMEDefang
+          # A newer MIME-tools than Ubuntu's enables the t/mime.t tests on
+          # concatenated base64 streams and ambiguous content.
+          sudo cpanm -n Mail::BIMI MIME::Tools
+      - name: build MIMEDefang (configure)
+        if: matrix.build == 'autoconf'
         run: |
           ./configure && make
+      - name: build MIMEDefang (Makefile.PL)
+        if: matrix.build == 'makemaker'
+        run: |
+          perl Makefile.PL && make
       - name: Regression tests
-        run: env NET_TEST=yes prove -lv t
+        run: env NET_TEST=yes TEST_AUTHOR=1 prove -lv t
+
+  # Run the suites of t/run-tests.sh in Docker: the full test suite against
+  # a live Postfix or Sendmail with MIMEDefang (SMTP_TEST=yes).  Manual runs
+  # only, like the ml job: they pull images and can break on network issues.
+  docker:
+    if: github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [postfix, sendmail]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Run the ${{ matrix.suite }} suite
+        run: sh t/run-tests.sh ${{ matrix.suite }}
+
+  # The live ML tests against the Laya and GLiClass servers.  Manual runs
+  # only: the models are downloaded from Hugging Face on every run.
+  ml:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Run the ml suite
+        run: sh t/run-tests.sh ml
