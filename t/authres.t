@@ -49,4 +49,36 @@ sub t_md_authres_bimi : Test(1)
   };
 }
 
+sub t_md_org_domain : Test(8)
+{
+  my $org = \&Mail::MIMEDefang::Authres::md_org_domain;
+  SKIP: {
+    skip "IO::Socket::SSL::PublicSuffix is needed for this test", 5
+      unless eval { require IO::Socket::SSL::PublicSuffix; 1 };
+    is($org->('mail.example.com'), 'example.com', 'subdomain of a .com domain');
+    is($org->('www.bank.co.uk'), 'bank.co.uk', 'multi-label public suffix');
+    isnt($org->('evil.co.uk'), $org->('bank.co.uk'), 'different co.uk domains do not align');
+    is($org->('co.uk'), '', 'a public suffix has no organizational domain');
+    is($org->('Mail.Example.COM.'), 'example.com', 'case and trailing dot');
+  };
+  is($org->(undef), '', 'undef');
+  is($org->('bad;domain.com'), '', 'invalid characters');
+  is($org->('[192.0.2.1]'), '', 'address literal');
+}
+
+sub t_ar_sanitize : Test(7)
+{
+  my $mf = \&Mail::MIMEDefang::Authres::_ar_mailfrom;
+  my $dom = \&Mail::MIMEDefang::Authres::_ar_domain;
+
+  is($mf->('<user.name+tag@example.com>'), 'user.name+tag@example.com', 'plain address kept');
+  is($mf->('"x;dkim=pass header.d=bank.com"@evil.example'), 'evil.example',
+     'quoted local part reduced to the domain');
+  is($mf->('user@evil;dkim=pass'), undef, 'invalid domain refused');
+  is($mf->('<>'), undef, 'null sender');
+  is($dom->('mx.example.com'), 'mx.example.com', 'host name kept');
+  is($dom->('[IPv6:2001:db8::1]'), '[IPv6:2001:db8::1]', 'address literal kept');
+  is($dom->('evil (spf=pass) x'), undef, 'HELO with spaces refused');
+}
+
 __PACKAGE__->runtests();

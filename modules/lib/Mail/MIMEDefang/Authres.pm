@@ -89,6 +89,14 @@ sub md_authres {
   my ($dkimres, $dkimdom, $ksize, $dkimpk) = md_dkim_verify();
 
   my ($spfcode, $spfexpl, $helo_spfcode, $helo_spfexpl) = md_spf_verify($spfmail, $relayip, $helo);
+
+  # The sender, HELO and domains come from the client: only well-formed
+  # values go into the header
+  my $ar_mailfrom = _ar_mailfrom($spfmail);
+  my $ar_helo     = _ar_domain($helo);
+  $dkimdom        = _ar_domain($dkimdom);
+  $spfcode        = undef unless defined $ar_mailfrom;
+  $helo_spfcode   = undef unless defined $ar_helo;
   if((defined $spfcode) or ((defined $dkimpk) and ($ksize > 0))) {
     # Mail::DKIM::ARC::Signer v0.54 doesn't correctly parse Authentication-Results headers,
     # add a workaround to make md_arc_sign work with our own headers.
@@ -97,8 +105,9 @@ sub md_authres {
     } else {
       $authres = "$serverdomain (MIMEDefang);";
     }
-    if(defined $dkimpk) {
+    if(defined $dkimpk and defined $dkimdom) {
       my $dkimb = substr($dkimpk, 0, 8);
+      $dkimb = undef unless $dkimb =~ m{^[A-Za-z0-9+/=]+$};
       if($ksize > 0) {
         $authres .= "\r\n\tdkim=$dkimres ($ksize-bit key) header.d=$dkimdom";
         if(defined($dkimb)) {
@@ -109,23 +118,24 @@ sub md_authres {
     }
     if(defined $spfcode) {
       if($spfcode eq 'fail') {
-        $authres .= "\r\n\tspf=" . $spfcode . " (domain of $spfmail does not designate $relayip as permitted sender) smtp.mailfrom=$spfmail;";
+        $authres .= "\r\n\tspf=" . $spfcode . " (domain of $ar_mailfrom does not designate $relayip as permitted sender) smtp.mailfrom=$ar_mailfrom;";
       } elsif($spfcode eq 'pass') {
-        $authres .= "\r\n\tspf=" . $spfcode . " (domain of $spfmail designates $relayip as permitted sender) smtp.mailfrom=$spfmail;";
+        $authres .= "\r\n\tspf=" . $spfcode . " (domain of $ar_mailfrom designates $relayip as permitted sender) smtp.mailfrom=$ar_mailfrom;";
       } elsif($spfcode eq 'none') {
-        $authres .= "\r\n\tspf=" . $spfcode . " (domain of $spfmail doesn't specify if $relayip is a permitted sender) smtp.mailfrom=$spfmail;";
+        $authres .= "\r\n\tspf=" . $spfcode . " (domain of $ar_mailfrom doesn't specify if $relayip is a permitted sender) smtp.mailfrom=$ar_mailfrom;";
       }
     }
     if(defined $helo_spfcode) {
       if($helo_spfcode eq 'fail') {
-        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $helo does not designate $relayip as permitted sender) smtp.helo=$helo;";
+        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $ar_helo does not designate $relayip as permitted sender) smtp.helo=$ar_helo;";
       } elsif($helo_spfcode eq 'pass') {
-        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $helo designates $relayip as permitted sender) smtp.helo=$helo;";
+        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $ar_helo designates $relayip as permitted sender) smtp.helo=$ar_helo;";
       } elsif($helo_spfcode eq 'none') {
-        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $helo doesn't specify if $relayip is a permitted sender) smtp.helo=$helo;";
+        $authres .= "\r\n\tspf=" . $helo_spfcode . " (domain of $ar_helo doesn't specify if $relayip is a permitted sender) smtp.helo=$ar_helo;";
       }
     }
-    if (defined $bimi_domain && $bimi_domain ne '') {
+    $bimi_domain = _ar_domain($bimi_domain);
+    if (defined $bimi_domain) {
       my $dmarc_record = md_get_dmarc_record($bimi_domain);
       my $dmarc_policy = 'none';
       if (defined $dmarc_record && $dmarc_record =~ /\bp=(\w+)/) {
@@ -136,10 +146,10 @@ sub md_authres {
       # or if SPF passes and the mail-from domain aligns.
       my $effective_dmarc = 'fail';
       my $bimi_org = md_org_domain($bimi_domain);
-      if (defined $dkimres && $dkimres eq 'pass' && defined $dkimdom) {
+      if ($bimi_org ne '' && defined $dkimres && $dkimres eq 'pass' && defined $dkimdom) {
         $effective_dmarc = 'pass' if md_org_domain($dkimdom) eq $bimi_org;
       }
-      if ($effective_dmarc ne 'pass' && defined $spfcode && $spfcode eq 'pass') {
+      if ($bimi_org ne '' && $effective_dmarc ne 'pass' && defined $spfcode && $spfcode eq 'pass') {
         my ($spf_localpart, $spf_domain) = split /\@/, $spfmail, 2;
         if (defined $spf_domain && md_org_domain($spf_domain) eq $bimi_org) {
           $effective_dmarc = 'pass';
@@ -157,20 +167,59 @@ sub md_authres {
 =item md_org_domain
 
 Returns the "organizational domain" of a domain name, for use in relaxed
-DMARC alignment checks (e.g. C<mail.example.com> -> C<example.com>). This is
-a simplification; a production deployment may use the Public Suffix List.
+DMARC alignment checks (e.g. C<mail.example.com> -> C<example.com>,
+C<www.bank.co.uk> -> C<bank.co.uk>), using the Public Suffix List shipped
+with C<IO::Socket::SSL>.  Returns an empty string for an invalid domain or
+a public suffix.  Without C<IO::Socket::SSL::PublicSuffix> the domain
+itself is returned, which gives strict alignment.
 
 =back
 
 =cut
 
+my $PublicSuffix;
+
 sub md_org_domain {
   my ($domain) = @_;
-  return '' unless defined $domain && $domain ne '';
+  $domain = _ar_domain($domain);
+  return '' unless defined $domain;
   $domain = lc $domain;
-  my @labels = split /\./, $domain;
-  return $domain if @labels <= 2;
-  return join('.', @labels[-2..-1]);
+  $domain =~ s/\.$//;
+  return '' if $domain =~ /^\[/;
+
+  $PublicSuffix //= eval {
+    require IO::Socket::SSL::PublicSuffix;
+    IO::Socket::SSL::PublicSuffix->default;
+  } // 0;
+  return $domain unless $PublicSuffix;
+
+  # A public suffix (e.g. "co.uk") has no organizational domain
+  my ($rest) = $PublicSuffix->public_suffix($domain);
+  return '' unless defined $rest && $rest ne '';
+  my (undef, $org) = $PublicSuffix->public_suffix($domain, 1);
+  return $org // '';
+}
+
+# Returns the domain if it is a well-formed host name or address literal
+sub _ar_domain {
+  my ($d) = @_;
+  return unless defined $d;
+  return $d if $d =~ /^(?=.{1,254}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.?$/;
+  return $d if $d =~ /^\[(?:IPv6:)?[0-9A-Fa-f.:]+\]$/;
+  return;
+}
+
+# Returns the envelope sender if it is safe to put in the header, else
+# just its domain (RFC 8601 allows either), or undef
+sub _ar_mailfrom {
+  my ($addr) = @_;
+  return unless defined $addr;
+  $addr =~ s/^<//;
+  $addr =~ s/>$//;
+  my ($local, $domain) = $addr =~ /^(.*)\@([^\@]+)$/ or return;
+  return unless defined _ar_domain($domain);
+  return $addr if $local =~ /^[A-Za-z0-9!#\$%&'*+\/=?^_`{|}~.-]+$/;
+  return $domain;
 }
 
 1;
