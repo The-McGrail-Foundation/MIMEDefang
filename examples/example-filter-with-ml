@@ -281,11 +281,11 @@ sub filter_end {
     #                                        leans yes below the action
     #                                        threshold, or has no opinion
     # A "no" answer is also logged as an ml_not_spam / ml_not_phishing
-    # event with its confidence, for mimedefang-dashboard.
+    # event, an "unsure" one as ml_uncertain_spam / ml_uncertain_phishing,
+    # both with their confidence, for mimedefang-dashboard.
     #*******************************************************************
     my %acted = (is_spam => $is_spam_verdict, is_phishing => $is_phishing_verdict);
-    # Highest confidence among the "unsure" questions, logged with ml_unsure
-    my $unsure;
+    my $unsure = 0;
     foreach my $q (['is_spam', 'Spam'], ['is_phishing', 'Phishing']) {
         my ($key, $name) = @$q;
         next unless grep { $_ eq $key } @{ $verdict->{questions} };
@@ -295,17 +295,20 @@ sub filter_end {
             sprintf('%.2f', $sign * $verdict->{$key}{confidence}));
 
         my $word = $acted{$key} ? 'yes' : $sign < 0 ? 'no' : 'unsure';
-        $unsure = $verdict->{$key}{confidence}
-            if $word eq 'unsure' && (!defined $unsure || $verdict->{$key}{confidence} > $unsure);
-        md_graphdefang_log($key eq 'is_spam' ? 'ml_not_spam' : 'ml_not_phishing',
-            $verdict->{$key}{confidence}) if $word eq 'no';
+        if ($word eq 'no') {
+            md_graphdefang_log($key eq 'is_spam' ? 'ml_not_spam' : 'ml_not_phishing',
+                $verdict->{$key}{confidence});
+        } elsif ($word eq 'unsure') {
+            $unsure++;
+            md_graphdefang_log($key eq 'is_spam' ? 'ml_uncertain_spam' : 'ml_uncertain_phishing',
+                $verdict->{$key}{confidence});
+        }
         action_change_header("X-MIMEDefang-ML-$name-Answer", $word);
     }
-    if (defined $unsure) {
+    if ($unsure) {
         md_syslog('info', sprintf("ml($verdict->{backend}): unsure, spam %s/%.2f phishing %s/%.2f",
             $verdict->{is_spam}{answer} // 'undef', $verdict->{is_spam}{confidence},
             $verdict->{is_phishing}{answer} // 'undef', $verdict->{is_phishing}{confidence}));
-        md_graphdefang_log('ml_unsure', $unsure);
     }
     action_change_header('X-MIMEDefang-ML-Backend', $verdict->{backend});
 

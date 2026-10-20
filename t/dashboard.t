@@ -128,20 +128,23 @@ sub t_store_aggregates : Test(11)
             'ML confidence bins, percentages scaled');
 }
 
-sub t_store_ml_no_verdicts : Test(4)
+sub t_store_ml_no_verdicts : Test(5)
 {
   my $st = MDDash::Store->new(history => 100, top_cap => 3, spam_event => 'spam',
-                              ml_events => ['ml_not_spam', 'ml_not_phishing', 'ml_unsure'], now => 0);
+                              ml_events => ['ml_not_spam', 'ml_uncertain_spam', 'ml_not_phishing', 'ml_uncertain_phishing'], now => 0);
   my $t = 1_000_000_020;
   $st->add_event(main::parse_mdlog('MDLOG,A,ml_not_spam,0.95,,a@x.org,r@l.test,S', $t));
   $st->add_event(main::parse_mdlog('MDLOG,B,ml_not_phishing,0.42,,b@x.org,r@l.test,S', $t + 1));
-  $st->add_event(main::parse_mdlog('MDLOG,C,ml_unsure,0.71,,c@x.org,r@l.test,S', $t + 2));
-  $st->add_event(main::parse_mdlog('MDLOG,D,ml_unsure,,,d@x.org,r@l.test,S', $t + 3));
-  my $sc = $st->scores('24h', $t + 10)->{scores};
+  $st->add_event(main::parse_mdlog('MDLOG,C,ml_uncertain_spam,0.71,,c@x.org,r@l.test,S', $t + 2));
+  $st->add_event(main::parse_mdlog('MDLOG,D,ml_uncertain_phishing,,,d@x.org,r@l.test,S', $t + 3));
+  my $res = $st->scores('24h', $t + 10);
+  my $sc = $res->{scores};
+  is_deeply($res->{ml_events}, [qw(ml_not_spam ml_uncertain_spam ml_not_phishing ml_uncertain_phishing)],
+            'ML events keep the configured order');
   is_deeply($sc->{ml_not_spam}, [ { bin => 0.9, count => 1 } ], 'not-spam confidence binned');
   is_deeply($sc->{ml_not_phishing}, [ { bin => 0.4, count => 1 } ], 'not-phishing confidence binned');
-  is_deeply($sc->{ml_unsure}, [ { bin => 0.7, count => 1 } ], 'unsure confidence binned, valueless event skipped');
-  is($st->{totals}{ml_unsure}, 2, 'valueless unsure event still counted');
+  is_deeply($sc->{ml_uncertain_spam}, [ { bin => 0.7, count => 1 } ], 'uncertain confidence binned');
+  is($st->{totals}{ml_uncertain_phishing}, 1, 'valueless uncertain event still counted');
 }
 
 sub t_store_mx_and_state : Test(7)
