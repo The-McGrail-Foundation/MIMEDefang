@@ -173,6 +173,7 @@ t/data/dkim.pem
 t/data/dkim_sig2a.txt
 t/data/dkim_sig2.txt
 t/data/dkim_sig.txt
+t/data/enc.7z
 t/data/exe.eml
 t/data/gtube.eml
 t/data/md.conf
@@ -180,6 +181,7 @@ t/data/mimedefang-async-filter
 t/data/mimedefang-recipients-filter
 t/data/mimedefang-score-filter
 t/data/mimedefang-test-filter
+t/data/multi.7z
 t/data/multipart.eml
 t/data/rspamd.conf
 t/data/sa-test-prefs.cf
@@ -212,6 +214,8 @@ t/smtp.t
 t/spf.t
 t/test_safe_append_header.c
 t/test_json_out.c
+t/test_pidfile.c
+t/test_sanitize_header.c
 t/tlspolicy.t
 t/antivirus.t
 t/utils.t
