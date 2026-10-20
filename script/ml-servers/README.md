@@ -247,7 +247,7 @@ on the same ports as above. To run the live tests of `t/ml.t` against
 them, run this from the top of the source tree:
 
 ```sh
-sh t/docker/dockerML.sh
+sh t/run-tests.sh ml
 ```
 
 ## Model cache and offline use
