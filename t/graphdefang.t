@@ -160,14 +160,19 @@ sub t_feed_only : Test(4)
     }
 }
 
-sub t_feed_missing_socket_is_harmless : Test(2)
+sub t_feed_missing_socket_is_harmless : Test(3)
 {
     _setup();
     undef $GraphDefangSyslogFacility;
     @Recipients = ('a@example.com');
     md_graphdefang_feed_enable('/nonexistent-dir/feed.sock');
-    my $ok = eval { md_graphdefang_log('virus', 'EICAR'); 1 };
+    my $ok;
+    my @lines = _collect_log(sub {
+        $ok = eval { md_graphdefang_log('virus', 'EICAR'); 1 };
+    });
     ok($ok, 'no die when the dashboard socket does not exist') or diag $@;
+    is(scalar(grep { /cannot reach dashboard feed/ } @lines), 0,
+       'a missing dashboard is not logged');
     is(Mail::MIMEDefang::_graphdefang_feed_send('x'), 0, 'send reports failure');
     undef $GraphDefangFeedSocket;
 }

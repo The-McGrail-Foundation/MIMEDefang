@@ -39,7 +39,7 @@ no warnings qw(once uninitialized);
 require Exporter;
 
 use Carp;
-use Errno qw(ENOENT EACCES);
+use Errno qw(ENOENT EACCES ECONNREFUSED EAGAIN EWOULDBLOCK ENOBUFS);
 use Fcntl qw(F_GETFL F_SETFL O_NONBLOCK);
 use File::Spec;
 use IO::File;
@@ -585,6 +585,7 @@ sub _graphdefang_feed_send
     return 0 unless defined($addr);
 
     if (!$FeedSock) {
+      return 0 unless -S $GraphDefangFeedSocket;
       my $sock;
       if (!socket($sock, PF_UNIX, SOCK_DGRAM, 0)) {
         _graphdefang_feed_warn("socket: $!");
@@ -597,7 +598,9 @@ sub _graphdefang_feed_send
     my $sent = send($FeedSock, $line, 0, $addr);
     if (!defined($sent)) {
       # A missing or busy dashboard is normal; anything else is worth a note
-      _graphdefang_feed_warn("send to $GraphDefangFeedSocket: $!");
+      my $err = $! + 0;
+      _graphdefang_feed_warn("send to $GraphDefangFeedSocket: $!")
+        unless grep { $err == $_ } (ENOENT, ECONNREFUSED, EAGAIN, EWOULDBLOCK, ENOBUFS);
       return 0;
     }
     return 1;
@@ -631,7 +634,8 @@ argument has the same meaning as the second argument of
 C<md_graphdefang_log_enable>: whether to send one line per recipient.
 
 Delivery never blocks: if the dashboard is not running the events are
-dropped.
+dropped and nothing is logged, so the dashboard can be started and
+stopped at any time.
 
 =cut
 
