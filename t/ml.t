@@ -402,7 +402,7 @@ sub t_retry : Test(4)
 }
 
 # Run against real servers, e.g. the mimedefang/laya and mimedefang/gliclass
-# images started by t/docker/dockerML.sh.  Checks the shape of the answers,
+# images started by "sh t/run-tests.sh ml".  Checks the shape of the answers,
 # which catches protocol drift between the backends and the servers, not
 # the quality of the model.
 sub t_live : Test(13)

@@ -1,15 +1,18 @@
 # docker-compose-ml.yml
 # ---------------------
 # Laya and GLiClass inference servers, used to run the live tests of
-# Mail::MIMEDefang::ML (t/ml.t) against the published images.
+# Mail::MIMEDefang::ML (t/ml.t) against the published images.  The tests
+# themselves run in the mimedefang-ml-ci container (profile ci), which
+# reaches the servers by service name.
 #
 # Usage:
-#   sh t/docker/dockerML.sh
+#   sh t/run-tests.sh ml
 #
 # or by hand:
 #   docker compose -f t/docker/docker-compose-ml.yml --project-directory . up -d
-#   (wait until curl http://127.0.0.1:8687/health and :8688/health answer)
-#   env NET_TEST=yes ML_TEST_BACKEND=laya prove -It/lib t/ml.t
+#   docker compose -f t/docker/docker-compose-ml.yml --project-directory . \
+#       --profile ci run --rm mimedefang-ml-ci
+#   docker compose -f t/docker/docker-compose-ml.yml --project-directory . down
 #
 # The servers have no authentication: the ports are published on 127.0.0.1 only.
 # On the first start the models are downloaded from Hugging Face into the
@@ -18,6 +21,21 @@
 name: mimedefang-ml
 
 services:
+
+  # ── CI / test service ──────────────────────────────────────────────────────
+  mimedefang-ml-ci:
+    profiles: [ci]
+    image: mimedefang/postfix:ci
+    container_name: mimedefang-ml-ci
+    working_dir: /tests
+    environment:
+      ML_WAIT_TIMEOUT: ${ML_WAIT_TIMEOUT:-1200}
+    volumes:
+      - .:/tests                        # mount full repo so t/ml.t can run
+    depends_on:
+      - laya
+      - gliclass
+    command: sh t/docker/dockerML.sh
 
   laya:
     image: mimedefang/laya:${ML_IMAGE_TAG:-latest}
