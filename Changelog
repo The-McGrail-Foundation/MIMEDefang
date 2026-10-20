@@ -2,6 +2,18 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2026-10-16 Giovanni Bechis <g.bechis@snb.it>
+
+        * split `Mail::MIMEDefang::Antivirus` into one module per scanner:
+          `Mail::MIMEDefang::Antivirus::ClamAV`,
+          `Mail::MIMEDefang::Antivirus::NAI` and, for scanners no longer
+          maintained, `Mail::MIMEDefang::Antivirus::Legacy::*` (BDC,
+          CarrierScan, CSAV, FProt, FSAV, HBEDV, Kaspersky, NOD32, NVCC,
+          Sophos, Trend, Vexira).  The code of each scanner is compiled
+          only when that scanner is initialized or used; the original
+          function names are still exported, so filters do not need to
+          change.
+
 2026-10-14 Giovanni Bechis <g.bechis@snb.it>
 
         * add `mimedefang-dashboard`, a live web console for the mail flow
