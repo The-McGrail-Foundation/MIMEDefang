@@ -2048,17 +2048,17 @@ V4BDgUx0DUW5kUDO1v8HW58Piu5OtQIAAAAASUVORK5CYII=
     <section class="view" id="v-overview">
       <div class="tiles" id="kpis"></div>
       <div class="card">
-        <div class="card-h"><h2>Events</h2><div class="seg" data-range-for="overview"></div></div>
+        <div class="card-h"><div class="card-t"><h2>Events</h2><button class="info" type="button" aria-label="About this card" data-info="Events logged by the filter with md_graphdefang_log, counted per time bucket and stacked by event name. The seven most frequent events have their own color; the rest are grouped as &quot;Other&quot;.">i</button></div><div class="seg" data-range-for="overview"></div></div>
         <div class="chart" id="ov-events"></div>
         <div class="legend" id="ov-legend"></div>
       </div>
       <div class="grid3">
-        <div class="card"><div class="card-h"><h3>Messages scanned</h3></div><div class="chart sm" id="ov-msgs"></div></div>
-        <div class="card"><div class="card-h"><h3>Busy workers (avg)</h3></div><div class="chart sm" id="ov-busy"></div></div>
-        <div class="card"><div class="card-h"><h3>Scan time (ms)</h3></div><div class="chart sm" id="ov-ams"></div></div>
+        <div class="card"><div class="card-h"><div class="card-t"><h3>Messages scanned</h3><button class="info" type="button" aria-label="About this card" data-info="Messages scanned by the multiplexor in each time bucket (growth of its message counter between snapshots).">i</button></div></div><div class="chart sm" id="ov-msgs"></div></div>
+        <div class="card"><div class="card-h"><div class="card-t"><h3>Busy workers (avg)</h3><button class="info" type="button" aria-label="About this card" data-info="Average number of busy workers over the multiplexor snapshots taken in each time bucket.">i</button></div></div><div class="chart sm" id="ov-busy"></div></div>
+        <div class="card"><div class="card-h"><div class="card-t"><h3>Scan time (ms)</h3><button class="info" type="button" aria-label="About this card" data-info="Average time the multiplexor spent per scan request, averaged over each time bucket.">i</button></div></div><div class="chart sm" id="ov-ams"></div></div>
       </div>
       <div class="card">
-        <div class="card-h"><h2>Mail Event Percentage, last hour</h2></div>
+        <div class="card-h"><div class="card-t"><h2>Mail Event Percentage, last hour</h2><button class="info" type="button" aria-label="About this card" data-info="Share of each event among all the events logged in the last 60 minutes.">i</button></div></div>
         <div id="ov-mix"></div>
       </div>
     </section>
@@ -2077,12 +2077,12 @@ V4BDgUx0DUW5kUDO1v8HW58Piu5OtQIAAAAASUVORK5CYII=
         <label>Top <select id="fl-window"><option value="1h">last hour</option><option value="24h">last 24 hours</option></select></label>
       </div>
       <div class="card">
-        <div class="card-h"><h2 id="fl-chart-title">Events</h2><div class="seg" data-range-for="flow"></div></div>
+        <div class="card-h"><div class="card-t"><h2 id="fl-chart-title">Events</h2><button class="info" type="button" aria-label="About this card" data-info="Events over time for the event selected above, or all events stacked by name.">i</button></div><div class="seg" data-range-for="flow"></div></div>
         <div class="chart" id="fl-chart"></div>
         <div class="legend" id="fl-legend"></div>
       </div>
       <div class="card">
-        <div class="card-h"><h2 id="fl-top-title">Top</h2><span class="hint">Select a row to see its events</span></div>
+        <div class="card-h"><div class="card-t"><h2 id="fl-top-title">Top</h2><button class="info" type="button" aria-label="About this card" data-info="The 25 most frequent values of the &quot;Group by&quot; field among the selected events in the chosen window. Select a row to open the Live log filtered on that value.">i</button></div><span class="hint">Select a row to see its events</span></div>
         <div id="fl-top"></div>
       </div>
     </section>
@@ -2092,6 +2092,7 @@ V4BDgUx0DUW5kUDO1v8HW58Piu5OtQIAAAAASUVORK5CYII=
         <input type="search" id="lv-q" placeholder="Filter: address, subject, value, queue id" aria-label="Filter events">
         <button class="btn" id="lv-pause" type="button" aria-pressed="false">Pause</button>
         <span class="hint" id="lv-count"></span>
+        <button class="info" type="button" aria-label="About this view" data-info="The latest 500 matching events, newest first, pushed live from the event feed. Select a row to see all the events of that message.">i</button>
         <span class="spacer"></span>
         <a class="btn ghost" href="/api/export?what=events&amp;fmt=csv">CSV</a>
         <a class="btn ghost" href="/api/export?what=events&amp;fmt=json">JSON</a>
@@ -2112,17 +2113,17 @@ V4BDgUx0DUW5kUDO1v8HW58Piu5OtQIAAAAASUVORK5CYII=
     <section class="view" id="v-workers" hidden>
       <div class="tiles" id="wk-tiles"></div>
       <div class="card">
-        <div class="card-h"><h2>Workers</h2><div class="legend inline" id="wk-legend"></div></div>
+        <div class="card-h"><div class="card-t"><h2>Workers</h2><button class="info" type="button" aria-label="About this card" data-info="Multiplexor worker processes grouped by state, with their status tag, pid, scans and requests handled, age and time spent in the current state.">i</button></div><div class="legend inline" id="wk-legend"></div></div>
         <div id="wk-groups"></div>
       </div>
       <div class="grid2">
         <div class="card">
-          <div class="card-h"><h2>Load</h2></div>
+          <div class="card-h"><div class="card-t"><h2>Load</h2><button class="info" type="button" aria-label="About this card" data-info="Requests per second and average milliseconds per request for each request type (scan, relay, sender, recipient) over the last 10 s, 1, 5 and 10 minutes. The second table counts requests over the last 1 to 24 hours.">i</button></div></div>
           <div class="tablewrap"><table class="num" id="wk-load"></table></div>
           <div class="tablewrap"><table class="num" id="wk-hload"></table></div>
         </div>
         <div class="card">
-          <div class="card-h"><h2>Busy workers per request</h2></div>
+          <div class="card-h"><div class="card-t"><h2>Busy workers per request</h2><button class="info" type="button" aria-label="About this card" data-info="How many workers were busy when each request was handled, since the multiplexor started, followed by the autoscaling settings and the current busy ratio.">i</button></div></div>
           <div class="chart sm" id="wk-histo"></div>
           <div class="kv" id="wk-autoscale"></div>
         </div>
@@ -2134,12 +2135,12 @@ V4BDgUx0DUW5kUDO1v8HW58Piu5OtQIAAAAASUVORK5CYII=
         <label>Window <select id="sc-window"><option value="24h">last 24 hours</option><option value="7d">last 7 days</option></select></label>
       </div>
       <div class="card">
-        <div class="card-h"><h2 id="sc-spam-title">Spam score</h2></div>
+        <div class="card-h"><div class="card-t"><h2 id="sc-spam-title">Spam score</h2><button class="info" type="button" aria-label="About this card" data-info="Number of messages per integer spam score, taken from Value 1 of the spam event, in the selected window.">i</button></div></div>
         <div class="chart sm" id="sc-spam"></div>
       </div>
       <div class="grid3" id="sc-ml"></div>
       <div class="card">
-        <div class="card-h"><h2>ML verdicts over time</h2><div class="seg" data-range-for="spam-ml"></div></div>
+        <div class="card-h"><div class="card-t"><h2>ML verdicts over time</h2><button class="info" type="button" aria-label="About this card" data-info="ML classifier verdict events per time bucket, stacked by verdict.">i</button></div><div class="seg" data-range-for="spam-ml"></div></div>
         <div class="chart" id="sc-series"></div>
         <div class="legend" id="sc-legend"></div>
       </div>
@@ -2254,6 +2255,10 @@ input[type="search"] { min-width: 0; width: 340px; max-width: 100%; }
 .card-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
 .card h2 { font-size: 14px; margin: 0; font-weight: 600; }
 .card h3 { font-size: 13px; margin: 0; font-weight: 600; color: var(--ink2); }
+.card-t { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.info { font: 600 10px/1 var(--sans); width: 15px; height: 15px; padding: 0; flex: none; display: inline-grid; place-items: center; border: 1px solid var(--muted); border-radius: 50%; background: transparent; color: var(--muted); cursor: help; }
+.info:hover, .info:focus-visible { color: var(--ink); border-color: var(--accent); outline: none; }
+.tip .ti { white-space: normal; line-height: 1.45; color: var(--ink2); }
 .hint { font-size: 12px; color: var(--muted); }
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
@@ -2467,6 +2472,9 @@ table.log tr.new td { animation: flash 1.2s ease-out; }
         h('b', { text: r.value })));
     }
     if (total != null) tip.append(h('div', { class: 'tr tt' }, h('span', { text: 'Total' }), h('b', { text: total })));
+    placeTip(x, y);
+  }
+  function placeTip(x, y) {
     tip.hidden = false;
     const w = tip.offsetWidth, ht = tip.offsetHeight;
     let left = x + 14, top = y + 14;
@@ -2475,7 +2483,28 @@ table.log tr.new td { animation: flash 1.2s ease-out; }
     tip.style.left = Math.max(8, left) + 'px';
     tip.style.top = Math.max(8, top) + 'px';
   }
-  function hideTip() { tip.hidden = true; }
+  function hideTip() { tip.hidden = true; tipFor = null; }
+
+  // "i" buttons: the description is in data-info
+  let tipFor = null;
+  function infoBtn(text) {
+    return h('button', { class: 'info', type: 'button', 'aria-label': 'About this card', 'data-info': text, text: 'i' });
+  }
+  function showInfo(el) {
+    tip.replaceChildren(h('div', { class: 'ti', text: el.dataset.info }));
+    const r = el.getBoundingClientRect();
+    placeTip(r.left - 6, r.bottom - 8);
+    tipFor = el;
+  }
+  const infoOf = (e) => e.target.closest && e.target.closest('.info');
+  document.addEventListener('pointerover', (e) => { const el = infoOf(e); if (el) showInfo(el); });
+  document.addEventListener('focusin', (e) => { const el = infoOf(e); if (el) showInfo(el); });
+  document.addEventListener('pointerout', (e) => { if (infoOf(e)) hideTip(); });
+  document.addEventListener('focusout', (e) => { if (infoOf(e)) hideTip(); });
+  document.addEventListener('click', (e) => {
+    const el = infoOf(e);
+    if (el) showInfo(el); else if (tipFor) hideTip();
+  });
 
   // ---------- charts ----------
   // Axis maximum split into 4 round steps; integer steps unless frac
@@ -2981,7 +3010,8 @@ table.log tr.new td { animation: flash 1.2s ease-out; }
     for (const e of d.ml_events) {
       const bins = d.scores[e] || [];
       const box = h('div', { class: 'chart sm' });
-      ml.append(h('div', { class: 'card' }, h('div', { class: 'card-h' }, h('h3', { text: mlLabel(e) + ' confidence' })), box));
+      ml.append(h('div', { class: 'card' }, h('div', { class: 'card-h' }, h('div', { class: 'card-t' }, h('h3', { text: mlLabel(e) + ' confidence' }),
+        infoBtn('Number of "' + e + '" events per classifier confidence (Value 1, from 0 to 1 in steps of 0.1), in the selected window.'))), box));
       const labels = [], vals = [];
       const byBin = Object.fromEntries(bins.map((b) => [b.bin.toFixed(1), b.count]));
       for (let k = 0; k < 10; k++) { const key = (k / 10).toFixed(1); labels.push(key); vals.push(byBin[key] || 0); }
