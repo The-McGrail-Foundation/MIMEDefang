@@ -503,6 +503,7 @@ sub action_add_header_now {
 Like C<action_change_header>, but also patches C<./INPUTMSG> immediately,
 so a C<spam_assassin_check>/C<spam_assassin_is_spam>/C<rspamd_check> call
 later in the same filter invocation sees the changed header.
+If the header does not exist it is added, as C<action_change_header> does.
 
 =cut
 
@@ -538,6 +539,9 @@ sub action_change_header_now {
                 last;
             }
         }
+        # Like milter's change header, add the header if it does not exist
+        push(@$headers, { name => $header, raw => "$header: $value\n" })
+            if ($count < $idx);
     });
 }
 

@@ -475,6 +475,44 @@ sub t_change_header_now : Test(4)
   unlink('./INPUTMSG') if -f './INPUTMSG';
 }
 
+sub t_change_header_now_adds_missing : Test(3)
+{
+  no warnings qw(redefine once);
+  local *::md_syslog = sub {};
+  use warnings qw(redefine once);
+
+  init_globals();
+  $CWD = '.';
+  $InMessageContext = 1;
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+
+  open(my $fh, '>', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  print $fh "From: a\@example.com\nSubject: test\n\nBody\n";
+  close($fh);
+
+  my $ret = action_change_header_now('X-New', 'v');
+  is($ret, 1, 'action_change_header_now returns 1');
+  if (defined $results_fh) {
+    close $results_fh;
+    undef $results_fh;
+  }
+
+  open(my $rfh, '<', './RESULTS') or die "Cannot open RESULTS: $!";
+  my $raw = do { local $/; <$rfh> };
+  close($rfh);
+  like($raw, qr/^IX-New 1 v$/m, 'action_change_header_now wrote I line');
+
+  open(my $ifh, '<', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  my $msg = do { local $/; <$ifh> };
+  close($ifh);
+  is($msg, "From: a\@example.com\nSubject: test\nX-New: v\n\nBody\n",
+     'action_change_header_now added the missing header');
+
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+}
+
 sub t_delete_header_now : Test(3)
 {
   no warnings qw(redefine once);
