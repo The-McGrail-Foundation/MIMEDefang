@@ -373,6 +373,28 @@ sub _read_inputmsg_headers {
 }
 
 #***********************************************************************
+# %PROCEDURE: _header_line
+# %ARGUMENTS:
+#  header -- header name
+#  value -- header value
+# %RETURNS:
+#  The "Name: value" line to write to ./INPUTMSG, or undef if the
+#  name is invalid.
+# %DESCRIPTION:
+#  Sanitizes the header like the C milter does with the RESULTS file.
+#***********************************************************************
+sub _header_line {
+    my($header, $value) = @_;
+    return unless defined($header) && $header =~ /^[\x21-\x39\x3b-\x7e]+$/;
+    $value = '' unless defined($value);
+    $value =~ s/\r//g;
+    $value =~ s/\n+/\n/g;
+    $value =~ s/\n\z//;
+    $value =~ s/\n(?![ \t])/\n\t/g;
+    return "$header: $value\n";
+}
+
+#***********************************************************************
 # %PROCEDURE: _rewrite_inputmsg_headers
 # %ARGUMENTS:
 #  transform -- coderef called as $transform->($headers), where $headers
@@ -453,6 +475,8 @@ sub action_insert_header_now {
     my($header, $value, $pos) = @_;
     return 0 if (!in_message_context("action_insert_header_now"));
     $pos = 0 unless defined($pos);
+    my $line = _header_line($header, $value);
+    return 0 unless defined($line);
 
     action_insert_header($header, $value, $pos);
 
@@ -461,7 +485,7 @@ sub action_insert_header_now {
         my $at = $pos;
         $at = 0 if ($at < 0);
         $at = scalar(@$headers) if ($at > scalar(@$headers));
-        splice(@$headers, $at, 0, { name => $header, raw => "$header: $value\n" });
+        splice(@$headers, $at, 0, { name => $header, raw => $line });
     });
 }
 
@@ -489,12 +513,14 @@ later in the same filter invocation sees the new header.
 sub action_add_header_now {
     my($header, $value) = @_;
     return 0 if (!in_message_context("action_add_header_now"));
+    my $line = _header_line($header, $value);
+    return 0 unless defined($line);
 
     action_add_header($header, $value);
 
     return _rewrite_inputmsg_headers(sub {
         my($headers) = @_;
-        push(@$headers, { name => $header, raw => "$header: $value\n" });
+        push(@$headers, { name => $header, raw => $line });
     });
 }
 
@@ -525,6 +551,8 @@ sub action_change_header_now {
     my($header, $value, $idx) = @_;
     return 0 if (!in_message_context("action_change_header_now"));
     $idx = 1 unless defined($idx);
+    my $line = _header_line($header, $value);
+    return 0 unless defined($line);
 
     action_change_header($header, $value, $idx);
 
@@ -535,12 +563,12 @@ sub action_change_header_now {
             next unless (lc($h->{name}) eq lc($header));
             $count++;
             if ($count == $idx) {
-                $h->{raw} = "$header: $value\n";
+                $h->{raw} = $line;
                 last;
             }
         }
         # Like milter's change header, add the header if it does not exist
-        push(@$headers, { name => $header, raw => "$header: $value\n" })
+        push(@$headers, { name => $header, raw => $line })
             if ($count < $idx);
     });
 }

@@ -436,6 +436,40 @@ sub t_add_header_now : Test(3)
   unlink('./INPUTMSG') if -f './INPUTMSG';
 }
 
+sub t_add_header_now_injection : Test(3)
+{
+  no warnings qw(redefine once);
+  local *::md_syslog = sub {};
+  use warnings qw(redefine once);
+
+  init_globals();
+  $CWD = '.';
+  $InMessageContext = 1;
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+
+  open(my $fh, '>', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  print $fh "Subject: Hello\n\nBody line 1\n";
+  close($fh);
+
+  is(action_add_header_now("X-Bad\nX-Injected", 'value'), 0, 'invalid header name is refused');
+  is(action_add_header_now('X-Added', "first\r\nX-Injected: yes\n\nfake body\n"), 1,
+     'value with newlines is accepted');
+  if (defined $results_fh) {
+    close $results_fh;
+    undef $results_fh;
+  }
+
+  open(my $ifh, '<', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  my $msg = do { local $/; <$ifh> };
+  close($ifh);
+  is($msg, "Subject: Hello\nX-Added: first\n\tX-Injected: yes\n\tfake body\n\nBody line 1\n",
+     'newlines in the value are folded');
+
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+}
+
 sub t_change_header_now : Test(4)
 {
   no warnings qw(redefine once);
