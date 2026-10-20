@@ -980,13 +980,11 @@ main(int argc, char *argv[], char **env)
 
     /* Open the pidfile as root.  We'll write the pid later on in the grandchild */
     if (pidfile) {
-	pidfile_fd = open(pidfile, O_RDWR|O_CREAT, 0666);
+	pidfile_fd = md_open_pidfile(pidfile);
 	if (pidfile_fd < 0) {
 	    syslog(LOG_ERR, "Could not open PID file %s: %m", pidfile);
 	    exit(EXIT_FAILURE);
 	}
-	/* It needs to be world-readable */
-	fchmod(pidfile_fd, 0644);
     }
 
     /* Drop privileges */

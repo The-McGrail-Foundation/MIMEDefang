@@ -31,6 +31,7 @@
 #include <stdarg.h>
 #include <netinet/in.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
@@ -1197,6 +1198,11 @@ make_listening_socket(char const *str, int backlog, int must_be_unix)
 	path = str;
 	if (!strncmp(str, "unix:", 5)) path = str+5;
 	else if (!strncmp(str, "local:", 6)) path = str+6;
+	if (strlen(path) >= sizeof(addr_un.sun_path)) {
+	    syslog(LOG_ERR, "make_listening_socket: socket path too long: %s", path);
+	    errno = ENAMETOOLONG;
+	    return -1;
+	}
 	(void) remove(path);
 	sock = socket(AF_LOCAL, SOCK_STREAM, 0);
 	if (sock < 0) {
@@ -1217,16 +1223,11 @@ make_listening_socket(char const *str, int backlog, int must_be_unix)
 
     if (listen(sock, backlog) < 0) {
 	/* Maybe backlog is too high... try again */
-	if (backlog > 5) {
-	    if (listen(sock, 5) < 0) {
-		syslog(LOG_ERR, "make_listening_socket: listen: %m");
-		close(sock);
-		return -1;
-	    }
+	if (backlog <= 5 || listen(sock, 5) < 0) {
+	    syslog(LOG_ERR, "make_listening_socket: listen: %m");
+	    close(sock);
+	    return -1;
 	}
-	syslog(LOG_ERR, "make_listening_socket: listen: %m");
-	close(sock);
-	return -1;
     }
     return sock;
 }
@@ -1305,6 +1306,56 @@ free_debug(void *ctx, void *x, char const *fname, int line)
 }
 #endif
 
+/**********************************************************************
+* %FUNCTION: md_open_pidfile
+* %ARGUMENTS:
+*  path -- PID file to open
+* %RETURNS:
+*  A descriptor open for read/write, or -1 with errno set.
+* %DESCRIPTION:
+*  Opens or creates a PID file as root without following symlinks, and
+*  refuses anything but a regular file with a single link.
+***********************************************************************/
+int
+md_open_pidfile(char const *path)
+{
+    struct stat sbuf;
+    int flags = O_RDWR|O_CREAT;
+    int fd;
+
+#ifdef O_NOFOLLOW
+    flags |= O_NOFOLLOW;
+#endif
+#ifdef O_NONBLOCK
+    /* Do not block on a FIFO planted in place of the file */
+    flags |= O_NONBLOCK;
+#endif
+    fd = open(path, flags, 0644);
+    if (fd < 0) return -1;
+    if (fstat(fd, &sbuf) < 0) {
+	int e = errno;
+	close(fd);
+	errno = e;
+	return -1;
+    }
+    if (!S_ISREG(sbuf.st_mode) || sbuf.st_nlink != 1) {
+	close(fd);
+	errno = EINVAL;
+	return -1;
+    }
+#ifdef O_NONBLOCK
+    if (fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) & ~O_NONBLOCK) < 0) {
+	int e = errno;
+	close(fd);
+	errno = e;
+	return -1;
+    }
+#endif
+    /* It needs to be world-readable */
+    fchmod(fd, 0644);
+    return fd;
+}
+
 int
 write_and_lock_pidfile(char const *pidfile, char **lockfile, int pidfile_fd)
 {
@@ -1327,7 +1378,11 @@ write_and_lock_pidfile(char const *pidfile, char **lockfile, int pidfile_fd)
 	snprintf(*lockfile, len, "%s.lock", pidfile);
     }
 
-    lockfile_fd = open(*lockfile, O_RDWR|O_CREAT, 0666);
+    lockfile_fd = open(*lockfile, O_RDWR|O_CREAT
+#ifdef O_NOFOLLOW
+		       |O_NOFOLLOW
+#endif
+		       , 0666);
     if (lockfile_fd < 0) {
       free(*lockfile);
       *lockfile = NULL;
@@ -1357,6 +1412,67 @@ write_and_lock_pidfile(char const *pidfile, char **lockfile, int pidfile_fd)
     /* Do NOT close lockfile_fd... it will close and lock will be released
        when we exit */
     return lockfile_fd;
+}
+
+/**********************************************************************
+* %FUNCTION: valid_header_name
+* %ARGUMENTS:
+*  name -- a header field name
+* %RETURNS:
+*  1 if name is a valid RFC 5322 field name (printable ASCII except
+*  colon); 0 otherwise.
+***********************************************************************/
+int
+valid_header_name(char const *name)
+{
+    unsigned char const *s = (unsigned char const *) name;
+
+    if (!s || !*s) return 0;
+    for (; *s; s++) {
+	if (*s < 33 || *s > 126 || *s == ':') return 0;
+    }
+    return 1;
+}
+
+/**********************************************************************
+* %FUNCTION: sanitize_header_value
+* %ARGUMENTS:
+*  in -- a header value supplied by the filter
+* %RETURNS:
+*  A malloc'd copy that cannot start a new header, or NULL if out of
+*  memory.
+* %DESCRIPTION:
+*  Drops CRs and trailing newlines, and folds any newline that is not
+*  followed by a space or a tab.
+***********************************************************************/
+char *
+sanitize_header_value(char const *in)
+{
+    char *out, *o;
+    char const *s, *next;
+
+    out = malloc(2 * strlen(in) + 1);
+    if (!out) return NULL;
+    o = out;
+    for (s = in; *s; s++) {
+	if (*s == '\r') continue;
+	if (*s != '\n') {
+	    *o++ = *s;
+	    continue;
+	}
+	next = s + 1;
+	while (*next == '\r') next++;
+	while (*next == '\n' || *next == '\r') {
+	    /* Collapse blank lines: they would end the header block */
+	    next++;
+	}
+	if (!*next) break;
+	*o++ = '\n';
+	if (*next != ' ' && *next != '\t') *o++ = '\t';
+	s = next - 1;
+    }
+    *o = 0;
+    return out;
 }
 
 /**********************************************************************
