@@ -71,6 +71,7 @@ extern void do_delay(char const *sleepstr);
 extern int is_localhost(struct sockaddr *);
 extern int remove_local_socket(char const *str);
 extern int write_and_lock_pidfile(char const *pidfile, char **lockfile, int fd);
+extern int md_open_pidfile(char const *path);
 #ifdef EMBED_PERL
 extern int make_embedded_interpreter(char const *progPath,
 				     char const *subFilter,
@@ -98,6 +99,8 @@ extern void dump_milter_buildlib_info(void);
 
 extern char *gen_mx_id(char *);
 extern int safe_append_header(dynamic_buffer *dbuf, char *str);
+extern int valid_header_name(char const *name);
+extern char *sanitize_header_value(char const *in);
 /* Magic return values */
 #define MD_TEMPFAIL                    -1
 #define MD_REJECT                       0

@@ -1583,29 +1583,32 @@ body(SMFICTX *ctx, u_char *text, size_t len)
 }
 
 /**********************************************************************
-*%FUNCTION: remove_carriage_return
+*%FUNCTION: checked_header_value
 *%ARGUMENTS:
-* str -- pointer to string to modify
+* qid -- queue ID, for logging
+* hdr -- header name from the RESULTS file
+* val -- header value from the RESULTS file
+*%RETURNS:
+* A malloc'd, sanitized copy of val, or NULL if the header must be skipped
 *%DESCRIPTION:
-* removes carriage returns from a string, header values should not
-* contain "\r" chars
+* Header names and values come from the filter and may contain text
+* taken from the message: refuse invalid names and fold newlines so
+* the value cannot inject headers.
 ***********************************************************************/
-static void remove_carriage_return(char *str)
+static char *
+checked_header_value(char const *qid, char const *hdr, char const *val)
 {
-    char t = '\r';
-    int i,j;
-    i = 0;
-    while(i < strlen(str))
-    {
-        if (str[i] == t)
-        {
-            for (j = i; j < strlen(str); j++) {
-                str[j] = str[j+1];
-	    }
-        } else {
-	    i++;
-	}
+    char *v;
+
+    if (!valid_header_name(hdr)) {
+	syslog(LOG_WARNING, "%s: Filter supplied an invalid header name; header ignored", qid);
+	return NULL;
     }
+    v = sanitize_header_value(val);
+    if (!v) {
+	syslog(LOG_WARNING, "%s: Out of memory sanitizing header %s; header ignored", qid, hdr);
+    }
+    return v;
 }
 
 /**********************************************************************
@@ -1625,6 +1628,7 @@ eom(SMFICTX *ctx)
     char buffer[SMALLBUF];
     char result[SMALLBUF];
     char *rbuf, *rptr, *eptr;
+    char *sval;
 
     int seen_F = 0;
     int res_fd;
@@ -1893,8 +1897,10 @@ eom(SMFICTX *ctx)
 	    if (!rejecting) {
 		/* New content-type header */
 		percent_decode(rptr+1);
-		if (strlen(rptr+1) > 0) {
-		    MD_SMFI_TRY(smfi_chgheader, (ctx, "Content-Type", 1, rptr+1));
+		if (strlen(rptr+1) > 0 &&
+		    (sval = checked_header_value(data->qid, "Content-Type", rptr+1)) != NULL) {
+		    MD_SMFI_TRY(smfi_chgheader, (ctx, "Content-Type", 1, sval));
+		    free(sval);
 		}
 		if (!data->seenMimeVersionHeader) {
 		    /* No MIME-Version: header.  Add one. */
@@ -1910,8 +1916,10 @@ eom(SMFICTX *ctx)
 		if (hdr && val) {
 		    percent_decode(hdr);
 		    percent_decode(val);
-		    remove_carriage_return(val);
+		    if ((sval = checked_header_value(data->qid, hdr, val)) == NULL) break;
+		    val = sval;
 		    MD_SMFI_TRY(smfi_addheader, (ctx, hdr, val));
+		    free(sval);
 		}
 	    }
 	    break;
@@ -1924,7 +1932,8 @@ eom(SMFICTX *ctx)
 		    percent_decode(hdr);
 		    percent_decode(count);
 		    percent_decode(val);
-		    remove_carriage_return(val);
+		    if ((sval = checked_header_value(data->qid, hdr, val)) == NULL) break;
+		    val = sval;
 		    if (sscanf(count, "%d", &j) != 1 || j < 0) {
 			j = 0; /* 0 means add header at the top */
 		    }
@@ -1937,6 +1946,7 @@ eom(SMFICTX *ctx)
 
 		    MD_SMFI_TRY(smfi_addheader, (ctx, hdr, val));
 #endif
+		    free(sval);
 		}
 	    }
 	    break;
@@ -1948,11 +1958,13 @@ eom(SMFICTX *ctx)
 		    percent_decode(hdr);
 		    percent_decode(count);
 		    percent_decode(val);
-		    remove_carriage_return(val);
+		    if ((sval = checked_header_value(data->qid, hdr, val)) == NULL) break;
+		    val = sval;
 		    if (sscanf(count, "%d", &j) != 1 || j < 1) {
 			j = 1;
 		    }
 		    MD_SMFI_TRY(smfi_chgheader, (ctx, hdr, j, val));
+		    free(sval);
 		}
 	    }
 	    break;
@@ -2625,13 +2637,11 @@ main(int argc, char **argv)
 
     /* Open the pidfile as root.  We'll write the pid later on in the grandchild */
     if (pidfile) {
-	pidfile_fd = open(pidfile, O_RDWR|O_CREAT, 0666);
+	pidfile_fd = md_open_pidfile(pidfile);
 	if (pidfile_fd < 0) {
 	    syslog(LOG_ERR, "Could not open PID file %s: %m", pidfile);
 	    exit(EXIT_FAILURE);
 	}
-	/* It needs to be world-readable */
-	fchmod(pidfile_fd, 0644);
     }
 
     /* Look up user */
