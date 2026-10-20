@@ -34,7 +34,7 @@ jobs:
               libmailtools-perl libmime-tools-perl libnet-smtp-ssl-perl libnet-ssleay-perl libtimedate-perl \
               libunix-syslog-perl libhtml-parser-perl libarchive-zip-perl libtest-class-most-perl spamassassin \
               libwww-perl libjson-perl libnet-dns-perl libanyevent-perl libhtml-format-perl \
-              libtest-perl-critic-perl sendmail libmilter-dev cpanminus 7zip
+              libtest-perl-critic-perl sendmail libmilter-dev libperl-dev cpanminus 7zip
       - name: Install extra modules
         run: |
           # A newer MIME-tools than Ubuntu's enables the t/mime.t tests on

@@ -7010,6 +7010,10 @@ fi
 
 SMPATH=`echo ../sendmail-*/obj.*/libmilter`
 MDLIBPATH=/usr/local/lib:/usr/local/lib64:/usr/lib:/usr/lib64:/lib:/lib64:/usr/lib/libmilter:/usr/lib64/libmilter
+MULTIARCH=`$CC -print-multiarch 2>/dev/null`
+if test -n "$MULTIARCH" ; then
+   MDLIBPATH="$MDLIBPATH:/usr/lib/$MULTIARCH:/lib/$MULTIARCH"
+fi
 # Extract the first word of "libmilter.a", so it can be a program name with args.
 set dummy libmilter.a; ac_word=$2
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
@@ -7176,7 +7180,8 @@ fi
 
 LIBMILTERDIR=`dirname "$LIBMILTERACTUAL"`
 
-if test "$LIBMILTERDIR" = "/usr/lib" -o "$LIBMILTERDIR" = "/lib" -o "$LIBMILTERDIR" = "/usr/lib64" -o "$LIBMILTERDIR" = "/lib64" ; then
+if test "$LIBMILTERDIR" = "/usr/lib" -o "$LIBMILTERDIR" = "/lib" -o "$LIBMILTERDIR" = "/usr/lib64" -o "$LIBMILTERDIR" = "/lib64" -o \
+        \( -n "$MULTIARCH" -a \( "$LIBMILTERDIR" = "/usr/lib/$MULTIARCH" -o "$LIBMILTERDIR" = "/lib/$MULTIARCH" \) \) ; then
    LIBMILTERDIR=""
 else
    LDFLAGS="$LDFLAGS -L$LIBMILTERDIR"

@@ -234,6 +234,9 @@ my $MILTERLIB = do {
         opt('MILTERLIB', ''),
         '/usr/lib',   '/usr/lib64',
         '/usr/local/lib', '/usr/local/lib64',
+        # The linker search path, which includes the multiarch
+        # directory on Debian and Ubuntu (/usr/lib/x86_64-linux-gnu)
+        split(' ', $Config{libpth} // ''),
     );
     my $found;
     for my $d (@candidates) {

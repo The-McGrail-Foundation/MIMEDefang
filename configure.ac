@@ -955,6 +955,12 @@ fi
 dnl find libmilter.a and libsm.a
 SMPATH=`echo ../sendmail-*/obj.*/libmilter`
 MDLIBPATH=/usr/local/lib:/usr/local/lib64:/usr/lib:/usr/lib64:/lib:/lib64:/usr/lib/libmilter:/usr/lib64/libmilter
+dnl Debian and Ubuntu install libraries in a multiarch directory,
+dnl e.g. /usr/lib/x86_64-linux-gnu
+MULTIARCH=`$CC -print-multiarch 2>/dev/null`
+if test -n "$MULTIARCH" ; then
+   MDLIBPATH="$MDLIBPATH:/usr/lib/$MULTIARCH:/lib/$MULTIARCH"
+fi
 AC_PATH_PROG(LIBMILTER, libmilter.a, no, $MILTERLIB:$SMPATH:$MDLIBPATH)
 SMPATH=`echo ../sendmail-*/obj.*/libsm`
 AC_PATH_PROG(LIBSM, libsm.a, no, $SMPATH:$MDLIBPATH)
@@ -981,7 +987,8 @@ dnl The directory containing libmilter
 LIBMILTERDIR=`dirname "$LIBMILTERACTUAL"`
 
 dnl Don't include standard directory paths
-if test "$LIBMILTERDIR" = "/usr/lib" -o "$LIBMILTERDIR" = "/lib" -o "$LIBMILTERDIR" = "/usr/lib64" -o "$LIBMILTERDIR" = "/lib64" ; then
+if test "$LIBMILTERDIR" = "/usr/lib" -o "$LIBMILTERDIR" = "/lib" -o "$LIBMILTERDIR" = "/usr/lib64" -o "$LIBMILTERDIR" = "/lib64" -o \
+        \( -n "$MULTIARCH" -a \( "$LIBMILTERDIR" = "/usr/lib/$MULTIARCH" -o "$LIBMILTERDIR" = "/lib/$MULTIARCH" \) \) ; then
    LIBMILTERDIR=""
 else
    LDFLAGS="$LDFLAGS -L$LIBMILTERDIR"
