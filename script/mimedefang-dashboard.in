@@ -1407,7 +1407,7 @@ mimedefang-dashboard [options]
        --ml-events LIST    events whose first value is an ML confidence
                            (default ml_spam,ml_not_spam,ml_uncertain_spam,
                            ml_phishing,ml_not_phishing,ml_uncertain_phishing);
-                           the Scores view shows them in this order
+                           the Spam & ML view shows them in this order
                            an event logged without a value is counted
                            but gets no histogram
        --events LIST       events that get the first chart colors, in order
@@ -2031,7 +2031,7 @@ V4BDgUx0DUW5kUDO1v8HW58Piu5OtQIAAAAASUVORK5CYII=
       <a href="#flow" data-view="flow">Flow</a>
       <a href="#live" data-view="live">Live log</a>
       <a href="#workers" data-view="workers">Workers</a>
-      <a href="#scores" data-view="scores">Scores</a>
+      <a href="#spam-ml" data-view="spam-ml">Spam &amp; ML</a>
     </nav>
     <div class="sources" id="sources" aria-live="polite"></div>
   </aside>
@@ -2129,7 +2129,7 @@ V4BDgUx0DUW5kUDO1v8HW58Piu5OtQIAAAAASUVORK5CYII=
       </div>
     </section>
 
-    <section class="view" id="v-scores" hidden>
+    <section class="view" id="v-spam-ml" hidden>
       <div class="filters">
         <label>Window <select id="sc-window"><option value="24h">last 24 hours</option><option value="7d">last 7 days</option></select></label>
       </div>
@@ -2139,7 +2139,7 @@ V4BDgUx0DUW5kUDO1v8HW58Piu5OtQIAAAAASUVORK5CYII=
       </div>
       <div class="grid3" id="sc-ml"></div>
       <div class="card">
-        <div class="card-h"><h2>ML verdicts over time</h2><div class="seg" data-range-for="scores"></div></div>
+        <div class="card-h"><h2>ML verdicts over time</h2><div class="seg" data-range-for="spam-ml"></div></div>
         <div class="chart" id="sc-series"></div>
         <div class="legend" id="sc-legend"></div>
       </div>
@@ -2959,11 +2959,11 @@ table.log tr.new td { animation: flash 1.2s ease-out; }
     }
   }
 
-  // ---------- scores ----------
-  const scRange = rangeSeg('scores', () => loadScores());
+  // ---------- spam & ML ----------
+  const scRange = rangeSeg('spam-ml', () => loadSpamMl());
   const ML_LABELS = { ml_spam: 'Spam (ML)', ml_not_spam: 'Not spam (ML)', ml_phishing: 'Phishing (ML)', ml_not_phishing: 'Not phishing (ML)', ml_uncertain_spam: 'Uncertain spam (ML)', ml_uncertain_phishing: 'Uncertain phishing (ML)' };
   const mlLabel = (e) => ML_LABELS[e] || e;
-  async function loadScores() {
+  async function loadSpamMl() {
     const win = $('sc-window').value;
     const [d, ser] = await Promise.all([api('/api/scores?window=' + win), api('/api/series?range=' + scRange())]);
     const spam = d.scores[d.spam_event] || [];
@@ -2995,8 +2995,8 @@ table.log tr.new td { animation: flash 1.2s ease-out; }
   }
 
   // ---------- router ----------
-  const loaders = { overview: loadOverview, flow: loadFlow, live: loadLive, workers: loadWorkers, scores: loadScores };
-  const titles = { overview: 'Overview', flow: 'Flow', live: 'Live log', workers: 'Workers', scores: 'Scores' };
+  const loaders = { overview: loadOverview, flow: loadFlow, live: loadLive, workers: loadWorkers, 'spam-ml': loadSpamMl };
+  const titles = { overview: 'Overview', flow: 'Flow', live: 'Live log', workers: 'Workers', 'spam-ml': 'Spam & ML' };
   function route() {
     const v = (location.hash || '#overview').slice(1);
     S.view = loaders[v] ? v : 'overview';
@@ -3045,7 +3045,7 @@ table.log tr.new td { animation: flash 1.2s ease-out; }
 
   for (const id of ['fl-event', 'fl-dim', 'fl-window']) $(id).addEventListener('change', () => { store(id, $(id).value); loadFlow(); });
   for (const id of ['fl-dim', 'fl-window']) { const v = store(id); if (v) $(id).value = v; }
-  $('sc-window').addEventListener('change', loadScores);
+  $('sc-window').addEventListener('change', loadSpamMl);
   let qt;
   $('lv-q').addEventListener('input', () => { clearTimeout(qt); qt = setTimeout(renderLive, 150); });
   $('lv-pause').addEventListener('click', (e) => {
