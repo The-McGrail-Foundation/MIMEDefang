@@ -327,8 +327,11 @@ sub re_match_in_rar_directory {
         $file = $1;
         return 1 if ((defined $file) and ($file =~ /$regexp/i));
       }
-      last if ( $beginmark and ( $rf !~ /^\-\-\-/ ) );
-      $beginmark = 1 if ( $rf =~ /^\-\-\-/ );
+      if ( $rf =~ /^\-\-\-/ ) {
+        # The second separator closes the file list
+        last if $beginmark;
+        $beginmark = 1;
+      }
     }
     close($unrar_pipe);
   }
@@ -357,14 +360,16 @@ To enable the check $Features{'7zip'} should be enabled.
 #***********************************************************************
 sub re_match_in_7zip_directory {
   my($zname, $regexp) = @_;
-  my ($rf, $beginmark, $file);
+  my ($rf, $beginmark);
 
   unless ($Features{"7zip"}) {
           md_syslog('err', "Attempted to use re_match_in_7zip_directory, but 7zip binary is not installed.");
           return 0;
   }
 
-  my @unz_args = ($Features{"7zip"}, "l", $zname);
+  # A dummy password makes archives with encrypted headers fail instead of
+  # prompting on stdin
+  my @unz_args = ($Features{"7zip"}, "l", "-pX", "--", $zname);
 
   if ( -f $zname ) {
     open(my $unz_pipe, "-|", @unz_args)
@@ -372,12 +377,19 @@ sub re_match_in_7zip_directory {
     while(<$unz_pipe>) {
       $rf = $_;
       if ( $beginmark and ( $rf !~ /^\-\-\-/ ) ) {
-        $rf =~ /(?:[0-9-]+)\s+(?:[0-9\:]+)\s+(?:[\.[A-Za-z]+)\s+(?:[0-9]+)\s+(?:[0-9]+)\s+(.*)/;
-        $file = $1;
-              return 1 if ((defined $file) and ($file =~ /$regexp/i));
+        # Date Time Attr Size [Compressed] Name: in solid archives only
+        # the first file of a block has a compressed size
+        if ($rf =~ /^\S+\s+\S+\s+(\S{5})\s+\d+\s+(?:\d+\s+)?(.*?)\s*$/) {
+          my ($attr, $name) = ($1, $2);
+          next if $attr =~ /^D/;
+          return 1 if $name =~ /$regexp/i;
+        }
       }
-      last if ( $beginmark and ( $rf !~ /^\-\-\-/ ) );
-      $beginmark = 1 if ( $rf =~ /^\-\-\-/ );
+      if ( $rf =~ /^\-\-\-/ ) {
+        # The second separator closes the file list
+        last if $beginmark;
+        $beginmark = 1;
+      }
     }
     close($unz_pipe);
   }
@@ -452,6 +464,9 @@ sub re_match_in_tgz_directory {
 
 Method that returns 1 if the EXTENSION part of any file in the zip archive
 matches regexp.
+Like the other C<re_match_in_*_directory> methods it returns 0 when the
+archive cannot be listed (corrupt, encrypted file names, missing tool), and
+it does not look inside nested archives.
 
 =cut
 
