@@ -45,5 +45,18 @@ ExecStopPost=/bin/rm -f $SOCKET
 # mimedefang-multiplexor.service.
 ExecReload=/bin/true
 
+# Sandboxing.  NoNewPrivileges and RestrictSUIDSGID are not set: workers
+# send mail through sendmail(1), which runs setgid postdrop (Postfix) or
+# smmsp (Sendmail).  ProtectSystem=full keeps /usr, /boot and /etc
+# read-only.  PrivateTmp is not set: filters may share files in /tmp
+# with other daemons.
+ProtectHome=yes
+ProtectSystem=full
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictRealtime=yes
+
 [Install]
 WantedBy=multi-user.target
