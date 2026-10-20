@@ -90,6 +90,63 @@ sub t_verify_dane_cert_edge : Test(3)
 }
 
 # ---------------------------------------------------------------------------
+# md_check_mta_sts - (no network: DNS and HTTP are stubbed)
+# ---------------------------------------------------------------------------
+
+{
+    package Mail::MIMEDefang::Unit::TLSPolicy::FakeUA;
+    sub new { my ($c, $r) = @_; return bless { resp => $r, urls => [] }, $c }
+    sub get { my ($s, $u) = @_; push @{ $s->{urls} }, $u; return $s->{resp} }
+}
+
+sub _sts_with {
+    my ($domain, $resp) = @_;
+    my $ua = Mail::MIMEDefang::Unit::TLSPolicy::FakeUA->new($resp);
+    my $dns = 0;
+    no warnings 'redefine';
+    local *Mail::MIMEDefang::TLSPolicy::md_dns_txt = sub { $dns++; return 'v=STSv1; id=20260101' };
+    local *Mail::MIMEDefang::TLSPolicy::_init_ua = sub { return $ua };
+    local *Mail::MIMEDefang::TLSPolicy::md_syslog = sub {};
+    my $policy = md_check_mta_sts($domain);
+    return ($policy, $dns, $ua->{urls});
+}
+
+sub t_mta_sts_check : Test(9)
+{
+    SKIP: {
+        eval { require LWP::UserAgent; require HTTP::Response; 1 }
+            or skip "LWP::UserAgent not available", 9;
+
+        my $ua = Mail::MIMEDefang::TLSPolicy::_init_ua(10);
+        is($ua->max_redirect, 0, 'redirects are not followed');
+        is($ua->max_size, 65536, 'policy size is capped at 64 KB');
+        is_deeply($ua->protocols_allowed, ['https'], 'HTTPS only');
+
+        my $ok = HTTP::Response->new(200, 'OK', [],
+            "version: STSv1\nmode: enforce\nmx: mail.example.com\nmax_age: 86400\n");
+        my ($policy, $dns, $urls) = _sts_with('example.com', $ok);
+        is($policy->{mode}, 'enforce', 'valid policy is parsed');
+        is($urls->[0], 'https://mta-sts.example.com/.well-known/mta-sts.txt', 'policy URL');
+
+        ($policy, $dns) = _sts_with('x@10.0.0.1', $ok);
+        ok(!defined $policy && $dns == 0, 'invalid domain refused before any lookup');
+
+        my $bad = HTTP::Response->new(200, 'OK', [], "version: STSv1\nmode: bogus\n");
+        ($policy) = _sts_with('example.com', $bad);
+        ok(!defined $policy, 'unknown mode refused');
+
+        my $big = HTTP::Response->new(200, 'OK', ['Client-Aborted' => 'max_size'],
+            "version: STSv1\nmode: enforce\n");
+        ($policy) = _sts_with('example.com', $big);
+        ok(!defined $policy, 'truncated policy refused');
+
+        my $redir = HTTP::Response->new(301, 'Moved', [Location => 'http://169.254.169.254/']);
+        ($policy) = _sts_with('example.com', $redir);
+        ok(!defined $policy, 'redirect response refused');
+    };
+}
+
+# ---------------------------------------------------------------------------
 # Live network tests
 # ---------------------------------------------------------------------------
 

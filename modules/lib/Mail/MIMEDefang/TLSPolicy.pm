@@ -138,6 +138,12 @@ sub md_check_mta_sts {
         md_syslog('err', 'md_check_mta_sts: domain is required');
         return;
     }
+    # The domain goes into a URL, check for valid values
+    unless ($domain =~ /^(?=.{1,253}\.?$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z][A-Za-z0-9-]{0,61}[A-Za-z0-9]\.?$/) {
+        md_syslog('warning', "md_check_mta_sts: invalid domain '$domain'");
+        return;
+    }
+    $domain =~ s/\.$//;
     unless ($Features{"Net::DNS"}) {
         md_syslog('err', 'md_check_mta_sts: Net::DNS is not available');
         return;
@@ -165,6 +171,10 @@ sub md_check_mta_sts {
         md_syslog('warning', "md_check_mta_sts: HTTP fetch failed for $url: " . $resp->status_line);
         return;
     }
+    if ($resp->header('Client-Aborted')) {
+        md_syslog('warning', "md_check_mta_sts: policy at $url is larger than 64 KB");
+        return;
+    }
 
     my $body = $resp->decoded_content;
     return unless defined $body && $body ne '';
@@ -174,7 +184,7 @@ sub md_check_mta_sts {
         $line =~ s/^\s+|\s+$//g;
         if ($line =~ /^version\s*:\s*(.+)/i) {
             return unless lc($1) eq 'stsv1';
-        } elsif ($line =~ /^mode\s*:\s*(\w+)/i) {
+        } elsif ($line =~ /^mode\s*:\s*(enforce|testing|none)\s*$/i) {
             $policy{mode} = lc($1);
         } elsif ($line =~ /^max_age\s*:\s*(\d+)/i) {
             $policy{max_age} = int($1);
@@ -360,9 +370,13 @@ sub _init_ua {
         md_syslog('err', 'md_check_mta_sts: LWP::UserAgent is not installed');
         return;
     };
+    # RFC 8461 3.3: no redirects, HTTPS only, policies are at most 64 KB
     my $ua = LWP::UserAgent->new(
-        agent   => 'MIMEDefang/' . ($Mail::MIMEDefang::VERSION // '3'),
-        timeout => $timeout,
+        agent             => 'MIMEDefang/' . ($Mail::MIMEDefang::VERSION // '3'),
+        timeout           => $timeout,
+        max_redirect      => 0,
+        max_size          => 65536,
+        protocols_allowed => ['https'],
     );
     $ua->ssl_opts(verify_hostname => 1);
     return $ua;
