@@ -133,6 +133,8 @@
 %define systemd_units  %{name}.service %{name}-multiplexor.service %{name}-dashboard.service
 
 %global debug_package %{nil}
+# Mail::MIMEDefang::Unit is only used by the test suite
+%global __requires_exclude ^perl\\((Test::Class|Test::Most)\\)
 
 %{?_with_antivirus: %{expand: %%define with_antivirus 1}}
 %{?_without_antivirus: %{expand: %%define with_antivirus 0}}
@@ -283,6 +285,7 @@ such as the graphdefang graphing package and a sample filter.
 %changelog
 * Thu Oct 22 2026 Giovanni Bechis <g.bechis@snb.it>
 - install systemd units for mimedefang, the multiplexor and the dashboard
+- do not require perl(Test::Class) and perl(Test::Most) at runtime
 * Sun Apr 16 2023 Giovanni Bechis <g.bechis@snb.it>
 - update Perl module requirements
 * Wed May 29 2002 Dianne Skoll <dfs@roaringpenguin.com>
