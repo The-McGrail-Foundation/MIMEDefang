@@ -27,13 +27,15 @@ ExecStart=/bin/sh -c 'HOME=${SPOOLDIR:=/var/spool/MIMEDefang} \
     `[ -n "$MX_MINIMUM" ] && echo "-m $MX_MINIMUM"` \
     `[ -n "$MX_MAXIMUM" ] && echo "-x $MX_MAXIMUM"` \
     `[ -n "$MX_MAP_SOCKET" ] && echo "-N $MX_MAP_SOCKET"` \
-    `[ -n "$MX_LOG_SLAVE_STATUS_INTERVAL" ] && echo "-L $MX_LOG_SLAVE_STATUS_INTERVAL"` \
+    `[ -n "$${MX_LOG_WORKER_STATUS_INTERVAL:=$MX_LOG_SLAVE_STATUS_INTERVAL}" ] && echo "-L $MX_LOG_WORKER_STATUS_INTERVAL"` \
     `[ -n "$MX_USER" ] && echo "-U $MX_USER"` \
     `[ -n "$MX_IDLE" ] && echo "-i $MX_IDLE"` \
     `[ -n "$MX_BUSY" ] && echo "-b $MX_BUSY"` \
     `[ -n "$MX_REQUESTS" ] && echo "-r $MX_REQUESTS"` \
-    `[ -n "$MX_SLAVE_DELAY" ] && echo "-w $MX_SLAVE_DELAY"` \
-    `[ -n "$MX_MIN_SLAVE_DELAY" ] && echo "-W $MX_MIN_SLAVE_DELAY"` \
+    `[ -n "$${MX_WORKER_DELAY:=$MX_SLAVE_DELAY}" ] && echo "-w $MX_WORKER_DELAY"` \
+    `[ -n "$${MX_MIN_WORKER_DELAY:=$MX_MIN_SLAVE_DELAY}" ] && echo "-W $MX_MIN_WORKER_DELAY"` \
+    `[ -n "$MX_TICK_REQUEST" ] && echo "-X $MX_TICK_REQUEST"` \
+    `[ -n "$MX_TICK_PARALLEL" ] && echo "-P $MX_TICK_PARALLEL"` \
     `[ -n "$MX_MAX_RSS" ] && echo "-R $MX_MAX_RSS"` \
     `[ -n "$MX_MAX_AS" ] && echo "-M $MX_MAX_AS"` \
     `[ "$MX_LOG" = "yes" ] && echo "-l"` \
