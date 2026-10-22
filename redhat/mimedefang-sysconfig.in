@@ -126,7 +126,7 @@
 # SPOOLDIR=@SPOOLDIR@
 
 # The socket used by mimedefang to communicate with sendmail
-# SOCKET=$SPOOLDIR/mimedefang.sock
+# SOCKET=@SPOOLDIR@/mimedefang.sock
 
 # If you want to log messages like "Filter time is 156ms" to syslog,
 # uncomment the next line
@@ -172,7 +172,7 @@ LOOPBACK_RESERVED_CONNECTIONS=-1
 
 # Set to path name of UNIX-domain socket if you want to use MIMEDefang
 # with Sendmail's SOCKETMAP map type
-# MX_MAP_SOCKET=$SPOOLDIR/map.sock
+# MX_MAP_SOCKET=@SPOOLDIR@/map.sock
 
 # Set to yes if you want to use an embedded Perl interpreter
 # MX_EMBED_PERL=yes
@@ -204,7 +204,7 @@ LOOPBACK_RESERVED_CONNECTIONS=-1
 # MX_STATS_SYSLOG=no
 
 # The socket used by the multiplexor
-# MX_SOCKET=$SPOOLDIR/mimedefang-multiplexor.sock
+# MX_SOCKET=@SPOOLDIR@/mimedefang-multiplexor.sock
 
 # Maximum # of requests a process handles
 # MX_REQUESTS=200
@@ -274,6 +274,43 @@ MX_BUSY=600
 
 # MX_AUTOSCALE enables auto scaling of MIMEDefang processes
 # MX_AUTOSCALE=yes
+
+##########################################################################
+# mimedefang-dashboard settings, used by mimedefang-dashboard.service.
+# The dashboard only receives events if the filter calls
+# md_graphdefang_feed_enable() (see mimedefang-dashboard(1)).
+# Settings in /etc/sysconfig/mimedefang-dashboard override these.
+##########################################################################
+
+# HTTP listen address.  To reach the dashboard from other hosts put a
+# reverse proxy with TLS and authentication in front of it.
+# DASHBOARD_LISTEN=127.0.0.1:8689
+
+# Multiplexor control socket to poll, or "none".  Defaults to MX_SOCKET
+# if set, otherwise @SPOOLDIR@/mimedefang-multiplexor.sock
+# DASHBOARD_MX_SOCKET=@SPOOLDIR@/mimedefang-multiplexor.sock
+
+# Event feed datagram socket, or "none".  Must match the path given to
+# md_graphdefang_feed_enable() in the filter.
+# DASHBOARD_FEED=@SPOOLDIR@/mimedefang-dashboard.sock
+
+# Permissions of the feed socket
+# DASHBOARD_FEED_MODE=0660
+
+# File where aggregated data is saved across restarts.  If unset, no
+# state is saved and the dashboard starts empty after every restart.
+# /var/lib/MIMEDefang/dashboard is writable by the systemd unit.
+# DASHBOARD_STATE=/var/lib/MIMEDefang/dashboard/state.json
+
+# Set to yes to drop subjects and mask local parts of addresses
+# DASHBOARD_ANONYMIZE=no
+
+# Space-separated list of accepted HTTP Host headers (needed behind a
+# reverse proxy)
+# DASHBOARD_ALLOW_HOST="mail.example.com"
+
+# Any extra arguments to mimedefang-dashboard
+# DASHBOARD_OPTIONS="--interval 5 --stale 1800"
 
 # I question why I'm including this as I see no real need for it
 # but in the interests of a flexible implementation, here goes!

@@ -16,7 +16,7 @@ EnvironmentFile=-/etc/default/mimedefang
 EnvironmentFile=-/etc/sysconfig/mimedefang
 # This can be removed with MIMEDefang 2.82, but is required for older versions:
 # SuccessExitStatus=1
-ExecStart=/bin/sh -c 'HOME=${SPOOLDIR:=/var/spool/MIMEDefang} \
+ExecStart=/bin/sh -c 'HOME=$${SPOOLDIR:=/var/spool/MIMEDefang} \
     exec /usr/bin/mimedefang-multiplexor -D \
     `[ "$MX_EMBED_PERL" = "yes" ] && echo "-E"` \
     `[ -n "$SPOOLDIR" ] && echo "-z $SPOOLDIR"` \

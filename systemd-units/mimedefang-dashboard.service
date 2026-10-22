@@ -11,14 +11,24 @@ Restart=on-failure
 # socket in the spool directory.
 User=defang
 StateDirectory=MIMEDefang/dashboard
-# DASHBOARD_OPTIONS: extra options, e.g. "--listen 127.0.0.1:8689
-#   --anonymize --allow-host mail.example.com".  To reach the dashboard
-#   from other hosts put a reverse proxy with TLS and authentication in
-#   front of it.
+# DASHBOARD_* variables are documented in /etc/sysconfig/mimedefang.
+# DASHBOARD_OPTIONS holds extra options.  To reach the dashboard from
+# other hosts put a reverse proxy with TLS and authentication in front
+# of it.
 Environment=DASHBOARD_OPTIONS=
+EnvironmentFile=-/etc/default/mimedefang
+EnvironmentFile=-/etc/sysconfig/mimedefang
 EnvironmentFile=-/etc/default/mimedefang-dashboard
 EnvironmentFile=-/etc/sysconfig/mimedefang-dashboard
-ExecStart=/usr/bin/mimedefang-dashboard --state /var/lib/MIMEDefang/dashboard/state.json $DASHBOARD_OPTIONS
+ExecStart=/bin/sh -c 'exec /usr/bin/mimedefang-dashboard \
+    `[ -n "$DASHBOARD_STATE" ] && echo "--state $DASHBOARD_STATE"` \
+    `[ -n "$DASHBOARD_LISTEN" ] && echo "--listen $DASHBOARD_LISTEN"` \
+    `[ -n "$${DASHBOARD_MX_SOCKET:=$MX_SOCKET}" ] && echo "--mx-socket $DASHBOARD_MX_SOCKET"` \
+    `[ -n "$DASHBOARD_FEED" ] && echo "--feed $DASHBOARD_FEED"` \
+    `[ -n "$DASHBOARD_FEED_MODE" ] && echo "--feed-mode $DASHBOARD_FEED_MODE"` \
+    `[ "$DASHBOARD_ANONYMIZE" = "yes" ] && echo "--anonymize"` \
+    `for h in $DASHBOARD_ALLOW_HOST; do echo "--allow-host $h"; done` \
+    $DASHBOARD_OPTIONS'
 ExecReload=/bin/kill -HUP $MAINPID
 
 NoNewPrivileges=yes

@@ -130,6 +130,7 @@
 %define dir_log        /var/log/mimedefang
 %define user           defang
 %define with_antivirus 0
+%define systemd_units  %{name}.service %{name}-multiplexor.service %{name}-dashboard.service
 
 %global debug_package %{nil}
 
@@ -149,6 +150,8 @@ Vendor:        MIMEDefang
 Buildroot:     %{_tmppath}/%{name}-root
 Requires:      perl-Digest-SHA perl-Digest-MD5 perl-MIME-tools perl-MailTools perl-Unix-Syslog
 BuildRequires: sendmail-milter-devel >= 8.12.0
+BuildRequires: systemd-rpm-macros
+%{?systemd_requires}
 
 %description
 MIMEDefang is an e-mail filter program which works with Sendmail 8.11
@@ -186,6 +189,12 @@ make DESTDIR=$RPM_BUILD_ROOT \
      INSTALL='install -p' INSTALL_STRIP_FLAG='' install-redhat
 rm -f %{buildroot}%{_libdir}/perl5/perllocal.pod
 rm -f %{buildroot}%{_libdir}/perl5/vendor_perl/auto/Mail/MIMEDefang/.packlist
+# systemd units replace the SysV init script
+rm -f %{buildroot}/etc/rc.d/init.d/%{name}
+mkdir -p %{buildroot}%{_unitdir}
+for u in %{systemd_units}; do
+	install -p -m 644 systemd-units/$u %{buildroot}%{_unitdir}/$u
+done
 # Turn off execute bit on scripts in contrib
 find contrib -type f -print0 | xargs -0 chmod a-x
 
@@ -208,7 +217,9 @@ rm -rf $RPM_BUILD_ROOT
 %config(noreplace) /etc/mail/sa-mimedefang.cf
 %config(noreplace) /etc/mail/sa-mimedefang.cf.example
 %config(noreplace) /etc/sysconfig/%{name}
-/etc/rc.d/init.d/%{name}
+%{_unitdir}/%{name}.service
+%{_unitdir}/%{name}-multiplexor.service
+%{_unitdir}/%{name}-dashboard.service
 /etc/logrotate.d/%{name}
 
 %pre
@@ -247,21 +258,13 @@ Use the sendmail-cf package to rebuild your /etc/mail/sendmail.cf file and
 restart your sendmail daemon.
 
 EOF
-%if 0%{?rhel} > 6 || 0%{?fedora} > 23
-%systemd_preun %{name}.service
-%else
-/sbin/chkconfig --add mimedefang
-%endif
+%systemd_post %{systemd_units}
 
 %preun
-%if 0%{?rhel} > 6 || 0%{?fedora} > 23
-%systemd_preun %{name}.service
-%else
-if [ $1 -eq 0 ]; then
-  /sbin/service %{name} stop > /dev/null 2>&1 || :
-  /sbin/chkconfig --del %{name}
-fi
-%endif
+%systemd_preun %{systemd_units}
+
+%postun
+%systemd_postun_with_restart %{systemd_units}
 
 %package contrib
 Summary:	Contributed software that works with MIMEDefang
@@ -278,6 +281,8 @@ such as the graphdefang graphing package and a sample filter.
 %doc contrib
 
 %changelog
+* Thu Oct 22 2026 Giovanni Bechis <g.bechis@snb.it>
+- install systemd units for mimedefang, the multiplexor and the dashboard
 * Sun Apr 16 2023 Giovanni Bechis <g.bechis@snb.it>
 - update Perl module requirements
 * Wed May 29 2002 Dianne Skoll <dfs@roaringpenguin.com>
