@@ -1450,17 +1450,35 @@ multiplexor it falls back to the B<status>, B<load> and B<histo> commands.
 =item Event feed
 
 The filter sends every B<md_graphdefang_log> event to a UNIX datagram
-socket, F<@SPOOLDIR@/mimedefang-dashboard.sock> by default.  Enable it in
-F<mimedefang-filter>:
+socket.  Enable it in F<mimedefang-filter>:
 
     sub filter_initialize {
         md_graphdefang_feed_enable();
     }
 
-or call it at the top level of the filter.  Delivery never blocks the
-filter; events are dropped while the dashboard is not running.  This works
-with or without B<md_graphdefang_log_enable>, which logs the same events to
-syslog.
+or call it at the top level of the filter.  The full form is
+
+    md_graphdefang_feed_enable($socket_path, $enum_recips);
+
+Both arguments are optional:
+
+=over 4
+
+=item I<$socket_path>
+
+The absolute path of the dashboard socket.  It must match B<--feed>.  The
+default is F<@SPOOLDIR@/mimedefang-dashboard.sock>.  A relative path is
+ignored with a warning, and the default is used.
+
+=item I<$enum_recips>
+
+If true (the default), a message with several recipients produces one
+event per recipient.
+
+=back
+
+Delivery never blocks the filter.  Events are dropped while the dashboard
+is not running.
 
 =back
 
