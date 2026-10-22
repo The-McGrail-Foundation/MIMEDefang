@@ -147,6 +147,23 @@ sub t_store_ml_no_verdicts : Test(5)
   is($st->{totals}{ml_uncertain_phishing}, 1, 'valueless uncertain event still counted');
 }
 
+sub t_ml_events_disabled : Test(8)
+{
+  for my $v ('none', '', "''", '""') {
+    is_deeply([ main::event_list($v) ], [], "ml-events '$v' gives an empty list");
+  }
+  is_deeply([ main::event_list("'ml_spam, ml_phishing'") ], [qw(ml_spam ml_phishing)],
+            'quotes stripped from event lists');
+  my $st = MDDash::Store->new(history => 100, top_cap => 3, spam_event => 'spam',
+                              ml_events => [ main::event_list("''") ], now => 0);
+  my $t = 1_000_000_020;
+  $st->add_event(main::parse_mdlog('MDLOG,A,ml_spam,0.95,,a@x.org,r@l.test,S', $t));
+  my $res = $st->scores('24h', $t + 10);
+  is_deeply($res->{ml_events}, [], 'no ML events reported');
+  ok(!exists $res->{scores}{ml_spam}, 'no ML histogram built');
+  is($st->{totals}{ml_spam}, 1, 'ML event still counted');
+}
+
 sub t_store_mx_and_state : Test(7)
 {
   my ($st, $t) = _store_with_events();

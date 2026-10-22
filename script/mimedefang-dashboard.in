@@ -94,6 +94,16 @@ sub addr_domain {
   return lc $1;
 }
 
+# Comma-separated event names from an option.  Quotes are dropped since
+# systemd units and config files pass '' literally; "none" means empty.
+sub event_list {
+  my ($s) = @_;
+  $s = '' unless defined $s;
+  $s =~ tr/"'//d;
+  return () if $s =~ /^\s*none\s*$/i;
+  return grep { /^[\w.-]+$/ } split /\s*,\s*/, $s;
+}
+
 #***********************************************************************
 # %PROCEDURE: parse_mdlog
 # %ARGUMENTS:
@@ -631,13 +641,13 @@ use constant {
 sub new {
   my ($class, %opt) = @_;
   my $now = main::time();
-  my @ml = grep { length } split /\s*,\s*/, ($opt{'ml-events'} // '');
+  my @ml = main::event_list($opt{'ml-events'});
   my $self = bless {
     opt     => \%opt,
     store   => MDDash::Store->new(
       history => $opt{history}, top_cap => $opt{'top-cap'},
       spam_event => $opt{'spam-event'}, ml_events => \@ml,
-      pinned => [ grep { length } split /\s*,\s*/, ($opt{events} // '') ],
+      pinned => [ main::event_list($opt{events}) ],
       now => $now,
     ),
     sel     => IO::Select->new,
@@ -1407,7 +1417,8 @@ mimedefang-dashboard [options]
        --ml-events LIST    events whose first value is an ML confidence
                            (default ml_spam,ml_not_spam,ml_uncertain_spam,
                            ml_phishing,ml_not_phishing,ml_uncertain_phishing);
-                           the Spam & ML view shows them in this order
+                           the Spam & ML view shows them in this order;
+                           "none" or an empty list hides the ML charts
                            an event logged without a value is counted
                            but gets no histogram
        --events LIST       events that get the first chart colors, in order
@@ -2157,7 +2168,7 @@ V4BDgUx0DUW5kUDO1v8HW58Piu5OtQIAAAAASUVORK5CYII=
         <div class="chart sm" id="sc-spam"></div>
       </div>
       <div class="grid3" id="sc-ml"></div>
-      <div class="card">
+      <div class="card" id="sc-ml-card">
         <div class="card-h"><div class="card-t"><h2>ML verdicts over time</h2><button class="info" type="button" aria-label="About this card" data-info="ML classifier verdict events per time bucket, stacked by verdict.">i</button></div><div class="seg" data-range-for="spam-ml"></div></div>
         <div class="chart" id="sc-series"></div>
         <div class="legend" id="sc-legend"></div>
@@ -2747,6 +2758,11 @@ table.log tr.new td { animation: flash 1.2s ease-out; }
   function renderChrome(sum) {
     S.summary = sum;
     slots = sum.slots || slots;
+    if (sum.config) {
+      titles['spam-ml'] = sum.config.ml_events.length ? 'Spam & ML' : 'Spam';
+      document.querySelector('.nav a[data-view="spam-ml"]').textContent = titles['spam-ml'];
+      if (S.view === 'spam-ml') { $('title').textContent = titles[S.view]; document.title = titles[S.view] + ' · MIMEDefang'; }
+    }
     const src = $('sources');
     src.replaceChildren();
     const mx = sum.mx, fd = sum.feed;
@@ -3025,6 +3041,10 @@ table.log tr.new td { animation: flash 1.2s ease-out; }
 
     const ml = $('sc-ml');
     ml.replaceChildren();
+    const mlOn = d.ml_events.length > 0;
+    ml.hidden = !mlOn;
+    $('sc-ml-card').hidden = !mlOn;
+    if (!mlOn) return;
     for (const e of d.ml_events) {
       const bins = d.scores[e] || [];
       const box = h('div', { class: 'chart sm' });
