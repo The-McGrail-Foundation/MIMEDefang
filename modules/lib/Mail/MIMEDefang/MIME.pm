@@ -453,7 +453,7 @@ sub _anonymize_text_uri {
   my $line;
   my $nline;
   while (defined($line = $ifh->getline())) {
-    if($line =~ /https?\:\/\/.{3,512}\/(.{1,30})?(\&|\?)utm([_a-z0-9=]+)/) {
+    if(_has_utm_uri($line)) {
       my @params = split(/(\?|\&|\s+)/, $line);
       foreach my $p ( @params ) {
         if($p =~ /(\?|\&)?utm_.{1,20}\=.{1,64}/) {
@@ -480,11 +480,20 @@ sub _anonymize_text_uri {
   return 0;
 }
 
+# True if a "?utm" or "&utm" parameter follows an http(s) URI on the
+# same line.
+sub _has_utm_uri {
+  my($text) = @_;
+
+  return 0 unless $text =~ m{https?://}g;
+  return ($text =~ /\G.*?[?&]utm[_a-z0-9=]/) ? 1 : 0;
+}
+
 sub html_utm_filter {
   my($p, $text) = @_;
 
   my $nline;
-  if($text =~ /https?\:\/\/.{3,512}\/(.{1,30})?(\&|\?)utm([_a-z0-9=]+)/) {
+  if(_has_utm_uri($text)) {
     my @params = split(/(\?|\&|\s+|\>|\"|\')/, $text);
     foreach my $par ( @params ) {
       if($par =~ /(\?|\&)?utm_.{1,20}\=.{1,64}/) {
