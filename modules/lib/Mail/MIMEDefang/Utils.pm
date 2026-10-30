@@ -379,8 +379,9 @@ sub re_match_in_7zip_directory {
       if ( $beginmark and ( $rf !~ /^\-\-\-/ ) ) {
         # Date Time Attr Size [Compressed] Name: in solid archives only
         # the first file of a block has a compressed size
-        if ($rf =~ /^\S+\s+\S+\s+(\S{5})\s+\d+\s+(?:\d+\s+)?(.*?)\s*$/) {
+        if ($rf =~ /^\S+\s+\S+\s+(\S{5})\s+\d+\s+(?:\d+\s+)?(.*)/) {
           my ($attr, $name) = ($1, $2);
+          $name =~ s/\s+\z//;
           next if $attr =~ /^D/;
           return 1 if $name =~ /$regexp/i;
         }
