@@ -122,7 +122,7 @@ sub md_async_interpret_spamassassin {
         $result{threshold} = $thresh_val + 0;
     }
 
-    if ($raw =~ /X-Spam-Status:.*?tests=([\w,\s_]+)/i) {
+    if ($raw =~ /^X-Spam-Status:[^\n]*?tests=([\w,\s_]+)/mi) {
         $result{symbols} = [ split /,\s*/, $1 ];
     }
 
