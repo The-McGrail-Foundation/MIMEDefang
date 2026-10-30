@@ -93,8 +93,11 @@ sub md_spf_verify {
   $spfmail =~ s/^<//;
   $spfmail =~ s/>$//;
   if(defined $spfmail and $spfmail ne '') {
-    if($spfmail =~ /(.*)\+(?:.*)\@(.*)/) {
-      $spfmail = $1 . '@' . $2;
+    # Drop the last "+tag" of the local part
+    my $at = rindex($spfmail, '@');
+    my $plus = $at > 0 ? rindex($spfmail, '+', $at - 1) : -1;
+    if($plus >= 0) {
+      $spfmail = substr($spfmail, 0, $plus) . substr($spfmail, $at);
     }
     eval {
       local $SIG{__WARN__} = sub {
