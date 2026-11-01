@@ -1307,18 +1307,21 @@ free_debug(void *ctx, void *x, char const *fname, int line)
 #endif
 
 /**********************************************************************
-* %FUNCTION: md_open_pidfile
+* %FUNCTION: md_open_runfile
 * %ARGUMENTS:
-*  path -- PID file to open
+*  path -- PID file or lock file to open
+*  mode -- permissions the file must end up with (e.g. 0644, 0600)
 * %RETURNS:
 *  A descriptor open for read/write, or -1 with errno set.
 * %DESCRIPTION:
-*  Opens or creates a PID file as root without following symlinks, and
-*  refuses anything but a regular file with a single link owned by the
-*  effective user.
+*  Opens or creates a run-time file (PID file, lock file) without
+*  following symlinks and without blocking on a FIFO, and refuses
+*  anything but a regular file with a single link owned by the
+*  effective user.  The file mode is forced to "mode" regardless
+*  of the umask.
 ***********************************************************************/
 int
-md_open_pidfile(char const *path)
+md_open_runfile(char const *path, mode_t mode)
 {
     struct stat sbuf;
     int flags = O_RDWR|O_CREAT;
@@ -1331,7 +1334,7 @@ md_open_pidfile(char const *path)
     /* Do not block on a FIFO planted in place of the file */
     flags |= O_NONBLOCK;
 #endif
-    fd = open(path, flags, 0644);
+    fd = open(path, flags, mode);
     if (fd < 0) return -1;
     if (fstat(fd, &sbuf) < 0) {
 	int e = errno;
@@ -1358,8 +1361,8 @@ md_open_pidfile(char const *path)
 	return -1;
     }
 #endif
-    /* It needs to be world-readable */
-    fchmod(fd, 0644);
+    /* Enforce the requested mode regardless of umask or a previous run */
+    fchmod(fd, mode);
     return fd;
 }
 
@@ -1367,7 +1370,6 @@ int
 write_and_lock_pidfile(char const *pidfile, char **lockfile, int pidfile_fd)
 {
     struct flock fl;
-    struct stat sbuf;
     char buf[64];
     int lockfile_fd;
     size_t len;
@@ -1386,21 +1388,9 @@ write_and_lock_pidfile(char const *pidfile, char **lockfile, int pidfile_fd)
 	snprintf(*lockfile, len, "%s.lock", pidfile);
     }
 
-    lockfile_fd = open(*lockfile, O_RDWR|O_CREAT
-#ifdef O_NOFOLLOW
-		       |O_NOFOLLOW
-#endif
-#ifdef O_NONBLOCK
-		       |O_NONBLOCK
-#endif
-		       , 0600);
-    if (lockfile_fd >= 0 &&
-	(fstat(lockfile_fd, &sbuf) < 0 || !S_ISREG(sbuf.st_mode))) {
-      syslog(LOG_ERR, "Lock file %s is not a regular file", *lockfile);
-      close(lockfile_fd);
-      lockfile_fd = -1;
-    }
+    lockfile_fd = md_open_runfile(*lockfile, 0600);
     if (lockfile_fd < 0) {
+      syslog(LOG_ERR, "Could not open lock file %s: %m", *lockfile);
       free(*lockfile);
       *lockfile = NULL;
       return -1;

@@ -114,7 +114,6 @@ SpamAssassin/spamassassin.cf
 syslog-fac.c
 systemd-units/mimedefang-multiplexor.service
 systemd-units/mimedefang.service
-t/c_unit.t
 t/actions.t
 t/antispam.t
 t/arc.t
@@ -122,6 +121,7 @@ t/async.t
 t/authres.t
 t/autoscale.t
 t/bimi.t
+t/c_unit.t
 t/core.t
 t/critic.t
 t/data/arc1.eml

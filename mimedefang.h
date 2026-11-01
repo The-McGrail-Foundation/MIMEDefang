@@ -71,7 +71,7 @@ extern void do_delay(char const *sleepstr);
 extern int is_localhost(struct sockaddr *);
 extern int remove_local_socket(char const *str);
 extern int write_and_lock_pidfile(char const *pidfile, char **lockfile, int fd);
-extern int md_open_pidfile(char const *path);
+extern int md_open_runfile(char const *path, mode_t mode);
 #ifdef EMBED_PERL
 extern int make_embedded_interpreter(char const *progPath,
 				     char const *subFilter,
