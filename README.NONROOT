@@ -17,7 +17,24 @@ To run as defang:
 directory, make that directory owned by defang with mode 755 or 700, depending
 on your tastes.
 
-5) You *MUST* create the socket(s) and pid file(s) in the spool directory.
-As of MIMEDefang 2.13, this is the default.  You may have to edit your
-sendmail.cf or sendmail.mc file to use /var/spool/MIMEDefang instead of
-/var/run as the directory containing the milter socket.
+5) Create the socket(s) in the spool directory.  As of MIMEDefang 2.13,
+this is the default.  You may have to edit your sendmail.cf or sendmail.mc
+file to use /var/spool/MIMEDefang instead of /var/run as the directory
+containing the milter socket.
+
+6) Do NOT put the pid files in the spool directory.  The daemons create
+them as root, before dropping privileges, and init scripts trust their
+contents ("kill `cat /var/run/mimedefang.pid`"); anybody who can write to
+the directory holding a pid file can replace it.  Use a directory only
+root can write to, such as /var/run, and use -o to put the lock files,
+which are opened after privileges are dropped, in the spool directory:
+
+  mimedefang-multiplexor -U defang -p /var/run/mimedefang-multiplexor.pid \
+      -o /var/spool/MIMEDefang/mimedefang-multiplexor.lock ...
+  mimedefang -U defang -P /var/run/mimedefang.pid \
+      -o /var/spool/MIMEDefang/mimedefang.lock ...
+
+Without -o the lock file defaults to <pidfile>.lock, which defang cannot
+create in /var/run.  The sample init scripts already do this; the systemd
+units do not use pid files.  The daemons refuse a pid file that is a
+symbolic link, a hard link, not a regular file, or owned by another user.
