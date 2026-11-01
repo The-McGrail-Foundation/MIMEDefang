@@ -1314,7 +1314,8 @@ free_debug(void *ctx, void *x, char const *fname, int line)
 *  A descriptor open for read/write, or -1 with errno set.
 * %DESCRIPTION:
 *  Opens or creates a PID file as root without following symlinks, and
-*  refuses anything but a regular file with a single link.
+*  refuses anything but a regular file with a single link owned by the
+*  effective user.
 ***********************************************************************/
 int
 md_open_pidfile(char const *path)
@@ -1343,6 +1344,12 @@ md_open_pidfile(char const *path)
 	errno = EINVAL;
 	return -1;
     }
+    /* Refuse a file planted by somebody else */
+    if (sbuf.st_uid != geteuid()) {
+	close(fd);
+	errno = EPERM;
+	return -1;
+    }
 #ifdef O_NONBLOCK
     if (fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) & ~O_NONBLOCK) < 0) {
 	int e = errno;
@@ -1360,6 +1367,7 @@ int
 write_and_lock_pidfile(char const *pidfile, char **lockfile, int pidfile_fd)
 {
     struct flock fl;
+    struct stat sbuf;
     char buf[64];
     int lockfile_fd;
     size_t len;
@@ -1382,7 +1390,16 @@ write_and_lock_pidfile(char const *pidfile, char **lockfile, int pidfile_fd)
 #ifdef O_NOFOLLOW
 		       |O_NOFOLLOW
 #endif
-		       , 0666);
+#ifdef O_NONBLOCK
+		       |O_NONBLOCK
+#endif
+		       , 0600);
+    if (lockfile_fd >= 0 &&
+	(fstat(lockfile_fd, &sbuf) < 0 || !S_ISREG(sbuf.st_mode))) {
+      syslog(LOG_ERR, "Lock file %s is not a regular file", *lockfile);
+      close(lockfile_fd);
+      lockfile_fd = -1;
+    }
     if (lockfile_fd < 0) {
       free(*lockfile);
       *lockfile = NULL;
@@ -1399,9 +1416,12 @@ write_and_lock_pidfile(char const *pidfile, char **lockfile, int pidfile_fd)
       return -1;
     }
     if (pidfile_fd >= 0) {
-	ftruncate(pidfile_fd, 0);
 	snprintf(buf, sizeof(buf), "%lu\n", (unsigned long) getpid());
-	write(pidfile_fd, buf, strlen(buf));
+	if (ftruncate(pidfile_fd, 0) < 0 ||
+	    write(pidfile_fd, buf, strlen(buf)) != (ssize_t) strlen(buf)) {
+	    syslog(LOG_ERR, "Could not write PID file: %m");
+	    return -1;
+	}
 
 	/* Close the pidfile fd; no longer needed */
 	if (close(pidfile_fd) < 0) {
