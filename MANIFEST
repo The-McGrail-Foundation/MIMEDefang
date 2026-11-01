@@ -150,7 +150,6 @@ systemd-units/mimedefang.service
 systemd-units/mimedefang-gliclass-server.service
 systemd-units/mimedefang-laya-server.service
 systemd-units/mimedefang-dashboard.service
-t/c_unit.t
 t/actions.t
 t/antispam.t
 t/arc.t

@@ -980,7 +980,7 @@ main(int argc, char *argv[], char **env)
 
     /* Open the pidfile as root.  We'll write the pid later on in the grandchild */
     if (pidfile) {
-	pidfile_fd = md_open_pidfile(pidfile);
+	pidfile_fd = md_open_runfile(pidfile, 0644);
 	if (pidfile_fd < 0) {
 	    syslog(LOG_ERR, "Could not open PID file %s: %m", pidfile);
 	    exit(EXIT_FAILURE);
