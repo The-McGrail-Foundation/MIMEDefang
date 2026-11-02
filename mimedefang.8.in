@@ -144,9 +144,9 @@ owned by root.
 
 .TP
 .B \-o \fIfileName\fR
-Causes \fbmimedefang\fR to use \fIfileName\fR as a lock file to avoid
+Causes \fBmimedefang\fR to use \fIfileName\fR as a lock file to avoid
 multiple instances from running.  If you supply \fB\-P\fR but not
-\fB\-o\fR, then \fbmimedefang\fR constructs a lock file by appending
+\fB\-o\fR, then \fBmimedefang\fR constructs a lock file by appending
 ".lock" to the pid file.  However, this is less secure than having a
 root-owned pid file in a root-owned directory and a lock file writable
 by the user named by the \fB\-U\fR option.  (The lock file must be
@@ -227,7 +227,7 @@ You can use either the short name ("mail") or long name ("LOG_MAIL") for
 the facility name.
 
 .TP
-\-a \fImacro\fR
+.B \-a \fImacro\fR
 Pass the value of the specified Sendmail macro through to the Perl filter.
 You can repeat the \-a option to write more macros than the built-in
 defaults.  Note that in addition to asking \fBmimedefang\fR to pass the
@@ -242,8 +242,22 @@ A bare CR should never appear in an e-mail message.  Older versions
 of \fBmimedefang\fR used to strip them out automatically, but now they
 are left in by default.  The \fB\-c\fR option enables the older behavior.
 .TP
+.B \-L \fIip.addr\fR
+Treat SMTP connections from \fIip.addr\fR as if they came from the
+loopback address: the filter sees 127.0.0.1 as the relay address
+(\fB$RelayAddr\fR).  It does not affect \fB\-R\fR, which looks at the
+real peer address.
+This is useful when a local proxy or content filter relays mail to
+\fBsendmail\fR from an address other than 127.0.0.1.  The option may
+be given only once.
+
+.TP
 .B \-h
 Print usage information and exit.
+
+.TP
+.B \-v
+Print the version and exit.
 
 .SH OPERATION
 
@@ -274,6 +288,6 @@ may introduce.
 The \fBmimedefang\fR home page is \fIhttp://www.mimedefang.org/\fR.
 
 .SH SEE ALSO
-mimedefang.pl(8), mimedefang-filter(5), mimedefang-multiplexor(8), mimedefang-protocol(7), mimedefang-release(8)
+mimedefang.pl(8), mimedefang-filter(5), mimedefang-multiplexor(8), mimedefang-protocol(7), mimedefang-release(8), md-mx-ctrl(8)
 
 

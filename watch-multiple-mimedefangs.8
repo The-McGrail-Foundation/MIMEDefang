@@ -1,27 +1,27 @@
 .\" $Id: watch-multiple-mimdefangs.8 9989 2004-09-22 14:08:58Z dfs $
 .\""
-.TH WATCH-MULTIPLE-MIMDEFANGS 8 "12 January 2007"
+.TH WATCH-MULTIPLE-MIMEDEFANGS 8 "12 January 2007"
 .UC 4
 .SH NAME
-watch-multiple-mimdefangs.tcl \- Keep an eye on a cluster of MIMEDefang machines
+watch-multiple-mimedefangs.tcl \- Keep an eye on a cluster of MIMEDefang machines
 .SH SYNOPSIS
-.B watch-multiple-mimdefangs.tcl [-n] [-r] [-s] [-t] [-archive] \fR\fImachine-1 machine-2 ... machine-N\fR
+.B watch-multiple-mimedefangs.tcl [-n] [-r] [-s] [-t] [-h | -d] [-archive] \fR\fImachine-1 machine-2 ... machine-N\fR
 
 .SH DESCRIPTION
 
-\fBwatch-multiple-mimdefangs.tcl\fR is a Tk script that graphically
+\fBwatch-multiple-mimedefangs.tcl\fR is a Tk script that graphically
 displays the status of \fBmimedefang-multiplexor\fR(8) on a cluster of
 machines.  Note that Tcl/Tk 8.4 or higher is required to run
-\fBwatch-multiple-mimdefangs.tcl\fR.
+\fBwatch-multiple-mimedefangs.tcl\fR.
 
 If you supply the \fB-archive\fR command-line option, then
-\fBwatch-multiple-mimdefangs.tcl\fR logs the output of
+\fBwatch-multiple-mimedefangs.tcl\fR logs the output of
 \fBmd-mx-ctrl rawload\fR for each machine.  The output for \fImachine_name\fR is logged in:
 
 $HOME/.watch-multiple-mimedefangs/\fImachine_name\fR/data.
 
 If you supply any of \fB-n\fR, \fB-r\fR, \fB-s\fR or \fB-t\fR
-options, then \fBwatch-multiple-mimdefangs.tcl\fR uses the
+options, then \fBwatch-multiple-mimedefangs.tcl\fR uses the
 \fBrawload1\fR command rather than \fBrawload\fR command to read
 performance data.  \fIDo not use these options unless all monitored
 machines are running MIMEDefang 2.74 or newer!\fR.
@@ -30,9 +30,12 @@ The \fB-n\fR, \fB-r\fR, \fB-s\fR, and \fB-t\fR options enable
 monitoring of scan times, filter_relay times, filter_sender times
 and filter_recipient times, respectively.
 
+By default, the rate graphs drawn with these options are per second.
+The \fB-h\fR option shows them per hour and the \fB-d\fR option per day.
+
 .SH PREREQUISITES
 
-To use \fBwatch-multiple-mimdefangs.tcl\fR to monitor a cluster of machines,
+To use \fBwatch-multiple-mimedefangs.tcl\fR to monitor a cluster of machines,
 you need the following prerequisites:
 
 .TP
@@ -54,7 +57,7 @@ to monitor.
 
 .SH DISPLAY
 
-For each machine specified on the command line, \fBwatch-multiple-mimdefangs.tcl\fR creates a chart with five columns.  The columns are:
+For each machine specified on the command line, \fBwatch-multiple-mimedefangs.tcl\fR creates a chart with five columns.  The columns are:
 
 .TP
 .B o
@@ -97,7 +100,7 @@ Monitor the busy workers on the machine.  If you click on the
 process-ID of a worker, an xterm will open up and the command "strace
 -s 100 -t -p \fIpid\fR" will be executed on the remote machine.  This
 is Linux-specific, but you can edit
-\fBwatch-multiple-mimdefangs.tcl\fR to replace the command with your
+\fBwatch-multiple-mimedefangs.tcl\fR to replace the command with your
 particular system's command for tracing system calls.
 
 .TP
@@ -110,7 +113,7 @@ If you need to add a machine to the display, simply type the name of the
 machine in the "Add Machine:" box and press Enter.
 
 .SH AUTHOR
-\fBwatch-multiple-mimdefangs.tcl\fR was written by Dianne Skoll.
+\fBwatch-multiple-mimedefangs.tcl\fR was written by Dianne Skoll.
 
 .SH SEE ALSO
 mimedefang.pl(8), mimedefang-filter(5), mimedefang(8), mimedefang-protocol(7),

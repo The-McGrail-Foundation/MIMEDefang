@@ -33,6 +33,15 @@ intended for use by a monitoring program such as
 The following commands are available:
 
 .TP
+.B help
+Lists the commands the multiplexor accepts.  On the unprivileged socket
+(\fBmimedefang-multiplexor \-a\fR) only the read-only commands are listed.
+
+.TP
+.B free
+Prints the number of free (idle or stopped) workers.
+
+.TP
 .B status
 Prints the status of all worker Perl processes in human-readable format.
 
@@ -280,6 +289,20 @@ and restart busy workers when they become idle.  This forces a reread of
 filter rules.
 
 .TP
+.B hload
+Prints the hourly load of scan requests in computer-readable format:
+sixteen space-separated numbers.  The first four are the number of
+messages processed in the last 1, 4, 12 and 24 hours; the second four are
+the average number of busy workers per request; the third four are the
+average time per request in milliseconds; and the last four are the number
+of seconds of history actually covered by each of the four windows.
+
+.TP
+.B hload-relayok\fR, \fBhload-senderok\fR, \fBhload-recipok
+Similar to \fBhload\fR, but for \fBfilter_relay\fR, \fBfilter_sender\fR
+and \fBfilter_recipient\fR calls.
+
+.TP
 .B msgs
 Prints the total number of messages scanned since the multiplexor started.
 
@@ -302,5 +325,5 @@ needs to be run as \fIroot\fR or the same user as \fBmimedefang-multiplexor\fR.
 The \fBmimedefang\fR home page is \fIhttps://www.mimedefang.org/\fR.
 
 .SH SEE ALSO
-mimedefang.pl(8), mimedefang-filter(5), mimedefang(8), mimedefang-protocol(7),
-watch-mimedefang(8)
+mimedefang.pl(8), mimedefang-filter(5), mimedefang(8), mimedefang-multiplexor(8),
+mimedefang-protocol(7), watch-mimedefang(8)

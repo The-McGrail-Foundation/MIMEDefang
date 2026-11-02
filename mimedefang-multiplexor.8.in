@@ -135,9 +135,9 @@ by root.
 
 .TP
 .B \-o \fIfileName\fR
-Causes \fbmimedefang-multiplexor\fR to use \fIfileName\fR as a lock
+Causes \fBmimedefang-multiplexor\fR to use \fIfileName\fR as a lock
 file to avoid multiple instances from running.  If you supply
-\fB\-p\fR but not \fB\-o\fR, then \fbmimedefang-multiplexor\fR
+\fB\-p\fR but not \fB\-o\fR, then \fBmimedefang-multiplexor\fR
 constructs a lock file by appending ".lock" to the pid file.  However,
 this is less secure than having a root-owned pid file in a root-owned
 directory and a lock file writable by the user named by the \fB\-U\fR
@@ -207,6 +207,10 @@ messages to force \fBmimedefang.pl\fR to consume lots of memory.
 .TP
 .B \-h
 Print usage information and exit.
+
+.TP
+.B \-v
+Print the version and exit.
 
 .TP
 .B \-t \fIfilename\fR

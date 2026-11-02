@@ -46,13 +46,13 @@ complain loudly about MIMEDefang.
 MIMEDefang has the following software requirements:
 
 1) A UNIX-like operating system (MIMEDefang is developed and tested on Linux)
-2) Perl 5.8.0 or higher
+2) Perl 5.8.9 or higher
 3) Required Perl modules:
 
 	Digest::SHA
         FindBin
 	MailTools 1.1401  or higher
-	MIME::tools 5.413 or higher
+	MIME::tools 5.412 or higher
 	MIME::Base64 3.03 or higher
         MIME::WordDecoder
 
@@ -60,14 +60,20 @@ MIMEDefang has the following software requirements:
 
 4) Optional Perl modules:
 
+	AnyEvent (CPAN) - Needed for Mail::MIMEDefang::Async parallel checks
+	Archive::Zip - Needed to look inside zip archives and for mimedefang-release -z
 	Crypt::OpenSSL::Random - Needed to generate a truly random ipheader file
 	HTML::Parser (CPAN) - Needed for append_html_boilerplate function
 	IO::Socket::SSL - Needed for md_check_against_smtp_server SSL checks
 	JSON and LWP::UserAgent - Needed for rspamd support
+	Mail::BIMI - Needed for BIMI checks
+	Mail::DKIM - Needed for DKIM and ARC verification and signing
+	Mail::SPF - Needed for SPF checks
+	Net::DNS - Needed for DNS lookups (DMARC, MTA-STS, DANE and others)
 	Mail::SpamAssassin (https://www.spamassassin.org/) - spam detector
 	Test::Class, Test::Most and tzdata files - Needed to run regression tests
 
-4) Sendmail 8.12.x, 8.13.x or Postfix.  Get the latest version.
+5) Sendmail 8.12 or later, or Postfix.  Get the latest version.
 
 4. INSTALLATION
 ---------------
@@ -189,18 +195,26 @@ Summary of useful ./configure options:
   --disable-anti-virus    Do not search for ANY anti-virus programs
 
   --disable-antivir       Do not include support for H+BEDV antivir
+  --disable-bdc           Do not include support for Bitdefender bdc
   --disable-vexira        Do not include support for Central Command Vexira
   --disable-uvscan        Do not include support for NAI uvscan
   --disable-sweep         Do not include support for Sophos sweep
+  --disable-savscan       Do not include support for Sophos savscan
   --disable-trend         Do not include support for Trend Filescanner/Interscan
   --disable-AvpLinux      Do not include support for AVP AvpLinux
+  --disable-kavscanner    Do not include support for Kaspersky kavscanner
+  --disable-aveclient     Do not include support for AVP5 aveclient
   --disable-clamav        Do not include support for clamav
+  --disable-clamd         Do not include support for clamd
   --disable-csav          Do not include support for Command Anti-Virus
   --disable-fsav          Do not include support for F-Secure Anti-Virus
   --disable-fprot         Do not include support for F-prot Anti-Virus
   --disable-fpscan        Do not include support for F-prot Anti-Virus v6
   --disable-sophie        Do not include support for Sophie
+  --disable-trophie       Do not include support for Trophie
+  --disable-nod32         Do not include support for Eset NOD32
   --disable-nvcc          Do not include support for Nvcc
+  --disable-rspamc        Do not include support for Rspamd
 
 5) Add the following line to your Sendmail "m4" configuration file.  (You
 DO use the m4 configuration method, right?)
