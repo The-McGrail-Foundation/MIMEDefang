@@ -20,7 +20,7 @@ for my $mod (@required) {
     }
 }
 
-plan tests => 26;
+plan tests => 27;
 
 use Mail::MIMEDefang;
 
@@ -223,6 +223,40 @@ subtest 'Mail::MIMEDefang::Async constructor via md_async_init' => sub {
     isa_ok $engine, 'Mail::MIMEDefang::Async';
     is $engine->{max_concurrency}, 4, 'max_concurrency set';
     is $engine->{global_timeout},  3, 'global_timeout set';
+};
+
+subtest 'md_async_message_contains_virus_clamd - short replies' => sub {
+    require AnyEvent::Handle;
+    require File::Temp;
+    require IO::Socket::UNIX;
+    require POSIX;
+    my $dir = File::Temp::tempdir(CLEANUP => 1);
+    my $n = 0;
+    for my $c (["x: OK\n",                 [0, 'ok', 'ok']],
+               ["x: Eicar-Test FOUND\n",   [1, 'virus', 'quarantine']],
+               ["x: Access denied. ERROR\n", [999, 'swerr', 'tempfail']],
+               ["UNKNOWN COMMAND\n",       [0, 'ok', 'ok']]) {
+        my ($reply, $expected) = @$c;
+        my $sock = "$dir/clamd" . $n++ . '.sock';
+        my $srv = IO::Socket::UNIX->new(Local => $sock, Listen => 1) or die "listen: $!";
+        my $pid = fork() // die "fork: $!";
+        if (!$pid) {
+            alarm 10;
+            my $conn = $srv->accept or POSIX::_exit(0);
+            my $req = <$conn>;
+            print $conn $reply;
+            close $conn;
+            POSIX::_exit(0);
+        }
+        close $srv;
+        init_globals();
+        $CWD = $dir;
+        md_async_init(global_timeout => 5);
+        my @got = md_async_message_contains_virus_clamd($sock);
+        waitpid($pid, 0);
+        (my $shown = $reply) =~ s/\n/\\n/g;
+        is_deeply \@got, $expected, "reply '$shown'";
+    }
 };
 
 done_testing();

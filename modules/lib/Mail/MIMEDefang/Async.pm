@@ -30,7 +30,7 @@ use warnings;
 use Exporter;
 use Carp qw(croak carp);
 
-use Mail::MIMEDefang qw(%Features $CWD $ClamdSock $Sender @Recipients
+use Mail::MIMEDefang qw(%Features $CWD $ClamdSock $VirusName $Sender @Recipients
                         $AddApparentlyToForSpamAssassin md_syslog);
 use Mail::MIMEDefang::Antispam qw(spam_assassin_check);
 use Mail::MIMEDefang::Net qw(reverse_ip_address_for_rbl);
@@ -330,19 +330,15 @@ sub _socket_check {
 
         $handle->push_write($request) if length $request;
 
-        my $reader;
-        $reader = sub {
-            my (undef, $chunk) = @_;
-            $buf .= $chunk;
+        $handle->on_read(sub {
+            $buf .= $_[0]->rbuf;
+            $_[0]->rbuf = '';
             if ($buf =~ $sentinel || length($buf) >= $max_bytes) {
                 $cleanup->();
                 $self->{_results}{$name} = $buf;
                 $done_cb->();
-            } else {
-                $handle->push_read(chunk => 1024, $reader);
             }
-        };
-        $handle->push_read(chunk => 1024, $reader);
+        });
     });
 }
 
@@ -598,11 +594,11 @@ sub _async_dmarc_lookup {
 Async replacement for C<message_contains_virus_clamd> from
 L<Mail::MIMEDefang::Antivirus>.
 
-Sends a C<SCAN $CWD/Work> command to the clamd daemon over a socket and
+Sends a C<nSCAN $CWD/Work> command to the clamd daemon over a socket and
 interprets the response. C<$clamd_sock> may be a Unix socket path or a
 C<host:port> string; defaults to C<$ClamdSock>.
 
-B<Note>: the C<SCAN> command instructs clamd to open the path on its own
+B<Note>: the C<nSCAN> command instructs clamd to open the path on its own
 filesystem. This only works when clamd runs on the same host as MIMEDefang.
 For remote clamd, use C<md_async_message_contains_virus_clamdscan> instead.
 
@@ -611,7 +607,10 @@ Returns the standard virus-scanner triplet C<($code, $category, $action)>:
   (0,   'ok',             'ok')          clean
   (1,   'virus',          'quarantine')  virus found
   (999, 'cannot-execute', 'tempfail')    cannot connect
-  (999, 'swerr',          'tempfail')    scan error
+  (999, 'swerr',          'tempfail')    scan error, or empty reply
+
+A reply that is neither a verdict nor an error is logged and treated
+as clean.
 
 =cut
 
@@ -626,9 +625,9 @@ sub md_async_message_contains_virus_clamd {
     }
 
     my %sock_args = (
-        request    => "SCAN $CWD/Work\n",
-        read_until => qr/\n/,
-        max_bytes  => 4096,
+        request    => "nSCAN $CWD/Work\n",
+        read_until => qr/(?!)/,    # never matches - read the whole reply, until EOF
+        max_bytes  => 65536,
         timeout    => 30,
     );
 
@@ -651,19 +650,12 @@ sub md_async_message_contains_virus_clamd {
         return wantarray ? (999, 'cannot-execute', 'tempfail') : 999;
     }
 
-    my $output = $out->{results}{_clamd_scan} // '';
-
-    if ($output =~ /: (.+) FOUND/) {
-        my $virus = $1;
-        md_syslog('info', "md_async_message_contains_virus_clamd: clamd found $virus");
-        return wantarray ? (1, 'virus', 'quarantine') : 1;
-    }
-    if ($output =~ /: (.+) ERROR/) {
-        md_syslog('err', "md_async_message_contains_virus_clamd: clamd error: $1");
-        return wantarray ? (999, 'swerr', 'tempfail') : 999;
-    }
-
-    return wantarray ? (0, 'ok', 'ok') : 0;
+    require Mail::MIMEDefang::Antivirus::ClamAV;
+    my ($code, $category, $action) =
+        Mail::MIMEDefang::Antivirus::ClamAV::clamd_interpret_reply($out->{results}{_clamd_scan});
+    md_syslog('info', "md_async_message_contains_virus_clamd: clamd found $VirusName")
+        if ($category eq 'virus');
+    return wantarray ? ($code, $category, $action) : $code;
 }
 
 =item md_async_message_contains_virus_clamdscan($conf)
