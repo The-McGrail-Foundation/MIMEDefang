@@ -918,8 +918,12 @@ fi
 
 AC_SUBST(ENABLE_DEBUGGING)
 AC_SUBST(PTHREAD_FLAG)
-VERSION=`$PERL -I modules/lib -e 'use Mail::MIMEDefang; print Mail::MIMEDefang->md_version'`
+dnl VERSION goes in man pages and packages; FULL_VERSION (with the
+dnl "-dev" suffix on development snapshots) only in the binaries
+VERSION=`$PERL -I modules/lib -e 'use Mail::MIMEDefang; print Mail::MIMEDefang::md_version()'`
+FULL_VERSION=`$PERL -I modules/lib -e 'use Mail::MIMEDefang; print Mail::MIMEDefang::md_version(1)'`
 AC_SUBST(VERSION)
+AC_SUBST(FULL_VERSION)
 
 dnl Jigger for machines without snprintf
 if test "$ac_cv_func_snprintf" != "yes" -o "$ac_cv_func_vsnprintf" != "yes" ; then

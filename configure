@@ -666,6 +666,7 @@ LIBMILTERSO
 LIBSM
 LIBMILTER
 MINCLUDE
+FULL_VERSION
 VERSION
 PTHREAD_FLAG
 ENABLE_DEBUGGING
@@ -6933,7 +6934,9 @@ fi
 
 
 
-VERSION=`$PERL -I modules/lib -e 'use Mail::MIMEDefang; print Mail::MIMEDefang->md_version'`
+VERSION=`$PERL -I modules/lib -e 'use Mail::MIMEDefang; print Mail::MIMEDefang::md_version()'`
+FULL_VERSION=`$PERL -I modules/lib -e 'use Mail::MIMEDefang; print Mail::MIMEDefang::md_version(1)'`
+
 
 
 if test "$ac_cv_func_snprintf" != "yes" -o "$ac_cv_func_vsnprintf" != "yes" ; then

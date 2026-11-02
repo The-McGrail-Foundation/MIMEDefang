@@ -55,7 +55,9 @@ my $MessageStartTime;
 our @EXPORT;
 our @EXPORT_OK;
 
-our $VERSION = '3.7.1';
+our $VERSION = '3.8.0';
+# 1 on development snapshots, 0 for release candidates and releases
+our $DEV = 1;
 
 @EXPORT = qw{
       $AddWarningsInline @StatusTags
@@ -107,12 +109,14 @@ our $VERSION = '3.7.1';
 #***********************************************************************
 # %PROCEDURE: md_version
 # %ARGUMENTS:
-#  None
+#  full -- (optional) if true, add the "-dev" suffix on development
+#          snapshots
 # %RETURNS:
 #  MIMEDefang version
 #***********************************************************************
 sub md_version {
-    return $VERSION;
+    my ($full) = @_;
+    return ($full && $DEV) ? "$VERSION-dev" : $VERSION;
 }
 
 =item md_get_processing_time

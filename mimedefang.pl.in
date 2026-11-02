@@ -402,7 +402,7 @@ sub main {
 	my($ans);
 
 	# Print MIMEDefang version
-	my $ver = md_version();
+	my $ver = md_version(1);
 	print("MIMEDefang version $ver\n\n");
 	# Print the features we have first
 	foreach my $thing (sort keys %Features) {

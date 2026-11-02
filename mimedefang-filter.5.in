@@ -1834,8 +1834,10 @@ sub filter_sender {
 \fBmimedefang.pl\fR includes some "test" functions:
 
 .TP
-.B md_version()
+.B md_version([\fIfull\fR])
 returns the version of MIMEDefang as a string (for example, "@VERSION@").
+If \fIfull\fR is true, development snapshots return the version with
+a "-dev" suffix (for example, "@VERSION@-dev").
 
 .TP
 .B message_rejected()

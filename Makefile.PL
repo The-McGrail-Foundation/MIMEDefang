@@ -35,20 +35,15 @@ use POSIX          qw(uname);
 # ---------------------------------------------------------------------------
 # Version
 # ---------------------------------------------------------------------------
-my $VERSION;
-{
-    my $pm = 'modules/lib/Mail/MIMEDefang.pm';
-    if (open my $fh, '<', $pm) {
-        while (<$fh>) {
-            if (/^\s*our\s+\$VERSION\s*=\s*['"]([^'"]+)['"]\s*;/) {
-                $VERSION = $1;
-                last;
-            }
-        }
-        close $fh;
-    }
-    die "Cannot determine version from $pm\n" unless defined $VERSION;
-}
+eval {
+    local @INC = ('modules/lib', @INC);
+    require Mail::MIMEDefang;
+} or die "Cannot load modules/lib/Mail/MIMEDefang.pm: $@\n";
+
+# $VERSION goes in man pages and packages; $FULL_VERSION (with the "-dev"
+# suffix on development snapshots) only in the binaries (config.h)
+my $VERSION      = Mail::MIMEDefang::md_version();
+my $FULL_VERSION = Mail::MIMEDefang::md_version(1);
 
 # Split "3.7-rc1" -> base "3.7" and prerelease "rc1".
 # RPM forbids hyphens in Version:; the prerelease part goes into Release:.
@@ -438,7 +433,7 @@ write_config_h(
     QUARANTINEDIR     => $QUARANTINEDIR,
     CONFDIR           => $CONFDIR,
     SENDMAILPROG      => $SENDMAILPROG,
-    VERSION           => $VERSION,
+    VERSION           => $FULL_VERSION,
     MIMEDEFANG_PL     => $MIMEDEFANG_PL,
     HAVE_CLOCK_MONOTONIC => $HAVE_CLOCK_MONOTONIC,
     HAVE_INET_NTOP    => $HAVE_INET_NTOP,
