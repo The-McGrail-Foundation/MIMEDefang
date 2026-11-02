@@ -660,6 +660,9 @@ routine.
 Socket used for clamd daemon calls within message_contains_virus_clamd
 and entity_contains_virus_clamd unless a socket is provided by the calling
 routine.
+It is either the path of a UNIX-domain socket or a \fIhost\fB:\fIport\fR
+string for a TCP socket.  clamd opens the files to scan by path, so
+it must be able to read the MIMEDefang spool directory even over TCP.
 
 .TP
 .B $TrophieSock \fR(default @SPOOLDIR@/trophie)
@@ -2102,7 +2105,8 @@ same as the other message_contains_virus functions.
 
 .TP
 .B message_contains_virus_clamd([$clamd_sock])
-Connects to the specified socket (default \fB$ClamdSock\fR), where
+Connects to the specified socket (default \fB$ClamdSock\fR), a UNIX-domain
+socket path or \fIhost\fB:\fIport\fR, where
 the clamd daemon is expected to be listening.  Return values are the
 same as the other message_contains_virus functions.
 
@@ -2180,7 +2184,8 @@ are the same as the other entity_contains_virus functions.
 
 .TP
 .B entity_contains_virus_clamd($entity[, $clamd_sock])
-Connects to the specified socket (default \fB$ClamdSock\fR), where
+Connects to the specified socket (default \fB$ClamdSock\fR), a UNIX-domain
+socket path or \fIhost\fB:\fIport\fR, where
 the clamd daemon is expected to be listening.  Return values
 are the same as the other entity_contains_virus functions.
 

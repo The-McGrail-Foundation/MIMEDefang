@@ -8,6 +8,12 @@ mimedefang.pl \- Perl script to scan MIME messages.
 
 .SH SYNOPSIS
 .B mimedefang.pl [-f \fIfilter\fR] \fIdir\fR
+.br
+.B mimedefang.pl [-f \fIfilter\fR] -test
+.br
+.B mimedefang.pl [-f \fIfilter\fR] -validate
+.br
+.B mimedefang.pl [-f \fIfilter\fR] -features
 
 .SH DESCRIPTION
 \fBmimedefang.pl\fR is a Perl script designed to work with

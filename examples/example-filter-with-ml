@@ -58,7 +58,7 @@ $AddWarningsInline = 0;
 # confidence threshold below which a verdict is treated as "no opinion".
 #***********************************************************************
 # $Mail::MIMEDefang::ML::Config{min_confidence} = 0.55;
-# The default timeout (10s) suits Laya and GLiClass; generative models
+# A 10s timeout (the module default is 30s) suits Laya and GLiClass; generative models
 # (OpenAI backend) are much slower, especially on CPU, so raise it.  Keep
 # timeout * (1 + connect_retries), plus SpamAssassin's run time, below the
 # multiplexor busy timeout (mimedefang-multiplexor -b, default 120s).

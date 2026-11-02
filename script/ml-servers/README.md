@@ -209,6 +209,7 @@ lines:
 | `GLICLASS_MODEL` | `knowledgator/gliclass-modern-base-v2.0` | gliclass |
 | `GLICLASS_DEVICE` | `cpu` | gliclass |
 | `GLICLASS_MAX_LENGTH` | `4096` | gliclass |
+| `GLICLASS_EXTRA_ARGS` | unset; further server options, e.g. `--add-prefix-space` | gliclass |
 | `LAYA_HOST`, `LAYA_PORT` | `127.0.0.1`, `8687` | laya |
 | `LAYA_THREADS`, `LAYA_TORCH_THREADS` | `8`, `2` | laya |
 | `LAYA_PRELOAD` | unset (all stock checkpoints) | laya |

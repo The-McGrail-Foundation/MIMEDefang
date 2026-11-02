@@ -42,8 +42,8 @@ every backend:
 
 Laya and GLiClass answer in a single forward pass and are fast enough for
 every message. The `openai` backend runs a generative model, so it is
-slower: the default `$Mail::MIMEDefang::ML::Config{timeout}` of 10 seconds
-is meant for Laya and GLiClass and must be increased for `openai` (e.g. to
+slower: the example sets `$Mail::MIMEDefang::ML::Config{timeout}` to 10 seconds
+(the module default is 30), which is meant for Laya and GLiClass and must be increased for `openai` (e.g. to
 60; an 8B model on CPU takes seconds per message).  Keep
 `timeout * (1 + connect_retries)`, plus the SpamAssassin run time, below
 the multiplexor busy timeout (`mimedefang-multiplexor -b`, default 120

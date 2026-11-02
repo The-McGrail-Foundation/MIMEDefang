@@ -23,6 +23,23 @@ A simple shell script which converts Word documents to HTML. Requires
 
 Utilities to make pretty graphs of MIMEDefang activity.
 
+## `greylisting`
+
+SQL schemas (MySQL, PostgreSQL, SQLite) for the greylisting table and
+a sample `mimedefang-filter` that calls `action_greylist` from
+`filter_recipient`.  Requires `DBI` and the matching DBD driver.
+
+## `munin`
+
+A Munin plugin that graphs MIMEDefang performance metrics read from the
+multiplexor socket (set `MX_SOCK` to its path).
+
+## `filebeat.yml`
+
+A sample Filebeat input that ships MIMEDefang status in JSON format to an
+ELK stack.  It reads `/var/log/mimedefang.json`, which you fill yourself,
+e.g. by appending the output of `md-mx-ctrl jsonstatus` from cron.
+
 ## `ml-benchmark`
 
 Measures the `Mail::MIMEDefang::ML` backends (Laya, GLiClass and

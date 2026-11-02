@@ -4,6 +4,10 @@ Running Sophie with MIMEDefang
 Sophie (http://www.vanja.com/tools/sophie/) is a virus-scanning daemon that
 uses libsavi from Sophos AntiVirus (http://www.sophos.com/).
 
+Sophie is no longer maintained.  MIMEDefang still supports it through the
+legacy module Mail::MIMEDefang::Antivirus::Legacy::Sophos, which is loaded
+on demand by Mail::MIMEDefang::Antivirus.
+
 To use Sophie with MD, you should use a configure line like this one when
 building Sophie:
 
