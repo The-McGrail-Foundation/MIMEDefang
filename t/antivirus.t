@@ -14,6 +14,8 @@ use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
 use Cwd qw(getcwd);
+use IO::Socket::UNIX;
+use POSIX ();
 use File::Temp qw(tempdir);
 use MIME::Entity;
 
@@ -261,6 +263,100 @@ sub t_end_to_end_with_fake_scanners : Test(8)
     my @got_e = $ent_sub->($entity);
     is_deeply(\@got_e, $expected, "entity_contains_virus_$suffix, exit $code");
   }
+  chdir $cwd or die "chdir: $!";
+}
+
+# A clamd that answers "PONG" to "nPING" and $reply to anything else,
+# for up to two connections on a Unix socket.  The last request that is
+# not a PING is written to "$sock_path.req".
+sub _mock_clamd
+{
+  my ($sock_path, $reply) = @_;
+  my $srv = IO::Socket::UNIX->new(Local => $sock_path, Listen => 5) or die "listen: $!";
+  my $pid = fork();
+  die "fork: $!" unless defined $pid;
+  if (!$pid) {
+    local $SIG{ALRM} = sub { POSIX::_exit(0) };
+    alarm 20;
+    for (1 .. 2) {
+      my $c = $srv->accept or POSIX::_exit(0);
+      my $req = <$c> // '';
+      if ($req eq "nPING\n") {
+        print $c "PONG\n";
+      } else {
+        if (open my $r, '>', "$sock_path.req") { print $r $req; close $r; }
+        print $c $reply;
+        close $c;
+        POSIX::_exit(0);
+      }
+      close $c;
+    }
+    POSIX::_exit(0);
+  }
+  close $srv;
+  return $pid;
+}
+
+sub _slurp
+{
+  my ($file) = @_;
+  open my $fh, '<', $file or return '';
+  local $/;
+  my $c = <$fh>;
+  close $fh;
+  return $c;
+}
+
+sub t_clamd_replies : Tests
+{
+  my $cwd = getcwd();
+  my $dir = tempdir(CLEANUP => 1);
+  chdir $dir or die "chdir: $!";
+  mkdir 'Work';
+  my $long = '/' . ('a' x 300);
+
+  my @cases = (
+    # name                 reply                                          expected                     virus
+    [ 'clean',             "$dir/Work: OK\n",                             [0, 'ok', 'ok'],             '' ],
+    [ 'virus',             "$dir/Work/x: Eicar-Test FOUND\n",             [1, 'virus', 'quarantine'],  'Eicar-Test' ],
+    [ 'virus, long reply', "$long: Win.Test.Eicar-1 FOUND\n",             [1, 'virus', 'quarantine'],  'Win.Test.Eicar-1' ],
+    [ 'virus after clean', "a: OK\nb: Bad.One FOUND\nc: Bad.Two FOUND\n", [1, 'virus', 'quarantine'],  'Bad.One' ],
+    [ 'virus beats error', "a: lstat() failed. ERROR\nb: Bad.One FOUND\n", [1, 'virus', 'quarantine'], 'Bad.One' ],
+    [ 'error',             "$dir/Work: Access denied. ERROR\n",           [999, 'swerr', 'tempfail'],  '' ],
+    [ 'empty reply',       '',                                            [999, 'swerr', 'tempfail'],  '' ],
+    # Replies that are neither a verdict nor an error are let through
+    [ 'unknown command',   "UNKNOWN COMMAND\n",                           [0, 'ok', 'ok'],             '' ],
+    [ 'garbage',           "<html>proxy error</html>\n",                  [0, 'ok', 'ok'],             '' ],
+  );
+  my $n = 0;
+  foreach my $c (@cases) {
+    my ($name, $reply, $expected, $virus) = @$c;
+    init_globals();
+    $CWD = $dir;
+    $ClamdSock = "$dir/clamd" . $n++ . '.sock';
+    $VirusName = '';
+    my $pid = _mock_clamd($ClamdSock, $reply);
+    my @got = message_contains_virus_clamd();
+    waitpid($pid, 0);
+    is_deeply(\@got, $expected, "clamd, $name");
+    is($VirusName, $virus, "clamd, $name: virus name");
+  }
+  is(_slurp("$dir/clamd0.sock.req"), "nSCAN $dir/Work\n", 'clamd is asked to scan the Work directory');
+
+  open my $data, '>', "$dir/Work/body.txt" or die;
+  print $data "hello\n";
+  close $data;
+  my $entity = MIME::Entity->build(Type => 'text/plain', Path => "$dir/Work/body.txt");
+  $ClamdSock = "$dir/ent.sock";
+  my $pid = _mock_clamd($ClamdSock, "$dir/Work/body.txt: Eicar-Test FOUND\n");
+  my @got = entity_contains_virus_clamd($entity);
+  waitpid($pid, 0);
+  is_deeply(\@got, [1, 'virus', 'quarantine'], 'entity_contains_virus_clamd finds the virus');
+  is(_slurp("$ClamdSock.req"), "nSCAN $dir/Work/body.txt\n", 'clamd is asked to scan the entity file');
+  is(scalar(entity_contains_virus_clamd($entity, "$dir/nobody-home.sock")), 999, 'no clamd: scalar context returns 999');
+  is_deeply([message_contains_virus_clamd("$dir/nobody-home.sock")], [999, 'cannot-execute', 'tempfail'],
+            'no clamd gives a temporary failure');
+
   chdir $cwd or die "chdir: $!";
 }
 

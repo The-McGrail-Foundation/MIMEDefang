@@ -28,6 +28,7 @@ use warnings;
 
 use Mail::MIMEDefang;
 use IO::Socket;
+use IO::Select;
 use Mail::MIMEDefang::Antivirus qw(run_virus_scanner);
 
 #***********************************************************************
@@ -172,6 +173,103 @@ sub message_contains_virus_clamdscan {
 }
 
 #***********************************************************************
+# %PROCEDURE: clamd_interpret_reply
+# %ARGUMENTS:
+#  reply -- the complete reply of clamd to a SCAN command
+# %RETURNS:
+#  ($code, $category, $action, $error) -- standard virus-scanner return
+#  values; $error is the text of the first ERROR reply, if any.
+# %DESCRIPTION:
+#  If a virus is found, $VirusName is set to the first one and every
+#  virus is added to $VirusScannerMessages.  An empty reply is a
+#  temporary failure; a reply that is neither a verdict nor an error
+#  (e.g. from a newer clamd) is logged and the message is let through.
+#***********************************************************************
+sub clamd_interpret_reply {
+    my ($reply) = @_;
+    my (@viruses, @errors, $clean);
+    $reply = '' unless defined($reply);
+
+    return (999, 'swerr', 'tempfail', undef) if ($reply eq '');
+
+    foreach my $line (split(/\r?\n|\0/, $reply)) {
+	if ($line =~ /: (.+) FOUND$/) {
+	    push(@viruses, $1);
+	} elsif ($line =~ /(?:^|: )(.+) ERROR$/) {
+	    push(@errors, $1);
+	} elsif ($line =~ /: OK$/) {
+	    $clean = 1;
+	}
+    }
+
+    if (@viruses) {
+	$VirusName = $viruses[0];
+	$VirusScannerMessages .= "clamd found the $_ virus.\n" for @viruses;
+	return (1, 'virus', 'quarantine', undef);
+    }
+    if (@errors) {
+	md_syslog('err', "Clamd returned error: $errors[0]");
+	return (999, 'swerr', 'tempfail', $errors[0]);
+    }
+    if (!$clean) {
+	(my $shown = substr($reply, 0, 200)) =~ s/[^\x20-\x7e]+/ /g;
+	md_syslog('warning', "Unexpected reply from clamd, message not scanned: '$shown'");
+    }
+    return (0, 'ok', 'ok', undef);
+}
+
+#***********************************************************************
+# %PROCEDURE: _clamd_scan_path
+# %ARGUMENTS:
+#  clamd_sock -- clamd socket path, or host:port
+#  path -- absolute path of the file or directory to scan
+# %RETURNS:
+#  ($code, $category, $action)
+# %DESCRIPTION:
+#  Asks clamd to scan $path and interprets its complete reply.
+#***********************************************************************
+sub _clamd_scan_path {
+    my ($clamd_sock, $path) = @_;
+    my $sock;
+    if($clamd_sock =~ /\:/) {
+      $sock = IO::Socket::INET->new($clamd_sock);
+    } else {
+      $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
+    }
+    if (!defined($sock)) {
+	md_syslog('err', "Could not connect to clamd daemon at $clamd_sock");
+	return (999, 'cannot-execute', 'tempfail');
+    }
+    if (!$sock->print("nSCAN $path\n") || !$sock->flush) {
+	$sock->close;
+	return (999, 'swerr', 'tempfail');
+    }
+    # Read the whole reply; clamd closes the connection when done
+    my ($reply, $buf, $ans) = ('');
+    while ($ans = $sock->sysread($buf, 4096)) {
+	$reply .= $buf;
+	last if (length($reply) > 65536);
+    }
+    $sock->close;
+    if (!defined($ans) && $reply eq '') {
+	return (999, 'swerr', 'tempfail');
+    }
+
+    my ($code, $category, $action, $err) = clamd_interpret_reply($reply);
+    # If it's a zip module failure, try falling back on clamscan.
+    # This is despicable, but it might work
+    if (defined($err) && $err =~ /(?:zip module failure|not supported data format)/i &&
+	$Features{'Virus:CLAMAV'}) {
+	($code, $category, $action) =
+	    run_virus_scanner($Features{'Virus:CLAMAV'} . " -r --stdout --no-summary --infected $path 2>&1");
+	return ($code, $category, $action) if ($action ne 'proceed');
+	md_syslog('info', "Falling back on clamscan because of Zip module failure in clamd");
+	return interpret_clamav_code($code);
+    }
+    return ($code, $category, $action);
+}
+
+#***********************************************************************
 # %PROCEDURE: entity_contains_virus_clamd
 # %ARGUMENTS:
 #  entity -- a MIME entity
@@ -185,68 +283,21 @@ sub message_contains_virus_clamdscan {
 sub entity_contains_virus_clamd {
     my ($entity) = shift;
     my ($clamd_sock) = $ClamdSock;
-    my $inet = 0;
 
     $clamd_sock = shift if (@_ > 0);
+    return (wantarray ? (999, 'swerr', 'tempfail') : 999) if (!defined($clamd_sock));
     if (!defined($entity->bodyhandle)) {
 	return (wantarray ? (0, 'ok', 'ok') : 0);
     }
-    if (!defined($entity->bodyhandle->path)) {
-	return (wantarray ? (999, 'swerr', 'tempfail') : 1);
+    my $path = $entity->bodyhandle->path;
+    if (!defined($path)) {
+	return (wantarray ? (999, 'swerr', 'tempfail') : 999);
     }
-    my $sock;
-    if($clamd_sock =~ /\:/) {
-      $sock = IO::Socket::INET->new($clamd_sock);
-      $inet = 1;
-    } else {
-      $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
-    }
-    if (defined $sock) {
-	my $path = $entity->bodyhandle->path;
-	# If path is not absolute, add cwd
-	if (! ($path =~ m+^/+)) {
-	    $path = $CWD . "/" . $path;
-	}
-	if (!$sock->print("SCAN $path\n")) {
-	    $sock->close;
-	    return (wantarray ? (999, 'swerr', 'tempfail') : 1);
-	}
-	if (!$sock->flush) {
-	    $sock->close;
-	    return (wantarray ? (999, 'swerr', 'tempfail') : 1);
-	}
-	my($output, $ans);
-	$ans = $sock->sysread($output,256);
-	$sock->close;
-	if (!defined($ans) || !$ans) {
-	    return (wantarray ? (999, 'swerr', 'tempfail') : 1);
-	}
-	if ($output =~ /: (.+) FOUND/) {
-	    $VirusScannerMessages .= "clamd found the $1 virus.\n";
-	    $VirusName = $1;
-	    return (wantarray ? (1, 'virus', 'quarantine') : 1);
-	} elsif ($output =~ /: (.+) ERROR/) {
-	    my $err_detail = $1;
-	    md_syslog('err', "Clamd returned error: $err_detail");
-	    # If it's a zip module failure, try falling back on clamscan.
-	    # This is despicable, but it might work
-	    if ($err_detail =~ /(?:zip module failure|not supported data format)/i &&
-		$Features{'Virus:CLAMAV'}) {
-		my ($code, $category, $action) =
-		run_virus_scanner($Features{'Virus:CLAMAV'} . " -r --unzip --unrar --stdout --no-summary --infected $CWD/Work 2>&1");
-		if ($action ne 'proceed') {
-			return (wantarray ? ($code, $category, $action) : $code);
-		}
-		md_syslog('info', "Falling back on clamscan --unzip --unrar because of Zip module failure in clamd");
-		return (wantarray ? interpret_clamav_code($code) : $code);
-	    }
-	    return (wantarray ? (999, 'swerr', 'tempfail') : 1);
-	}
-	return (wantarray ? (0, 'ok', 'ok') : 0);
-    }
-    # Could not connect to daemon
-    md_syslog('err', "Could not connect to clamd Daemon at $clamd_sock");
-    return (wantarray ? (999, 'cannot-execute', 'tempfail') : 999);
+    # If path is not absolute, add cwd
+    $path = $CWD . "/" . $path if ($path !~ m+^/+);
+
+    my @r = _clamd_scan_path($clamd_sock, $path);
+    return (wantarray ? @r : $r[0]);
 }
 
 #***********************************************************************
@@ -262,14 +313,12 @@ sub entity_contains_virus_clamd {
 sub message_contains_virus_clamd {
     my ($clamd_sock) = $ClamdSock;
     $clamd_sock = shift if (@_ > 0);
-    return (wantarray ? (999, 'swerr', 'tempfail') : 1) if (!defined($clamd_sock));
+    return (wantarray ? (999, 'swerr', 'tempfail') : 999) if (!defined($clamd_sock));
     my ($output,$sock);
-    my $inet = 0;
 
     # PING/PONG test to make sure clamd is alive
     if($clamd_sock =~ /\:/) {
       $sock = IO::Socket::INET->new($clamd_sock);
-      $inet = 1;
     } else {
       $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
     }
@@ -286,7 +335,7 @@ sub message_contains_virus_clamd {
 	return (wantarray ? (999, 'cannot-execute', 'tempfail') : 999);
     }
 
-    $sock->print("PING");
+    $sock->print("nPING\n");
     $sock->flush;
 
     if (!$s->can_read(60)) {
@@ -300,62 +349,14 @@ sub message_contains_virus_clamd {
 
     $sock->sysread($output,256);
     $sock->close;
-    chomp($output);
-    if (! defined($output) || $output ne "PONG") {
+    if (! defined($output) || $output !~ /^PONG\r?\n?\z/) {
 	md_syslog('err', "clamd is not responding");
 	return (wantarray ? (999, 'cannot-execute', 'tempfail') : 999);
     }
 
-    # open up a socket and scan each file in ./Work
-    if($inet) {
-      $sock = IO::Socket::INET->new($clamd_sock);
-    } else {
-      $sock = IO::Socket::UNIX->new(Peer => $clamd_sock);
-    }
-    if (defined $sock) {
-	if (!$sock->print("SCAN $CWD/Work\n")) {
-	    $sock->close;
-	    return (wantarray ? (999, 'swerr', 'tempfail') : 999);
-	}
-	if (!$sock->flush) {
-	    $sock->close;
-	    return (wantarray ? (999, 'swerr', 'tempfail') : 999);
-	}
-	my $ans;
-	$ans = $sock->sysread($output,256);
-	$sock->close;
-	if (!defined($ans) || !$ans) {
-	    return (wantarray ? (999, 'swerr', 'tempfail') : 999);
-	}
-	if ($output =~ /: (.+) FOUND/) {
-	    $VirusScannerMessages .= "clamd found the $1 virus.\n";
-	    $VirusName = $1;
-	    return (wantarray ? (1, 'virus', 'quarantine') : 1);
-	} elsif ($output =~ /: (.+) ERROR/) {
-	    my $err_detail = $1;
-	    md_syslog('err', "Clamd returned error: $err_detail");
-	    # If it's a zip module failure, try falling back on clamscan.
-	    # This is despicable, but it might work
-	    if ($err_detail =~ /(?:zip module failure|not supported data format)/i &&
-		$Features{'Virus:CLAMAV'}) {
-		my ($code, $category, $action) =
-		    run_virus_scanner($Features{'Virus:CLAMAV'} . " -r --unzip --unrar --stdout --no-summary --infected $CWD/Work 2>&1");
-		if ($action ne 'proceed') {
-			return (wantarray ? ($code, $category, $action) : $code);
-		}
-		md_syslog('info', "Falling back on clamscan --unzip --unrar because of Zip module failure in clamd");
-		return (wantarray ? interpret_clamav_code($code) : $code);
-	    }
-	    return (wantarray ? (999, 'swerr', 'tempfail') : 999);
-	}
-    }
-    else {
-	# Could not connect to daemon
-	md_syslog('err', "Could not connect to clamd daemon at $clamd_sock");
-	return (wantarray ? (999, 'cannot-execute', 'tempfail') : 999);
-    }
-    # No errors, no infected files were found
-    return (wantarray ? (0, 'ok', 'ok') : 0);
+    # scan each file in ./Work
+    my @r = _clamd_scan_path($clamd_sock, "$CWD/Work");
+    return (wantarray ? @r : $r[0]);
 }
 
 1;
