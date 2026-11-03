@@ -285,12 +285,32 @@ Returns true if $ip_addr is a publicly-routable IPv6 address, false otherwise
 
 sub is_public_ip6_address {
 	my ($addr) = @_;
-	my @octets = split(/\:/, $addr);
 
-	# Unique-local address
-	return 0 if $octets[0] =~ /^fd/i;
-	# Link-local address
-	return 0 if $octets[0] =~ /^fe80/i;
+	return 0 unless defined $addr;
+	my $bin = Socket::inet_pton(Socket::AF_INET6(), $addr);
+	return 0 unless defined $bin;
+	my @w = unpack('n8', $bin);
+
+	# IPv4-mapped address ::ffff:0:0/96
+	if ($w[0] == 0 && $w[1] == 0 && $w[2] == 0 && $w[3] == 0 &&
+	    $w[4] == 0 && $w[5] == 0xffff) {
+		return is_public_ip4_address(join('.', unpack('C4', substr($bin, 12, 4))));
+	}
+
+	# Unspecified (::) and loopback (::1)
+	return 0 if ($w[0] == 0 && $w[1] == 0 && $w[2] == 0 && $w[3] == 0 &&
+		     $w[4] == 0 && $w[5] == 0 && $w[6] == 0 && $w[7] <= 1);
+
+	# Unique-local address fc00::/7
+	return 0 if (($w[0] & 0xfe00) == 0xfc00);
+	# Link-local fe80::/10 and deprecated site-local fec0::/10
+	return 0 if (($w[0] & 0xff80) == 0xfe80);
+	# Multicast ff00::/8
+	return 0 if (($w[0] & 0xff00) == 0xff00);
+	# Discard-only 100::/64
+	return 0 if ($w[0] == 0x0100 && $w[1] == 0 && $w[2] == 0 && $w[3] == 0);
+	# Documentation 2001:db8::/32
+	return 0 if ($w[0] == 0x2001 && $w[1] == 0x0db8);
 
 	return 1;
 }
