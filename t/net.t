@@ -36,12 +36,33 @@ sub t_ipv4_public_ip : Test(2)
   is(is_public_ip4_address($ip_pub), 1);
 }
 
-sub t_ipv6_public_ip : Test(2)
+sub t_ipv6_public_ip : Test(19)
 {
-  my $ip_priv = 'fe80::354f:365c:422e:6ae';
-  my $ip_pub = '2001:460:1e1f:ddc::1';
-  is(is_public_ip6_address($ip_priv), 0);
-  is(is_public_ip6_address($ip_pub), 1);
+  my @not_public = (
+    'fe80::354f:365c:422e:6ae',  # link-local
+    'febf::1',                   # link-local, end of fe80::/10
+    'fec0::1',                   # site-local
+    '::1',                       # loopback
+    '0:0:0:0:0:0:0:1',           # loopback, uncompressed
+    '::',                        # unspecified
+    'fc00::1',                   # unique-local
+    'FD12:3456::1',              # unique-local, upper case
+    'ff02::1',                   # multicast
+    '100::1',                    # discard-only
+    '2001:db8::1',               # documentation
+    '::ffff:10.0.0.1',           # IPv4-mapped private
+    '::ffff:127.0.0.1',          # IPv4-mapped loopback
+    'not-an-address',
+    '1.2.3.4',
+  );
+  my @public = (
+    '2001:460:1e1f:ddc::1',
+    '2a00:1450:4009:816::200e',
+    'fe00::1',                   # outside fe80::/10
+    '::ffff:212.212.212.212',    # IPv4-mapped public
+  );
+  is(is_public_ip6_address($_), 0, "$_ is not public") for @not_public;
+  is(is_public_ip6_address($_), 1, "$_ is public") for @public;
 }
 
 sub t_reverse_ip : Test(2)
