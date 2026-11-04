@@ -35,15 +35,27 @@ use POSIX          qw(uname);
 # ---------------------------------------------------------------------------
 # Version
 # ---------------------------------------------------------------------------
-eval {
-    local @INC = ('modules/lib', @INC);
-    require Mail::MIMEDefang;
-} or die "Cannot load modules/lib/Mail/MIMEDefang.pm: $@\n";
+# Parsed statically instead of require'ing Mail::MIMEDefang: the module
+# uses MIME::Tools, which may not be installed yet (CPAN clients install
+# the prerequisites only after reading the MYMETA written below).
+my ($VERSION, $DEV) = do {
+    my $pm = 'modules/lib/Mail/MIMEDefang.pm';
+    open(my $fh, '<', $pm) or die "Cannot open $pm: $!\n";
+    my ($ver, $dev);
+    while (my $line = <$fh>) {
+        $ver = $1 if !defined $ver && $line =~ /^\s*our\s+\$VERSION\s*=\s*['"]([^'"]+)['"]/;
+        $dev = $1 if !defined $dev && $line =~ /^\s*our\s+\$DEV\s*=\s*(\d+)/;
+        last if defined $ver && defined $dev;
+    }
+    close($fh);
+    defined $ver or die "Cannot find \$VERSION in $pm\n";
+    ($ver, $dev // 0);
+};
 
 # $VERSION goes in man pages and packages; $FULL_VERSION (with the "-dev"
-# suffix on development snapshots) only in the binaries (config.h)
-my $VERSION      = Mail::MIMEDefang::md_version();
-my $FULL_VERSION = Mail::MIMEDefang::md_version(1);
+# suffix on development snapshots) only in the binaries (config.h).
+# Same logic as Mail::MIMEDefang::md_version().
+my $FULL_VERSION = $DEV ? "$VERSION-dev" : $VERSION;
 
 # Split "3.7-rc1" -> base "3.7" and prerelease "rc1".
 # RPM forbids hyphens in Version:; the prerelease part goes into Release:.
@@ -269,9 +281,22 @@ if ($ENABLE_CHECK_PERL_MODULES) {
         printf "  %-35s %s\n", $mod, $ok ? 'ok' : 'MISSING';
         $all_ok = 0 unless $ok;
     }
-    die "\nERROR: One or more required Perl modules are missing.\n"
-      . "       Install them from CPAN, then re-run perl Makefile.PL\n"
-      unless $all_ok;
+    unless ($all_ok) {
+        # Under a CPAN client, go on and write the Makefile: the client
+        # reads PREREQ_PM from MYMETA and installs the missing modules.
+        if ($ENV{PERL5_CPAN_IS_RUNNING}
+            || $ENV{PERL5_CPANPLUS_IS_RUNNING}
+            || $ENV{PERL5_CPANM_IS_RUNNING}) {
+            warn "\nWARNING: One or more required Perl modules are missing.\n"
+               . "         They are listed as prerequisites and will be\n"
+               . "         installed by the CPAN client.\n";
+        } else {
+            die "\nERROR: One or more required Perl modules are missing.\n"
+              . "       Install them from CPAN (e.g. 'cpanm .' or 'cpan .' in this\n"
+              . "       directory), then re-run perl Makefile.PL, or skip this\n"
+              . "       check with ENABLE_CHECK_PERL_MODULES=0\n";
+        }
+    }
 
     # Syslog: need at least one
     print "\nChecking syslog Perl module (need one of):\n";
