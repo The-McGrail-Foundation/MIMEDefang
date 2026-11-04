@@ -55,9 +55,9 @@ my $MessageStartTime;
 our @EXPORT;
 our @EXPORT_OK;
 
-our $VERSION = '3.8.0-rc1';
+our $VERSION = '3.8.0';
 # 1 on development snapshots, 0 for release candidates and releases
-our $DEV = 0;
+our $DEV = 1;
 
 @EXPORT = qw{
       $AddWarningsInline @StatusTags
