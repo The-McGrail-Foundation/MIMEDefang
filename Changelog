@@ -2,6 +2,10 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2026-11-04 Giovanni Bechis <g.bechis@snb.it>
+
+        * MIMEDefang 3.7.2 released (3.7 maintenance release)
+
 2026-10-16 Giovanni Bechis <g.bechis@snb.it>
 
         * split `Mail::MIMEDefang::Antivirus` into one module per scanner:
