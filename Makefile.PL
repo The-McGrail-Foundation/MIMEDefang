@@ -262,9 +262,22 @@ if ($ENABLE_CHECK_PERL_MODULES) {
         printf "  %-35s %s\n", $mod, $ok ? 'ok' : 'MISSING';
         $all_ok = 0 unless $ok;
     }
-    die "\nERROR: One or more required Perl modules are missing.\n"
-      . "       Install them from CPAN, then re-run perl Makefile.PL\n"
-      unless $all_ok;
+    unless ($all_ok) {
+        # Under a CPAN client, go on and write the Makefile: the client
+        # reads PREREQ_PM from MYMETA and installs the missing modules.
+        if ($ENV{PERL5_CPAN_IS_RUNNING}
+            || $ENV{PERL5_CPANPLUS_IS_RUNNING}
+            || $ENV{PERL5_CPANM_IS_RUNNING}) {
+            warn "\nWARNING: One or more required Perl modules are missing.\n"
+               . "         They are listed as prerequisites and will be\n"
+               . "         installed by the CPAN client.\n";
+        } else {
+            die "\nERROR: One or more required Perl modules are missing.\n"
+              . "       Install them from CPAN (e.g. 'cpanm .' or 'cpan .' in this\n"
+              . "       directory), then re-run perl Makefile.PL, or skip this\n"
+              . "       check with ENABLE_CHECK_PERL_MODULES=0\n";
+        }
+    }
 
     # Syslog: need at least one
     print "\nChecking syslog Perl module (need one of):\n";
