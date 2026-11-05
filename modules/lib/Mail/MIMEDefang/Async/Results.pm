@@ -139,8 +139,16 @@ sub md_async_interpret_spamassassin {
 
 =item md_async_interpret_clamav(%args)
 
-Interpret a clamd PING or INSTREAM response. Args: C<raw>, C<error>.
-Returns C<available>, C<virus>, C<name>, C<reason>.
+Interpret a ClamAV result. Args: C<raw>, C<error>.
+
+C<raw> may be the reply of a clamd socket check (C<PING>, C<INSTREAM>
+C<stream: ...> lines, or C<SCAN>/C<nSCAN> C</path: ...> lines, as built by
+C<md_async_check_clamd>), or the hashref returned by a clamdscan process
+check (C<md_async_check_clamdscan>).
+
+Returns a hashref with C<virus> (0 or 1), C<name> (first virus found),
+C<names> (all viruses found), C<reason>, plus C<available> for a C<PONG>
+and C<error> when the scan failed or the reply is not understood.
 
 =cut
 
@@ -152,20 +160,40 @@ sub md_async_interpret_clamav {
     return { error => 1, reason => "ClamAV error: $error" }    if $error;
     return { error => 1, reason => "No response from clamd" }  unless defined $raw;
 
+    # clamdscan process check: { stdout, stderr, exit_code }
+    if (ref $raw eq 'HASH') {
+        my $code   = $raw->{exit_code} // 999;
+        my $output = ($raw->{stdout} // '') . ($raw->{stderr} // '');
+        return { virus => 0, reason => 'Clean' } if $code == 0;
+        if ($code == 1) {
+            my @names = ($output =~ /: (.+) FOUND$/mg);
+            @names = ('unknown-Clamav-virus') unless @names;
+            return { virus => 1, name => $names[0], names => \@names,
+                     reason => "Virus detected: $names[0]" };
+        }
+        return { error => 1, reason => "clamdscan error (exit code $code)", raw => $output };
+    }
+
     return { available => 1, virus => 0, reason => 'ClamAV daemon online' }
-        if $raw =~ /PONG/i;
+        if $raw =~ /^\s*PONG\s*$/i;
 
-    if ($raw =~ /stream:\s*(.+?)\s+FOUND/i) {
-        return { virus => 1, name => $1, reason => "Virus detected: $1" };
-    }
-    if ($raw =~ /stream:\s*OK/i) {
-        return { virus => 0, reason => 'Clean' };
-    }
-    if ($raw =~ /ERROR/) {
-        return { error => 1, reason => "ClamAV scan error: $raw" };
+    my (@names, @errors, $clean);
+    foreach my $line (split /\r?\n|\0/, $raw) {
+        if ($line =~ /: (.+) FOUND$/) {
+            push @names, $1;
+        } elsif ($line =~ /(?:^|: )(.+) ERROR$/) {
+            push @errors, $1;
+        } elsif ($line =~ /: OK$/) {
+            $clean = 1;
+        }
     }
 
-    return { virus => 0, reason => 'Unknown ClamAV response', raw => $raw };
+    return { virus => 1, name => $names[0], names => \@names,
+             reason => "Virus detected: $names[0]" } if @names;
+    return { error => 1, reason => "ClamAV scan error: $errors[0]" } if @errors;
+    return { virus => 0, reason => 'Clean' } if $clean;
+
+    return { error => 1, virus => 0, reason => 'Unknown ClamAV response', raw => $raw };
 }
 
 # Reverse DNS (PTR)

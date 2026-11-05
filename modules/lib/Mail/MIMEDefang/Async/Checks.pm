@@ -24,7 +24,10 @@ use strict;
 use warnings;
 use Exporter;
 
+use Mail::MIMEDefang qw(%Features $CWD $ClamdSock $Sender @Recipients
+                        $AddApparentlyToForSpamAssassin);
 use Mail::MIMEDefang::Net qw(reverse_ip_address_for_rbl);
+use Mail::MIMEDefang::Utils qw(synthesize_received_header);
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(
@@ -34,6 +37,10 @@ our @EXPORT = qw(
     md_async_check_rdns
     md_async_check_dkim_record
     md_async_check_dmarc_record
+    md_async_check_clamd
+    md_async_check_clamdscan
+    md_async_check_spamc
+    md_async_check_rspamd
 );
 our @EXPORT_OK;
 
@@ -183,6 +190,183 @@ sub md_async_check_dmarc_record {
             host    => "_dmarc.${domain}",
             type    => 'TXT',
             timeout => $args{timeout} // 5,
+        },
+    };
+}
+
+# Socket and process based checks (antivirus, antispam)
+
+=item md_async_check_clamd(%args)
+
+Build a clamd socket check that sends C<nSCAN $path> and reads the whole
+reply. Optional: C<sock> (Unix socket path or C<host:port>, default
+C<$ClamdSock>), C<path> (default C<$CWD/Work>), C<timeout> (default 30),
+C<name> (default C<clamd>).
+
+clamd opens C<$path> on its own filesystem, so this only works when clamd runs
+on the same host as MIMEDefang; use C<md_async_check_clamdscan> for a remote
+clamd. Interpret the result with C<md_async_interpret_clamav()> from
+L<Mail::MIMEDefang::Async::Results>, or with
+C<Mail::MIMEDefang::Antivirus::ClamAV::clamd_interpret_reply()> to get the
+standard virus-scanner triplet.
+
+=cut
+
+sub md_async_check_clamd {
+    my (%args) = @_;
+    my $sock = $args{sock} // $ClamdSock
+        // die "md_async_check_clamd: no clamd socket configured";
+    my $path = $args{path} // "$CWD/Work";
+
+    my %sock_args = (
+        request    => "nSCAN $path\n",
+        read_until => qr/(?!)/,    # never matches - read the whole reply, until EOF
+        max_bytes  => 65536,
+        timeout    => $args{timeout} // 30,
+    );
+    if ($sock =~ /:/) {
+        @sock_args{qw(host port)} = split /:/, $sock, 2;
+    } else {
+        $sock_args{unix_path} = $sock;
+    }
+
+    return {
+        name => $args{name} // 'clamd',
+        type => 'socket',
+        args => \%sock_args,
+    };
+}
+
+=item md_async_check_clamdscan(%args)
+
+Build a process check that runs C<clamdscan --stream>, which streams the
+files to clamd (INSTREAM) and so works with a local or a remote clamd.
+Optional: C<conf> (path to C<clamd.conf>, default
+C<$Features{'Path:CLAMDCONF'}>), C<path> (default C<$CWD/Work>),
+C<timeout> (default 60), C<name> (default C<clamdscan>).
+
+Dies if clamdscan is not installed. The result is a hashref with
+C<stdout>, C<stderr> and C<exit_code>; C<md_async_interpret_clamav()>
+understands it.
+
+=cut
+
+sub md_async_check_clamdscan {
+    my (%args) = @_;
+    my $clamdscan = $Features{'Virus:CLAMDSCAN'}
+        or die "md_async_check_clamdscan: clamdscan not installed";
+    my $conf = $args{conf} // $Features{'Path:CLAMDCONF'};
+    my $path = $args{path} // "$CWD/Work";
+
+    my @cmd = ($clamdscan);
+    push @cmd, '-c', $conf if defined $conf;
+    push @cmd, '--no-summary', '--infected', '--fdpass', '--stream', $path;
+
+    return {
+        name => $args{name} // 'clamdscan',
+        type => 'process',
+        args => { cmd => \@cmd, timeout => $args{timeout} // 60 },
+    };
+}
+
+# Read ./INPUTMSG, dies on failure.
+sub _read_inputmsg {
+    my ($caller) = @_;
+    open(my $in, '<', './INPUTMSG') or die "$caller: cannot open INPUTMSG: $!";
+    local $/;
+    my $msg = <$in>;
+    close($in);
+    return $msg // '';
+}
+
+=item md_async_check_spamc(%args)
+
+Build a spamd socket check that sends the message (C<./INPUTMSG>, with the
+synthesized C<Return-Path>, C<Received> and optional C<Apparently-To>
+headers) using the SPAMC C<CHECK> command. Optional: C<host> (default
+C<127.0.0.1>), C<port> (default 783), C<user> (default current user),
+C<timeout> (default 30), C<name> (default C<spamc>).
+
+Dies if C<./INPUTMSG> cannot be read. Interpret the result with
+C<md_async_interpret_spamassassin()>.
+
+=cut
+
+sub md_async_check_spamc {
+    my (%args) = @_;
+    my $user = $args{user} // getpwuid($<);
+
+    my $sahdrs = "Return-Path: " . ($Sender // '') . "\n";
+    $sahdrs   .= synthesize_received_header();
+    if ($AddApparentlyToForSpamAssassin && @Recipients) {
+        $sahdrs .= "Apparently-To: " . join(', ', @Recipients) . "\n";
+    }
+    my $msg = $sahdrs . _read_inputmsg('md_async_check_spamc');
+
+    my $request = join("\r\n",
+        "CHECK SPAMC/1.5",
+        "Content-length: " . length($msg),
+        "User: $user",
+        '',
+        $msg,
+    );
+
+    return {
+        name => $args{name} // 'spamc',
+        type => 'socket',
+        args => {
+            host       => $args{host} // '127.0.0.1',
+            port       => $args{port} // 783,
+            request    => $request,
+            read_until => qr/\r\n\r\n/,
+            max_bytes  => 65536,
+            timeout    => $args{timeout} // 30,
+        },
+    };
+}
+
+=item md_async_check_rspamd(%args)
+
+Build an Rspamd socket check that POSTs C<./INPUTMSG> to C<$uri/checkv2>
+over HTTP/1.0. Optional: C<uri> (default C<http://127.0.0.1:11333>),
+C<timeout> (default 30), C<name> (default C<rspamd>).
+
+Dies if C<./INPUTMSG> cannot be read. The result is the raw HTTP response;
+the JSON body follows the first blank line.
+
+=cut
+
+sub md_async_check_rspamd {
+    my (%args) = @_;
+    my $uri = $args{uri} // 'http://127.0.0.1:11333';
+
+    my ($host, $port) = ('127.0.0.1', 11333);
+    if ($uri =~ m{https?://([^/:]+)(?::(\d+))?}) {
+        $host = $1;
+        $port = $2 // 11333;
+    }
+
+    my $mail    = _read_inputmsg('md_async_check_rspamd');
+    my $request = join("\r\n",
+        "POST /checkv2 HTTP/1.0",
+        "Host: $host:$port",
+        "User-Agent: MIMEDefang",
+        "Content-Type: text/plain",
+        "Content-Length: " . length($mail),
+        '',
+        $mail,
+    );
+
+    return {
+        name => $args{name} // 'rspamd',
+        type => 'socket',
+        args => {
+            host       => $host,
+            port       => $port,
+            request    => $request,
+            read_until => qr/(?!)/,    # never matches - HTTP/1.0 closes after response
+            max_bytes  => 131072,
+            timeout    => $args{timeout} // 30,
         },
     };
 }

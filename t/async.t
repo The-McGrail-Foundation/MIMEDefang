@@ -20,7 +20,7 @@ for my $mod (@required) {
     }
 }
 
-plan tests => 27;
+plan tests => 33;
 
 use Mail::MIMEDefang;
 
@@ -257,6 +257,168 @@ subtest 'md_async_message_contains_virus_clamd - short replies' => sub {
         (my $shown = $reply) =~ s/\n/\\n/g;
         is_deeply \@got, $expected, "reply '$shown'";
     }
+};
+
+subtest 'md_async_check_clamd structure' => sub {
+    my $c = md_async_check_clamd(sock => '/run/clamd.sock', path => '/tmp/x/Work');
+    is $c->{name},              'clamd',             'default name';
+    is $c->{type},              'socket',            'type is socket';
+    is $c->{args}{unix_path},   '/run/clamd.sock',   'unix socket path';
+    is $c->{args}{request},     "nSCAN /tmp/x/Work\n", 'nSCAN request';
+    is $c->{args}{timeout},     30,                  'default timeout';
+
+    $c = md_async_check_clamd(sock => '10.0.0.1:3310', name => 'av1', timeout => 9);
+    is $c->{name},         'av1',      'custom name';
+    is $c->{args}{host},   '10.0.0.1', 'tcp host';
+    is $c->{args}{port},   '3310',     'tcp port';
+    is $c->{args}{timeout}, 9,         'custom timeout';
+};
+
+subtest 'md_async_check_clamdscan structure' => sub {
+    local $Features{'Virus:CLAMDSCAN'};
+    ok !eval { md_async_check_clamdscan(); 1 }, 'dies when clamdscan is not installed';
+
+    $Features{'Virus:CLAMDSCAN'} = '/usr/bin/clamdscan';
+    my $c = md_async_check_clamdscan(conf => '/etc/clamd.conf', path => '/tmp/x/Work');
+    is $c->{name}, 'clamdscan', 'default name';
+    is $c->{type}, 'process',   'type is process';
+    is_deeply $c->{args}{cmd},
+        ['/usr/bin/clamdscan', '-c', '/etc/clamd.conf', '--no-summary', '--infected',
+         '--fdpass', '--stream', '/tmp/x/Work'],
+        'clamdscan argv';
+    is $c->{args}{timeout}, 60, 'default timeout';
+};
+
+subtest 'md_async_check_spamc / md_async_check_rspamd structure' => sub {
+    require Cwd;
+    require File::Temp;
+    my $orig = Cwd::getcwd();
+    my $dir  = File::Temp::tempdir(CLEANUP => 1);
+    chdir $dir or die "chdir: $!";
+
+    ok !eval { md_async_check_spamc(); 1 },  'spamc dies without INPUTMSG';
+    like $@, qr/cannot open INPUTMSG/,       'spamc error message';
+    ok !eval { md_async_check_rspamd(); 1 }, 'rspamd dies without INPUTMSG';
+
+    open(my $fh, '>', 'INPUTMSG') or die;
+    print $fh "Subject: test\n\nbody\n";
+    close $fh;
+
+    init_globals();
+    $Sender = '<sender@example.com>';
+    my $c = md_async_check_spamc(port => 1783, user => 'defang');
+    is $c->{name},         'spamc',     'spamc default name';
+    is $c->{type},         'socket',    'spamc type is socket';
+    is $c->{args}{host},   '127.0.0.1', 'spamc default host';
+    is $c->{args}{port},   1783,        'spamc custom port';
+    like $c->{args}{request}, qr/\ACHECK SPAMC\/1\.5\r\nContent-length: \d+\r\nUser: defang\r\n\r\n/,
+        'spamc request header';
+    like $c->{args}{request}, qr/^Return-Path: <sender\@example\.com>$/m, 'Return-Path added';
+    like $c->{args}{request}, qr/Subject: test\n\nbody\n\z/,             'message body sent';
+    my ($len) = $c->{args}{request} =~ /Content-length: (\d+)/;
+    my ($msg) = $c->{args}{request} =~ /\r\n\r\n(.*)\z/s;
+    is $len, length($msg), 'Content-length matches the message';
+
+    $c = md_async_check_rspamd(uri => 'http://rspamd.example:11334');
+    is $c->{name},       'rspamd',         'rspamd default name';
+    is $c->{args}{host}, 'rspamd.example', 'rspamd host from uri';
+    is $c->{args}{port}, 11334,            'rspamd port from uri';
+    like $c->{args}{request}, qr/\APOST \/checkv2 HTTP\/1\.0\r\n/, 'rspamd request line';
+
+    chdir $orig or die "chdir: $!";
+};
+
+subtest 'md_async_interpret_clamav - nSCAN and clamdscan results' => sub {
+    my $r = md_async_interpret_clamav(raw => "/var/spool/MIMEDefang/mdefang-x/Work/PART1: Eicar-Test-Signature FOUND\n");
+    is $r->{virus}, 1,                      'nSCAN FOUND -> virus';
+    is $r->{name},  'Eicar-Test-Signature', 'nSCAN virus name';
+
+    $r = md_async_interpret_clamav(raw => "/w/PART1: OK\n/w/PART2: Win.Test.A FOUND\n/w/PART3: Win.Test.B FOUND\n");
+    is $r->{virus}, 1,                            'multi-file reply -> virus';
+    is_deeply $r->{names}, ['Win.Test.A', 'Win.Test.B'], 'all virus names collected';
+
+    $r = md_async_interpret_clamav(raw => "/w/PART1: OK\n/w/PART2: OK\n");
+    is $r->{virus}, 0, 'all OK -> clean';
+    ok !$r->{error},   'all OK -> no error';
+
+    $r = md_async_interpret_clamav(raw => "/w: Access denied. ERROR\n");
+    is $r->{error}, 1, 'ERROR reply -> error';
+
+    $r = md_async_interpret_clamav(raw => "UNKNOWN COMMAND\n");
+    is $r->{error}, 1, 'unknown reply -> error, not clean';
+
+    $r = md_async_interpret_clamav(raw => { exit_code => 0, stdout => '', stderr => '' });
+    is $r->{virus}, 0, 'clamdscan exit 0 -> clean';
+    $r = md_async_interpret_clamav(raw => { exit_code => 1, stdout => "/w/PART1: Eicar FOUND\n", stderr => '' });
+    is $r->{virus}, 1,       'clamdscan exit 1 -> virus';
+    is $r->{name},  'Eicar', 'clamdscan virus name';
+    $r = md_async_interpret_clamav(raw => { exit_code => 2, stdout => '', stderr => 'oops' });
+    is $r->{error}, 1, 'clamdscan exit 2 -> error';
+};
+
+# Start a fake daemon on a Unix socket that waits $delay seconds and replies.
+sub _fake_daemon {
+    my ($sock, $delay, $reply) = @_;
+    require IO::Socket::UNIX;
+    require POSIX;
+    my $srv = IO::Socket::UNIX->new(Local => $sock, Listen => 1) or die "listen: $!";
+    my $pid = fork() // die "fork: $!";
+    if (!$pid) {
+        alarm 10;
+        my $conn = $srv->accept or POSIX::_exit(0);
+        my $req = <$conn>;
+        select(undef, undef, undef, $delay);
+        print $conn $reply;
+        close $conn;
+        POSIX::_exit(0);
+    }
+    close $srv;
+    return $pid;
+}
+
+subtest 'md_async_run_checks - unfinished checks reported on global timeout' => sub {
+    require File::Temp;
+    my $dir = File::Temp::tempdir(CLEANUP => 1);
+    my $slow = _fake_daemon("$dir/slow.sock", 4, "x: OK\n");
+    my $fast = _fake_daemon("$dir/fast.sock", 0, "x: OK\n");
+
+    md_async_init(global_timeout => 1);
+    my $out = do {
+        local $SIG{__WARN__} = sub {};
+        md_async_run_checks([
+            md_async_check_clamd(sock => "$dir/slow.sock", name => 'slow', timeout => 5),
+            md_async_check_clamd(sock => "$dir/fast.sock", name => 'fast', timeout => 5),
+        ]);
+    };
+    kill 'TERM', $slow;
+    waitpid($_, 0) for ($slow, $fast);
+
+    is   $out->{results}{fast}, "x: OK\n",           'fast check has a result';
+    ok   !exists $out->{results}{slow},              'slow check has no result';
+    like $out->{errors}{slow}, qr/Global timeout after 1s/, 'slow check reported in errors';
+};
+
+subtest 'md_async_run_checks - socket checks run in parallel' => sub {
+    require File::Temp;
+    require Time::HiRes;
+    my $dir = File::Temp::tempdir(CLEANUP => 1);
+    my @pids = (
+        _fake_daemon("$dir/av1.sock", 1, "/w/PART1: OK\n"),
+        _fake_daemon("$dir/av2.sock", 1, "/w/PART1: Eicar FOUND\n"),
+    );
+
+    md_async_init(global_timeout => 5);
+    my $t0  = Time::HiRes::time();
+    my $out = md_async_run_checks([
+        md_async_check_clamd(sock => "$dir/av1.sock", name => 'av1'),
+        md_async_check_clamd(sock => "$dir/av2.sock", name => 'av2'),
+    ]);
+    my $elapsed = Time::HiRes::time() - $t0;
+    waitpid($_, 0) for @pids;
+
+    ok $elapsed < 1.8, sprintf('two 1s scans finished in %.2fs', $elapsed);
+    is md_async_interpret_clamav(raw => $out->{results}{av1})->{virus}, 0, 'av1 clean';
+    is md_async_interpret_clamav(raw => $out->{results}{av2})->{virus}, 1, 'av2 found a virus';
 };
 
 done_testing();
