@@ -214,9 +214,9 @@ standard virus-scanner triplet.
 
 sub md_async_check_clamd {
     my (%args) = @_;
+    my $path = _scan_path('md_async_check_clamd', $args{path});
     my $sock = $args{sock} // $ClamdSock
         // die "md_async_check_clamd: no clamd socket configured";
-    my $path = $args{path} // "$CWD/Work";
 
     my %sock_args = (
         request    => "nSCAN $path\n",
@@ -253,10 +253,10 @@ understands it.
 
 sub md_async_check_clamdscan {
     my (%args) = @_;
+    my $path = _scan_path('md_async_check_clamdscan', $args{path});
     my $clamdscan = $Features{'Virus:CLAMDSCAN'}
         or die "md_async_check_clamdscan: clamdscan not installed";
     my $conf = $args{conf} // $Features{'Path:CLAMDCONF'};
-    my $path = $args{path} // "$CWD/Work";
 
     my @cmd = ($clamdscan);
     push @cmd, '-c', $conf if defined $conf;
@@ -267,6 +267,14 @@ sub md_async_check_clamdscan {
         type => 'process',
         args => { cmd => \@cmd, timeout => $args{timeout} // 60 },
     };
+}
+
+# Path to scan: the explicit one, else $CWD/Work; dies when neither is set.
+sub _scan_path {
+    my ($caller, $path) = @_;
+    return $path if defined $path;
+    die "$caller: no path given and \$CWD is not set" unless defined $CWD;
+    return "$CWD/Work";
 }
 
 # Read ./INPUTMSG, dies on failure.

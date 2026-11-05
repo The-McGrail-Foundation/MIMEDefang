@@ -272,6 +272,11 @@ subtest 'md_async_check_clamd structure' => sub {
     is $c->{args}{host},   '10.0.0.1', 'tcp host';
     is $c->{args}{port},   '3310',     'tcp port';
     is $c->{args}{timeout}, 9,         'custom timeout';
+
+    my $saved_cwd = $CWD;
+    $CWD = undef;
+    ok !eval { md_async_check_clamd(sock => '/run/clamd.sock'); 1 }, 'dies without path and $CWD';
+    $CWD = $saved_cwd;
 };
 
 subtest 'md_async_check_clamdscan structure' => sub {
@@ -287,6 +292,12 @@ subtest 'md_async_check_clamdscan structure' => sub {
          '--fdpass', '--stream', '/tmp/x/Work'],
         'clamdscan argv';
     is $c->{args}{timeout}, 60, 'default timeout';
+
+    my $saved_cwd = $CWD;
+    $CWD = undef;
+    ok !eval { md_async_check_clamdscan(); 1 }, 'dies without path and $CWD';
+    like $@, qr/no path given/,                 'clamdscan error message';
+    $CWD = $saved_cwd;
 };
 
 subtest 'md_async_check_spamc / md_async_check_rspamd structure' => sub {
@@ -386,8 +397,8 @@ subtest 'md_async_run_checks - unfinished checks reported on global timeout' => 
     my $out = do {
         local $SIG{__WARN__} = sub {};
         md_async_run_checks([
-            md_async_check_clamd(sock => "$dir/slow.sock", name => 'slow', timeout => 5),
-            md_async_check_clamd(sock => "$dir/fast.sock", name => 'fast', timeout => 5),
+            md_async_check_clamd(sock => "$dir/slow.sock", path => $dir, name => 'slow', timeout => 5),
+            md_async_check_clamd(sock => "$dir/fast.sock", path => $dir, name => 'fast', timeout => 5),
         ]);
     };
     kill 'TERM', $slow;
@@ -410,8 +421,8 @@ subtest 'md_async_run_checks - socket checks run in parallel' => sub {
     md_async_init(global_timeout => 5);
     my $t0  = Time::HiRes::time();
     my $out = md_async_run_checks([
-        md_async_check_clamd(sock => "$dir/av1.sock", name => 'av1'),
-        md_async_check_clamd(sock => "$dir/av2.sock", name => 'av2'),
+        md_async_check_clamd(sock => "$dir/av1.sock", path => $dir, name => 'av1'),
+        md_async_check_clamd(sock => "$dir/av2.sock", path => $dir, name => 'av2'),
     ]);
     my $elapsed = Time::HiRes::time() - $t0;
     waitpid($_, 0) for @pids;
