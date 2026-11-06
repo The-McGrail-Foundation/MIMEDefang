@@ -399,6 +399,13 @@ If you need to log UTF-8 strings you can call the sub as:
 
 C<md_graphdefang_log('spam',$hits, undef, 1);>
 
+The optional fifth argument C<$per_message> controls how messages with
+more than one recipient are logged: 0 (default) logs one line per recipient
+when C<$EnumerateRecipients> is set, 1 logs a single line with "rcpts=N"
+and 2 logs a single line with all the recipients separated by ";".
+
+C<md_graphdefang_log('non-spam', $hits, $RelayAddr, 1, 2);>
+
 =cut
 
 #***********************************************************************
@@ -410,6 +417,9 @@ C<md_graphdefang_log('spam',$hits, undef, 1);>
 #  value2 -- (optional) A value associated with the event being logged.
 #  utf8_decode -- (optional) A boolean value that indicates if we want to
 #                 decode UTF-8 encoded strings
+#  per_message -- (optional) 0: one line per recipient (if EnumerateRecipients),
+#                 1: a single line with "rcpts=N",
+#                 2: a single line with all recipients separated by ";"
 # %RETURNS:
 #  Nothing
 # %DESCRIPTION:
@@ -457,6 +467,9 @@ If you need to log UTF-8 strings you can call the sub as:
 
 C<md_graphdefang_log_array('spam',1,\@info);>
 
+The optional fourth argument C<$per_message> has the same meaning as
+the fifth argument of C<md_graphdefang_log>.
+
 =cut
 
 #***********************************************************************
@@ -467,8 +480,9 @@ C<md_graphdefang_log_array('spam',1,\@info);>
 #  utf8_decode -- (optional) A boolean value that indicates if we want to
 #                 decode UTF-8 encoded strings
 #  values -- (optional) An array of values associated with the event being logged.
-#  per_message -- (optional) A boolean value that indicates if the log should be printed
-#                  once per recipient or just one time.
+#  per_message -- (optional) 0: one line per recipient (if EnumerateRecipients),
+#                 1: a single line with "rcpts=N",
+#                 2: a single line with all recipients separated by ";"
 # %RETURNS:
 #  Nothing
 # %DESCRIPTION:
@@ -538,7 +552,12 @@ sub md_graphdefang_log_array
 	                "$lcrecipient,$subj");
 	  }
   } else {
-	  my $lcrecipient = "rcpts=" . scalar(@Recipients);
+	  my $lcrecipient;
+	  if ($per_message == 2) {
+	    $lcrecipient = join(';', map { lc } @Recipients);
+	  } else {
+	    $lcrecipient = "rcpts=" . scalar(@Recipients);
+	  }
 	  $lcrecipient = percent_encode_for_graphdefang($lcrecipient);
 	  _graphdefang_emit("MDLOG,$id," .
 	          "$event," . join(",", @info) . ",$lcsender," .

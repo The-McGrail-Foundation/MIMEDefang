@@ -95,6 +95,40 @@ sub t_log_array_per_message : Test(2)
     like($lines[0], qr/rcpts=2/, 'line contains recipient count summary');
 }
 
+# With per_message=2 and two recipients, a single line with all the
+# recipients separated by ';' is logged.
+sub t_per_message_recipient_list : Test(3)
+{
+    _setup();
+    @Recipients        = ('<X@Example.com>', '<y@example.com>');
+    $EnumerateRecipients = 1;
+
+    my @lines = _collect_log(sub {
+        md_graphdefang_log('non-spam', '0.1', '1.2.3.4', 1, 2);
+    });
+
+    is(scalar @lines, 1, 'per_message=2: single line');
+    like($lines[0], qr/,sender\@example\.com,<x\@example\.com>;<y\@example\.com>,test subject$/,
+         'line contains the lowercased recipient list');
+    unlike($lines[0], qr/rcpts=/, 'no recipient count summary');
+}
+
+# With per_message=2 and a single recipient, the address is logged as usual.
+sub t_per_message_recipient_list_single : Test(2)
+{
+    _setup();
+    @Recipients        = ('only@example.com');
+    $EnumerateRecipients = 1;
+
+    my @lines = _collect_log(sub {
+        my @info = ('extra');
+        md_graphdefang_log_array('mail_out', 0, \@info, 2);
+    });
+
+    is(scalar @lines, 1, 'per_message=2, single recipient: one line');
+    like($lines[0], qr/,only\@example\.com,test subject$/, 'single recipient address shown');
+}
+
 # Omitting per_message (undef) test.
 sub t_per_message_default_preserves_enumeration : Test(1)
 {

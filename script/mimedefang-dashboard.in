@@ -71,7 +71,8 @@ our %Opt = (
 #***********************************************************************
 
 my $ADDR_RE  = qr/^(?:[^\s,\@]*\@[^\s,]*|<[^>]*>|)$/;
-my $RCPT_RE  = qr/^(?:rcpts=\d+|[^\s,\@]*\@[^\s,]*|<[^>]*>|)$/;
+my $ONE_RE   = qr/(?:[^\s,;\@]*\@[^\s,;]*|<[^>;]*>)/;
+my $RCPT_RE  = qr/^(?:rcpts=\d+|[^\s,\@]*\@[^\s,]*|<[^>]*>|$ONE_RE(?:;$ONE_RE)+|)$/;
 
 sub pct_decode {
   my ($s) = @_;
@@ -169,6 +170,10 @@ sub parse_mdlog {
   if ($r =~ /^rcpts=(\d+)$/) {
     $ev{rcpt} = '';
     $ev{rcpts} = $1 + 0;
+  } elsif ($r =~ /;/) {
+    # Recipient list logged with md_graphdefang_log(..., $per_message = 2)
+    $ev{rcpt} = '';
+    $ev{rcpts} = scalar(split(/;/, $r));
   } else {
     $ev{rcpt} = $r;
     $ev{rcpts} = 1;

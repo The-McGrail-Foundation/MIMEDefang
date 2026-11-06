@@ -2,6 +2,13 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2026-11-06 Giovanni Bechis <g.bechis@snb.it>
+
+        * md_graphdefang_log, md_graphdefang_log_array: `$per_message = 2`
+          logs a single line with all the recipients separated by ";"
+          instead of "rcpts=N"; mimedefang-dashboard counts them as
+          recipients.
+
 2026-11-05 Giovanni Bechis <g.bechis@snb.it>
 
         * Mail::MIMEDefang::Async: add `md_async_check_clamd`,

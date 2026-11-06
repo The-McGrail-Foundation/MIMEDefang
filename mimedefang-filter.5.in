@@ -1626,6 +1626,14 @@ whole message rather than per-user statistics.  Example:
 	md_graphdefang_log('mail_in', undef, undef, 0, 1);
 .fi
 
+When \fI$per_message\fR is set to 2, exactly one syslog line is emitted as
+well, but if the message has more than one recipient the "recipient" field
+holds all the recipients separated by ";" instead of "rcpts=N".  Example:
+
+.nf
+	md_graphdefang_log('non-spam', $hits, $RelayAddr, 0, 2);
+.fi
+
 Note that md_graphdefang_log should not be used in filter_relay, filter_sender
 or filter_recipient.  The global variables it relies on are not
 valid in that context.
@@ -1666,6 +1674,8 @@ there are no additional values.
 Optional; defaults to 0.  When set to 1, exactly one syslog line is emitted
 regardless of the \fI$EnumerateRecipients\fR setting, the actual recipient
 address is used when there is a single recipient, otherwise "rcpts=N" is used.
+When set to 2, exactly one syslog line is emitted with all the recipients
+separated by ";".
 .RE
 
 Examples:

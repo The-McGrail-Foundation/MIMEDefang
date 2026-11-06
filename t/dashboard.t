@@ -44,7 +44,7 @@ sub t_parse_standard : Test(8)
   is($ev->{rcpts}, 1, 'single recipient');
 }
 
-sub t_parse_variants : Test(12)
+sub t_parse_variants : Test(15)
 {
   my $ev = main::parse_mdlog('Oct 14 08:00:00 mx mimedefang.pl[123]: MDLOG,Q2,mail_in,,,<>,rcpts=3,Sub%2C%20j%C3%A9', 1);
   is($ev->{event}, 'mail_in', 'syslog prefix is skipped');
@@ -65,6 +65,10 @@ sub t_parse_variants : Test(12)
   is($ev->{subject}, "caf\x{e9}", 'RFC 2047 Q encoding is decoded');
   $ev = main::parse_mdlog('MDLOG,Q8,mail_in,,,a@b.c,d@e.f,=?bogus?B?xx?=', 1);
   ok(defined $ev->{subject}, 'unknown charset does not break parsing');
+  $ev = main::parse_mdlog('MDLOG,Q9,non-spam,0.1,1.2.3.4,a@b.c,<d@e.f>;<g@h.i>;j@k.l,S', 1);
+  is($ev->{event}, 'non-spam', 'recipient list (per_message=2) is parsed');
+  is($ev->{rcpts}, 3, 'recipient list gives the recipient count');
+  is($ev->{rcpt}, '', 'and no single recipient');
   ok(!defined main::parse_mdlog('hello world', 1), 'non-MDLOG line is rejected');
   ok(!defined main::parse_mdlog('MDLOG,Q5', 1), 'truncated line is rejected');
 }
