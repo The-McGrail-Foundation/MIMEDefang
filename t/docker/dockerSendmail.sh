@@ -25,6 +25,8 @@ echo ">>> rpmbuild -bb..."
 rpmbuild -bb redhat/mimedefang.spec 1>/dev/null 2>&1 || { echo "rpmbuild FAILED"; exit 1; }
 echo ">>> dnf install..."
 dnf -y install ~/rpmbuild/RPMS/x86_64/mimedefang-* || { echo "dnf install FAILED"; exit 1; }
+# HTTPS support for LWP (needed by the MTA-STS live tests)
+dnf install -y perl-LWP-Protocol-https 1>/dev/null 2>&1 || true
 
 cp t/data/mimedefang-test-filter /etc/mail/mimedefang-filter
 
@@ -76,6 +78,13 @@ echo "Starting mimedefang..."
 /usr/bin/mimedefang -D -m /var/spool/MIMEDefang/mimedefang-multiplexor.sock \
     -U defang -q -p inet:10997 \
     >/var/log/mimedefang-milter.log 2>&1 &
+
+# Hook MIMEDefang into sendmail (the stock sendmail.cf has no milter)
+grep -q mimedefang /etc/mail/sendmail.mc || cat >> /etc/mail/sendmail.mc << 'EOF'
+INPUT_MAIL_FILTER(`mimedefang', `S=inet:10997@127.0.0.1, F=T, T=S:5m;R:5m;E:10m')dnl
+EOF
+m4 /etc/mail/sendmail.mc > /etc/mail/sendmail.cf || { echo "sendmail.cf build FAILED"; exit 1; }
+newaliases
 
 echo "Starting sendmail..."
 /usr/sbin/sendmail -bd
