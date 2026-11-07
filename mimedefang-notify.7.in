@@ -37,6 +37,13 @@ which is issued when an error occurs.
 The normal messages are:
 
 .TP
+\fBA\fR \fIout|in\fR \fIn\fR
+This message is issued when the autoscaler (\fB\-k\fR option of
+\fBmimedefang-multiplexor\fR) starts a worker (\fBout\fR) or stops workers
+(\fBin\fR).  The parameter \fIn\fR is the number of running workers
+afterwards.
+
+.TP
 \fBB\fR
 This message is issued whenever a worker is killed because of a busy
 timeout.

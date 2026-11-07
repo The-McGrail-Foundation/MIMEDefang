@@ -5442,6 +5442,13 @@ then :
 
 fi
 
+ac_fn_c_check_func "$LINENO" "getloadavg" "ac_cv_func_getloadavg"
+if test "x$ac_cv_func_getloadavg" = xyes
+then :
+  printf "%s\n" "#define HAVE_GETLOADAVG 1" >>confdefs.h
+
+fi
+
 ac_fn_c_check_func "$LINENO" "inet_ntop" "ac_cv_func_inet_ntop"
 if test "x$ac_cv_func_inet_ntop" = xyes
 then :

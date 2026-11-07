@@ -676,6 +676,7 @@ AC_CHECK_FUNCS(snprintf)
 AC_CHECK_FUNCS(vsnprintf)
 AC_CHECK_FUNCS(readdir_r)
 AC_CHECK_FUNCS(pathconf)
+AC_CHECK_FUNCS(getloadavg)
 AC_CHECK_FUNCS(inet_ntop)
 
 if test "$SPOOLDIR" = "no" -o "$SPOOLDIR" = "" ; then

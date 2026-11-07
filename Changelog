@@ -4,6 +4,20 @@ affect your filter.
 
 2026-11-07 Giovanni Bechis <g.bechis@snb.it>
 
+        * mimedefang-multiplexor: the adaptive autoscaler (`-k`) keeps the
+          pool sized for the highest demand of the last 10 minutes, instead
+          of following an average of the busy ratio, so the workers needed
+          by recent bursts are not stopped and started again.  It can be
+          tuned with `-k key=value,...` (`window`, `spare`, `interval`)
+          and kept from adding workers to an overloaded machine
+          (`max_load`, `min_mem`).
+
+        * mimedefang-multiplexor(8) explains how to choose `-x`, and
+          `contrib/mimedefang-tune` suggests `-x`, `-m`, `-q`, `-Q` and `-k`
+          settings for a running system.
+
+2026-11-07 Giovanni Bechis <g.bechis@snb.it>
+
         * Mail::SpamAssassin is never loaded when the filter sets
           `$Features{"SpamAssassin"} = 0`.
 

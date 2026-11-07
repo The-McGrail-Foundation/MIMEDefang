@@ -57,8 +57,8 @@ INSTALL_STRIP_FLAG=-s
 
 all: mimedefang mimedefang-multiplexor md-mx-ctrl pod2man
 
-mimedefang-multiplexor: mimedefang-multiplexor.o event.o event_tcp.o drop_privs_nothread.o notifier.o syslog-fac.o dynbuf.o json_out.o utils.o $(EMBPERLOBJS)
-	$(CC) $(CFLAGS) -o mimedefang-multiplexor mimedefang-multiplexor.o event.o event_tcp.o drop_privs_nothread.o syslog-fac.o notifier.o dynbuf.o json_out.o utils.o $(EMBPERLOBJS) $(LIBS_WITHOUT_PTHREAD) $(EMBPERLLDFLAGS) $(EMBPERLLIBS)
+mimedefang-multiplexor: mimedefang-multiplexor.o event.o event_tcp.o drop_privs_nothread.o notifier.o syslog-fac.o dynbuf.o json_out.o autoscale.o utils.o $(EMBPERLOBJS)
+	$(CC) $(CFLAGS) -o mimedefang-multiplexor mimedefang-multiplexor.o event.o event_tcp.o drop_privs_nothread.o syslog-fac.o notifier.o dynbuf.o json_out.o autoscale.o utils.o $(EMBPERLOBJS) $(LIBS_WITHOUT_PTHREAD) $(EMBPERLLDFLAGS) $(EMBPERLLIBS)
 
 embperl.o: embperl.c
 	$(CC) $(CFLAGS) $(EMBPERLCFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o embperl.o $(srcdir)/embperl.c
@@ -101,7 +101,7 @@ drop_privs_threaded.o: drop_privs.c
 event.o: event.c
 	$(CC) $(CFLAGS) $(DEFS) $(MINCLUDE) -c -o event.o $(srcdir)/event.c
 
-mimedefang-multiplexor.o: mimedefang-multiplexor.c json_out.h
+mimedefang-multiplexor.o: mimedefang-multiplexor.c json_out.h autoscale.h
 	$(CC) $(CFLAGS) $(DEFS) $(MINCLUDE) -c -o mimedefang-multiplexor.o $(srcdir)/mimedefang-multiplexor.c
 
 mimedefang: mimedefang.o drop_privs_threaded.o utils.o rm_r.o syslog-fac.o dynbuf.o milter_cap.o gen_id.o
@@ -121,6 +121,9 @@ dynbuf.o: dynbuf.c dynbuf.h
 
 json_out.o: json_out.c json_out.h dynbuf.h
 	$(CC) $(CFLAGS) $(DEFS) $(MINCLUDE) -c -o json_out.o $(srcdir)/json_out.c
+
+autoscale.o: autoscale.c autoscale.h
+	$(CC) $(CFLAGS) $(DEFS) $(MINCLUDE) -c -o autoscale.o $(srcdir)/autoscale.c
 
 gen_id.o: gen_id.c mimedefang.h
 	$(CC) $(CFLAGS) $(PTHREAD_FLAG) $(DEFS) $(MINCLUDE) -c -o gen_id.o $(srcdir)/gen_id.c
