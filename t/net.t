@@ -9,6 +9,8 @@ use Sys::Hostname;
 
 use Mail::MIMEDefang;
 use Mail::MIMEDefang::Net;
+use Mail::MIMEDefang::Net qw(md_shared_resolver md_dns_query md_dns_cache_clear);
+use Net::DNS;
 
 init_globals;
 $Features{"Net::DNS"} = 1;
@@ -171,6 +173,133 @@ sub t_get_mx_ip_addresses : Test(1)
     my @res = get_mx_ip_addresses($domain);
     is(scalar @res, 1);
   }
+}
+
+# --- shared resolver and DNS answer cache (no network: send() is stubbed) ---
+
+sub _fake_reply
+{
+  my ($name, $type, $rcode, @rdata) = @_;
+  my $pkt = Net::DNS::Packet->new($name, $type);
+  $pkt->header->qr(1);
+  $pkt->header->rcode($rcode);
+  foreach my $r (@rdata) {
+    $pkt->push(answer => Net::DNS::RR->new($r));
+  }
+  return $pkt;
+}
+
+sub t_shared_resolver : Test(3)
+{
+  my $r1 = md_shared_resolver();
+  isa_ok($r1, 'Net::DNS::Resolver');
+  is(md_shared_resolver(), $r1, 'the resolver is reused');
+  ok(!$r1->{defnames}, 'search list is not appended to lookups');
+}
+
+sub t_dns_query_cache : Test(11)
+{
+  my $calls = 0;
+  my $reply;
+  my $res = md_shared_resolver();
+  md_dns_cache_clear();
+  no warnings 'redefine';
+  local *Net::DNS::Resolver::Base::send = sub { $calls++; return $reply; };
+
+  # positive answer is cached, and the trailing dot / case do not matter
+  $reply = _fake_reply('a.example.org', 'A', 'NOERROR', 'a.example.org. 120 IN A 192.0.2.1');
+  my $p = md_dns_query($res, 'a.example.org', 'A');
+  is(($p->answer)[0]->address, '192.0.2.1');
+  md_dns_query(undef, 'A.Example.ORG.', 'A');
+  is($calls, 1, 'second lookup answered from the cache');
+
+  # NXDOMAIN: query() semantics (undef), cached; send() semantics (packet)
+  $calls = 0;
+  $reply = _fake_reply('nx.example.org', 'TXT', 'NXDOMAIN');
+  is(md_dns_query($res, 'nx.example.org', 'TXT'), undef, 'NXDOMAIN gives undef with query');
+  my $s = md_dns_query($res, 'nx.example.org', 'TXT', 'send');
+  is($s->header->rcode, 'NXDOMAIN', 'NXDOMAIN packet is returned with send');
+  is($calls, 1, 'negative answer was cached');
+
+  # SERVFAIL and timeouts are never cached
+  $calls = 0;
+  $reply = _fake_reply('sf.example.org', 'A', 'SERVFAIL');
+  md_dns_query($res, 'sf.example.org', 'A') for 1..2;
+  is($calls, 2, 'SERVFAIL is not cached');
+  $reply = undef;
+  md_dns_query($res, 'to.example.org', 'A') for 1..2;
+  is($calls, 4, 'timeout is not cached');
+
+  # TTL expiry
+  $calls = 0;
+  $reply = _fake_reply('ttl.example.org', 'A', 'NOERROR', 'ttl.example.org. 1 IN A 192.0.2.9');
+  md_dns_query($res, 'ttl.example.org', 'A');
+  sleep(2);
+  md_dns_query($res, 'ttl.example.org', 'A');
+  is($calls, 2, 'entry expired after its TTL');
+
+  # a resolver supplied by the caller is never cached
+  $calls = 0;
+  my $mine = Net::DNS::Resolver->new;
+  $reply = _fake_reply('b.example.org', 'A', 'NOERROR', 'b.example.org. 120 IN A 192.0.2.2');
+  md_dns_query($mine, 'b.example.org', 'A') for 1..2;
+  is($calls, 2, 'caller-supplied resolver bypasses the cache');
+
+  md_dns_cache_clear();
+  $calls = 0;
+  $reply = _fake_reply('a.example.org', 'A', 'NOERROR', 'a.example.org. 120 IN A 192.0.2.1');
+  md_dns_query($res, 'a.example.org', 'A');
+  md_dns_cache_clear();
+  md_dns_query($res, 'a.example.org', 'A');
+  is($calls, 2, 'md_dns_cache_clear empties the cache');
+}
+
+sub t_dns_txt_uses_cache : Test(2)
+{
+  my $calls = 0;
+  my $res = md_shared_resolver();
+  md_dns_cache_clear();
+  no warnings 'redefine';
+  local *Net::DNS::Resolver::Base::send = sub {
+    $calls++;
+    return _fake_reply('_dmarc.example.net', 'TXT', 'NOERROR',
+                       '_dmarc.example.net. 300 IN TXT "v=DMARC1; p=none"');
+  };
+  is(md_dns_txt($res, '_dmarc.example.net', qr/^v=DMARC1/), 'v=DMARC1; p=none');
+  md_dns_txt($res, '_dmarc.example.net', qr/^v=DMARC1/);
+  is($calls, 1, 'md_dns_txt goes through the cache');
+}
+
+sub t_dns_query_nocache : Test(3)
+{
+  my $calls = 0;
+  my $res = md_shared_resolver();
+  md_dns_cache_clear();
+  no warnings 'redefine';
+  local *Net::DNS::Resolver::Base::send = sub {
+    $calls++;
+    return _fake_reply('nc.example.org', 'A', 'NOERROR', 'nc.example.org. 120 IN A 192.0.2.3');
+  };
+
+  my $p = md_dns_query($res, 'nc.example.org', 'A', 'query', 1);
+  is(($p->answer)[0]->address, '192.0.2.3');
+  md_dns_query(undef, 'nc.example.org', 'A', 'query', 1);
+  is($calls, 2, 'nocache lookups always go to the network');
+  md_dns_query($res, 'nc.example.org', 'A');
+  is($calls, 3, 'nocache lookups do not fill the cache');
+}
+
+sub t_rbl_multi_uses_md_dns_query : Test(3)
+{
+  my @resolvers;
+  pipe(my $rd, my $wr) or die "pipe: $!";
+  no warnings 'redefine';
+  local *Net::DNS::Resolver::Base::bgsend = sub { push(@resolvers, $_[0]); return $rd; };
+
+  my $ans = relay_is_blacklisted_multi('192.0.2.1', 0, 0, ['rbl.example.org']);
+  is($ans->{'rbl.example.org'}, 'SERVFAIL', 'no answer within the timeout');
+  is(scalar(@resolvers), 1, 'one bgsend per blocklist');
+  is($resolvers[0], md_shared_resolver(), 'the shared resolver is used');
 }
 
 __PACKAGE__->runtests();

@@ -143,8 +143,7 @@ sub md_spf_verify {
   # undefined even though a raw record exists in DNS. Fetch it directly.
   if((not defined $spf_record or (defined $helo and not defined $helospf_record))
       and $Features{"Net::DNS"}) {
-    my $res = Net::DNS::Resolver->new;
-    $res->defnames(0);
+    my $res = Mail::MIMEDefang::Net::md_shared_resolver();
     if(not defined $spf_record and $spfmail =~ /\@(.*)/) {
       $spf_record = md_dns_txt($res, $1, qr/^v=spf1\b/i);
     }

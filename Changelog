@@ -2,6 +2,15 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2026-11-07 Giovanni Bechis <g.bechis@snb.it>
+
+        * Mail::MIMEDefang::Net: DNS lookups go through a per-worker
+          shared resolver (`md_shared_resolver`) and a new
+          `md_dns_query` wrapper, which caches definitive answers for
+          their TTL (at most 5 minutes, NXDOMAIN/NODATA for 1 minute);
+          SERVFAIL and timeouts are never cached.
+          Mail::MIMEDefang::Net: DNS blocklist answers are never cached.
+
 2026-11-06 Giovanni Bechis <g.bechis@snb.it>
 
         * md_graphdefang_log, md_graphdefang_log_array: `$per_message = 2`

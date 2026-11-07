@@ -39,6 +39,7 @@ use warnings;
 require Exporter;
 
 use Mail::MIMEDefang;
+use Mail::MIMEDefang::Net ();
 use Net::DNS;
 
 our @ISA = qw(Exporter);
@@ -179,11 +180,8 @@ sub _bimi_dns_lookup {
     return (undef, 'temperror');
   }
 
-  my $res = Net::DNS::Resolver->new;
-  $res->defnames(0);
-
   my $lookup = $selector . '._bimi.' . $domain;
-  my $packet = $res->send($lookup, 'TXT');
+  my $packet = Mail::MIMEDefang::Net::md_dns_query(undef, $lookup, 'TXT', 'send');
 
   return (undef, 'temperror') unless defined $packet;
   my $rcode = $packet->header->rcode;

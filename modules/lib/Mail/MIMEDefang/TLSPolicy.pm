@@ -150,8 +150,7 @@ sub md_check_mta_sts {
     }
 
     # DNS TXT lookup for _mta-sts.<domain>
-    my $res = Net::DNS::Resolver->new;
-    $res->defnames(0);
+    my $res = Mail::MIMEDefang::Net::md_shared_resolver();
 
     my $txt_record = md_dns_txt($res, "_mta-sts.$domain");
     return unless defined $txt_record && $txt_record =~ /\bv=STSv1\b/i;
@@ -245,11 +244,8 @@ sub md_check_dane_tlsa {
         return ();
     }
 
-    my $res = Net::DNS::Resolver->new;
-    $res->defnames(0);
-
     my $lookup = "_${port}._tcp.$domain";
-    my $packet = $res->query($lookup, 'TLSA');
+    my $packet = Mail::MIMEDefang::Net::md_dns_query(undef, $lookup, 'TLSA');
 
     return () unless defined $packet;
     return () if $packet->header->rcode eq 'NXDOMAIN';

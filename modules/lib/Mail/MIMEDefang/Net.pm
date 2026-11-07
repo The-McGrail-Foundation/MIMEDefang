@@ -24,6 +24,7 @@ use strict;
 use warnings;
 
 use Socket;
+use Scalar::Util qw(refaddr);
 
 use IO::Select;
 use Net::DNS;
@@ -37,7 +38,18 @@ our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_blackli
                  relay_is_blacklisted_multi relay_is_blacklisted_multi_count relay_is_blacklisted_multi_list
                  is_public_ip4_address is_public_ip6_address md_get_bogus_mx_hosts get_mx_ip_addresses
                  md_get_dmarc_record md_dns_txt);
-our @EXPORT_OK = qw(get_host_name get_ptr_record md_init);
+our @EXPORT_OK = qw(get_host_name get_ptr_record md_init
+                    md_shared_resolver md_dns_query md_dns_cache_clear);
+
+# Shared resolver and DNS answer cache, see md_shared_resolver() and
+# md_dns_query().  Both live as long as the worker process does.
+use constant {
+  DNS_CACHE_MAX_ENTRIES => 512,  # the cache is flushed when it gets this big
+  DNS_CACHE_MAX_TTL     => 300,  # upper bound for a positive answer
+  DNS_CACHE_NEG_TTL     => 60,   # NXDOMAIN / NODATA
+};
+my ($SharedResolver, $SharedResolverPid);
+my %DnsCache;
 
 sub md_init {
   my $digest_md5 = 0;
@@ -329,18 +341,15 @@ sub get_mx_ip_addresses {
     md_syslog('err', "Attempted to call get_mx_ip_addresses, but Perl module Net::DNS is not installed");
 		return(@results);
 	}
-	if (!defined($res)) {
-		$res = Net::DNS::Resolver->new;
-		$res->defnames(0);
-	}
+	$res = md_shared_resolver() unless defined($res);
 
-	my $packet = $res->query($domain, 'MX');
+	my $packet = md_dns_query($res, $domain, 'MX');
 	if (!defined($packet) ||
 	    $packet->header->rcode eq 'SERVFAIL' ||
 	    $packet->header->rcode eq 'NXDOMAIN' ||
 	    !defined($packet->answer)) {
 		# No MX records; try A records
-		$packet = $res->query($domain, 'A');
+		$packet = md_dns_query($res, $domain, 'A');
 		if (!defined($packet) ||
 		    $packet->header->rcode eq 'SERVFAIL' ||
 		    $packet->header->rcode eq 'NXDOMAIN' ||
@@ -373,7 +382,7 @@ sub get_mx_ip_addresses {
 				}
 			}
 
-			my $packet2 = $res->query($item->exchange, 'A');
+			my $packet2 = md_dns_query($res, $item->exchange, 'A');
 			next unless defined($packet2);
 			next if $packet2->header->rcode eq 'SERVFAIL';
 			next if $packet2->header->rcode eq 'NXDOMAIN';
@@ -421,12 +430,9 @@ sub get_ptr_record {
                 md_syslog('err', "Attempted to call get_ptr_record, but Perl module Net::DNS is not installed");
                 return;
         }
-        if (!defined($res)) {
-                $res = Net::DNS::Resolver->new;
-                $res->defnames(0);
-        }
+        $res = md_shared_resolver() unless defined($res);
 
-        my $packet = $res->query(reverse_ip_address_for_rbl($ip) . ".in-addr.arpa", 'PTR');
+        my $packet = md_dns_query($res, reverse_ip_address_for_rbl($ip) . ".in-addr.arpa", 'PTR');
         if (!defined($packet) ||
             $packet->header->rcode eq 'SERVFAIL' ||
             $packet->header->rcode eq 'NXDOMAIN' ||
@@ -464,10 +470,9 @@ sub md_get_dmarc_record {
 sub _md_get_dmarc_txt_records {
         my ($domain) = @_;
 
-        my $res = Net::DNS::Resolver->new;
-        $res->defnames(0);
+        my $res = md_shared_resolver();
 
-        my $packet = $res->query('_dmarc.' . $domain, 'TXT');
+        my $packet = md_dns_query($res, '_dmarc.' . $domain, 'TXT');
         if (!defined($packet) ||
             $packet->header->rcode eq 'NXDOMAIN') {
 	          my @dots = $domain =~ /\./g;
@@ -482,7 +487,7 @@ sub _md_get_dmarc_txt_records {
         my @answer = $packet->answer;
         if (scalar(@answer) == 1 && $answer[0]->type eq 'CNAME') {
                 my $cname_target = $answer[0]->cname;
-                my $cname_packet = $res->query($cname_target, 'TXT');
+                my $cname_packet = md_dns_query($res, $cname_target, 'TXT');
                 if (!defined($cname_packet) ||
                     $cname_packet->header->rcode eq 'NXDOMAIN' ||
                     $cname_packet->header->rcode eq 'SERVFAIL' ||
@@ -551,15 +556,15 @@ sub relay_is_blacklisted_multi {
 
   # If user did not pass in a Net::DNS::Resolver object, generate one.
   unless (defined($res and (UNIVERSAL::isa($res, "Net::DNS::Resolver")))) {
-    $res = Net::DNS::Resolver->new;
-    $res->defnames(0);
+    $res = md_shared_resolver();
   }
 
   my $sel = IO::Select->new();
 
   # Send out the queries
   foreach my $domain (@{$domains}) {
-    $sock = $res->bgsend("$addr.$domain", 'A');
+    # Never cached: blocklist answers must always be fresh
+    $sock = md_dns_query($res, "$addr.$domain", 'A', 'bgsend');
     $sock_to_domain{$sock} = $domain;
     $sel->add($sock);
   }
@@ -695,7 +700,7 @@ domain that publishes several unrelated TXT records.
 
 sub md_dns_txt {
     my ($res, $name, $filter) = @_;
-    my $packet = $res->query($name, 'TXT');
+    my $packet = md_dns_query($res, $name, 'TXT');
     return unless defined $packet;
     return if $packet->header->rcode eq 'NXDOMAIN';
     return if $packet->header->rcode eq 'SERVFAIL';
@@ -710,6 +715,110 @@ sub md_dns_txt {
         return $txt;
     }
     return;
+}
+
+=item md_shared_resolver()
+
+Returns a C<Net::DNS::Resolver> (with C<defnames(0)>) that is created
+once per worker process and then reused (and created again after a
+C<fork()>).  It is the resolver whose answers L</md_dns_query> caches.
+
+=cut
+
+sub md_shared_resolver {
+  if (!defined($SharedResolver) or $SharedResolverPid != $$) {
+    # A forked child must not trust answers cached by its parent
+    %DnsCache = () if defined($SharedResolverPid);
+    $SharedResolver = Net::DNS::Resolver->new;
+    $SharedResolver->defnames(0);
+    $SharedResolverPid = $$;
+  }
+  return $SharedResolver;
+}
+
+=item md_dns_cache_clear()
+
+Empties the DNS answer cache used by L</md_dns_query>.
+
+=cut
+
+sub md_dns_cache_clear {
+  %DnsCache = ();
+  return;
+}
+
+=item md_dns_query($resolver, $name, $type [, $method [, $nocache]])
+
+Looks up C<$name>/C<$type> like the C<query> (default), C<send> or
+C<bgsend> method of C<Net::DNS::Resolver>, chosen by C<$method>, and with
+the same return values: a C<Net::DNS::Packet> for C<query> and C<send>,
+a socket to pass to C<bgread> for C<bgsend>.
+
+When C<$resolver> is undefined or is the object returned by
+L</md_shared_resolver>, definitive answers are cached in the worker for
+as long as their TTL allows, but never longer than five minutes:
+positive answers use the smallest TTL of the answer section and
+NXDOMAIN or empty answers are kept for one minute.  Timeouts, SERVFAIL
+and other errors are never cached.  A resolver passed in by the caller is
+used as is, with no caching.
+
+Nothing is cached, and the cache is not consulted, when C<$nocache> is
+true or C<$method> is C<bgsend>.  C<relay_is_blacklisted_multi> uses
+C<bgsend>, so blocklist answers are always fresh.
+
+The returned packet may be shared with other callers and must be treated
+as read-only.
+
+=cut
+
+sub md_dns_query {
+  my ($res, $name, $type, $method, $nocache) = @_;
+  $method = 'query' unless (defined($method) and ($method eq 'send' or $method eq 'bgsend'));
+
+  $res = md_shared_resolver() unless defined($res);
+  if ($nocache or $method eq 'bgsend' or
+      !(defined($SharedResolver) and refaddr($res) == refaddr($SharedResolver))) {
+    # Uncached lookup, or caller-supplied resolver: no caching.
+    return $res->$method($name, $type);
+  }
+
+  my $key = uc($type) . ' ' . lc($name);
+  $key =~ s/\.$//;
+  my $now = time();
+  my $hit = $DnsCache{$key};
+  my $packet;
+  if (defined($hit) and $hit->[0] > $now) {
+    $packet = $hit->[1];
+  } else {
+    # query() is send() that turns an empty answer into undef; use send()
+    # so that NXDOMAIN and NODATA replies can be cached as well.
+    $packet = $res->send($name, $type);
+    my $ttl = _dns_cache_ttl($packet);
+    if ($ttl > 0) {
+      %DnsCache = () if (scalar(keys %DnsCache) >= DNS_CACHE_MAX_ENTRIES);
+      $DnsCache{$key} = [$now + $ttl, $packet];
+    } else {
+      delete $DnsCache{$key};
+    }
+  }
+  return $packet if ($method eq 'send');
+  return (defined($packet) and $packet->header->ancount) ? $packet : undef;
+}
+
+# Number of seconds a reply may be cached; 0 means do not cache.
+sub _dns_cache_ttl {
+  my ($packet) = @_;
+  return 0 unless defined($packet);
+  my $rcode = $packet->header->rcode;
+  if ($rcode eq 'NXDOMAIN' or ($rcode eq 'NOERROR' and !$packet->header->ancount)) {
+    return DNS_CACHE_NEG_TTL;
+  }
+  return 0 unless $rcode eq 'NOERROR';
+  my $ttl = DNS_CACHE_MAX_TTL;
+  foreach my $rr ($packet->answer) {
+    $ttl = $rr->ttl if $rr->ttl < $ttl;
+  }
+  return $ttl;
 }
 
 =back
