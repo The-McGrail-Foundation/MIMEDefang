@@ -53,3 +53,13 @@ per backend.  Run `ml-benchmark --help` for the options.
 kind of corpus, for `mimedefang-gliclass-server --model`; see "Training a
 model" in `script/ml-servers/README.md`.  GLiClass is the only backend
 that can be trained this easily.
+
+## `mimedefang-tune`
+
+Suggests `mimedefang-multiplexor` settings (`-x`, `-m`, `-q`, `-Q` and
+`-k`) for the machine it runs on, from the statistics of the running
+multiplexor, the number of CPUs, the available memory, the size and CPU
+time of the workers and, optionally, the arrival times of the mail
+(`--arrivals`).  It only reads; it prints each suggestion with the numbers
+behind it.  See "CHOOSING THE NUMBER OF WORKERS" in
+mimedefang-multiplexor(8) and `mimedefang-tune --man`.

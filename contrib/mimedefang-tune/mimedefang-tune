@@ -1,0 +1,486 @@
+#!/usr/bin/perl
+
+#***********************************************************************
+#
+# mimedefang-tune
+#
+# Suggest mimedefang-multiplexor settings (-x, -m, -q, -Q, -k) from
+# what the running multiplexor, the machine and, optionally, the mail
+# log say.  It only reads: nothing is changed.
+#
+# * This program may be distributed under the terms of the GNU General
+# * Public License, Version 2.
+#
+#***********************************************************************
+
+use strict;
+use warnings;
+use Getopt::Long;
+use Pod::Usage;
+use IO::Socket::UNIX;
+use IO::Select;
+use Socket qw(SOCK_STREAM);
+use POSIX qw(ceil floor mktime);
+
+my %opt = (
+  sample   => 60,
+  headroom => 0.8,
+);
+GetOptions(\%opt, 'socket|s=s', 'arrivals|a=s', 'sample=i', 'cpu-per-scan=f',
+           'headroom=f', 'year=i', 'help|h', 'man')
+  or pod2usage(2);
+pod2usage(1) if $opt{help};
+pod2usage(-verbose => 2) if $opt{man};
+
+my @notes;    # assumptions and warnings, printed at the end
+
+#-----------------------------------------------------------------------
+# Multiplexor
+#-----------------------------------------------------------------------
+my $sock = $opt{socket};
+if (!defined $sock) {
+  ($sock) = grep { -S $_ } map { "$_/mimedefang-multiplexor.sock" }
+    qw(/var/spool/MIMEDefang /var/spool/mimedefang /var/run/mimedefang);
+  die "multiplexor socket not found: use --socket\n" unless defined $sock;
+}
+
+# Same protocol as md-mx-ctrl: write "cmd\n", read until EOF.
+sub mx {
+  my ($cmd) = @_;
+  my $s = IO::Socket::UNIX->new(Peer => $sock, Type => SOCK_STREAM, Timeout => 5)
+    or die "cannot connect to $sock: $!\n";
+  syswrite($s, "$cmd\n");
+  my ($ans, $buf) = ('', '');
+  my $sel = IO::Select->new($s);
+  while ($sel->can_read(5)) {
+    my $n = sysread($s, $buf, 65536);
+    last unless $n;
+    $ans .= $buf;
+  }
+  close $s;
+  return $ans;
+}
+
+# status: worker states, messages, activations, queue size, queued, uptime
+my @st = split ' ', mx('status');
+die "unexpected answer to 'status' from $sock\n" unless @st >= 6 && $st[0] =~ /^[IBSK]+$/;
+my $max_now   = length $st[0];
+my $busy_now  = ($st[0] =~ tr/B//);
+my $live_now  = ($st[0] =~ tr/IB//);
+my $msgs0     = $st[1];
+my $acts      = $st[2];
+my $qsize_now = $st[3];
+my $uptime    = $st[5];
+
+# hload: msgs[1h 4h 12h 24h], avg busy[4], avg ms[4], seconds covered[4]
+sub hload {
+  my ($cmd) = @_;
+  my @v = split ' ', mx($cmd);
+  return unless @v >= 16 && $v[0] =~ /^\d+$/;
+  # The longest window with enough requests to be meaningful
+  for my $i (3, 2, 1, 0) {
+    next unless $v[$i] >= 20 && $v[12 + $i] > 0;
+    return { msgs => $v[$i], busy => $v[4 + $i], ms => $v[8 + $i],
+             secs => $v[12 + $i], win => (1, 4, 12, 24)[$i] };
+  }
+  return { msgs => $v[3], busy => $v[7], ms => $v[11], secs => $v[15], win => 24 };
+}
+my $scan = hload('hload')
+  or die "the multiplexor did not answer 'hload'\n";
+my %check = map { $_ => hload("hload-$_") } qw(relayok senderok recipok);
+
+
+#-----------------------------------------------------------------------
+# Machine: CPUs and memory (MiB)
+#-----------------------------------------------------------------------
+sub run { my $o = `$_[0] 2>/dev/null`; return defined $o ? $o : '' }
+
+sub ncpu {
+  for my $c ('getconf _NPROCESSORS_ONLN', 'getconf NPROCESSORS_ONLN',
+             'sysctl -n hw.ncpuonline', 'sysctl -n hw.ncpu') {
+    my $n = run($c);
+    return $1 if $n =~ /^\s*(\d+)\s*$/ && $1 > 0;
+  }
+  if (open my $f, '<', '/proc/cpuinfo') {
+    my $n = grep { /^processor\s*:/ } <$f>;
+    return $n if $n;
+  }
+  return;
+}
+
+# (available, total) in MiB
+sub memory {
+  if (open my $f, '<', '/proc/meminfo') {
+    my %m = map { /^(\w+):\s+(\d+)/ ? ($1 => $2) : () } <$f>;
+    return (int(($m{MemAvailable} // $m{MemFree} // 0) / 1024),
+            int(($m{MemTotal} // 0) / 1024)) if $m{MemTotal};
+  }
+  my $page = run('sysctl -n hw.pagesize') =~ /(\d+)/ ? $1 : 4096;
+  my $total = 0;
+  for my $k (qw(hw.physmem64 hw.physmem hw.memsize)) {
+    if (run("sysctl -n $k") =~ /^\s*(\d+)/) { $total = int($1 / 1048576); last }
+  }
+  # FreeBSD, DragonFly
+  my $f = run('sysctl -n vm.stats.vm.v_free_count');
+  my $i = run('sysctl -n vm.stats.vm.v_inactive_count');
+  if ($f =~ /(\d+)/) {
+    my $pages = $1 + ($i =~ /(\d+)/ ? $1 : 0);
+    return (int($pages * $page / 1048576), $total);
+  }
+  # OpenBSD, NetBSD
+  my $vs = run('vmstat -s');
+  if ($vs =~ /(\d+)\s+pages free/) {
+    my $pages = $1 + ($vs =~ /(\d+)\s+pages inactive/ ? $1 : 0);
+    return (int($pages * $page / 1048576), $total);
+  }
+  # macOS
+  my $vm = run('vm_stat');
+  if ($vm =~ /Pages free:\s+(\d+)/) {
+    my $pages = $1 + ($vm =~ /Pages inactive:\s+(\d+)/ ? $1 : 0);
+    my $ps = $vm =~ /page size of (\d+)/ ? $1 : $page;
+    return (int($pages * $ps / 1048576), $total);
+  }
+  return (undef, $total || undef);
+}
+
+my $ncpu = ncpu();
+my ($mem_avail, $mem_total) = memory();
+
+#-----------------------------------------------------------------------
+# Workers: the children of the master multiplexor (mimedefang.pl
+# processes, or forked multiplexors with embedded Perl)
+#-----------------------------------------------------------------------
+sub cpu_secs {    # [[dd-]hh:]mm:ss[.ff]
+  my ($t) = @_;
+  my $d = ($t =~ s/^(\d+)-//) ? $1 : 0;
+  my $s = 0;
+  $s = $s * 60 + $_ for split /:/, $t;
+  return $d * 86400 + $s;
+}
+
+sub processes {
+  my %p;
+  for (split /\n/, run('ps -A -ww -o pid= -o ppid= -o rss= -o time= -o command=')) {
+    next unless /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/;
+    $p{$1} = { ppid => $2, rss => $3, cpu => cpu_secs($4), cmd => $5 };
+  }
+  return \%p;
+}
+
+my $procs = processes();
+my $is_mx = sub { my $q = $procs->{$_[0]}; $q && $q->{cmd} =~ /mimedefang-multiplexor/ };
+my @masters = grep { $is_mx->($_) && !$is_mx->($procs->{$_}{ppid}) } keys %$procs;
+my ($master) = grep { $procs->{$_}{cmd} =~ /\s-s\s+\Q$sock\E(\s|$)/ } @masters;
+if (!$master && @masters == 1) {
+  $master = $masters[0];
+}
+if (!$master && @masters > 1) {
+  push @notes, 'several multiplexors run and none names ' . $sock
+    . ' with -s: worker sizes and current flags are not measured';
+}
+my $mxcmd = $master ? $procs->{$master}{cmd} : '';
+my @workers = $master ? grep { $procs->{$_}{ppid} == $master } keys %$procs : ();
+my ($rss_max, $rss_sum) = (0, 0);
+for (@workers) {
+  my $r = $procs->{$_}{rss} / 1024;
+  $rss_sum += $r;
+  $rss_max = $r if $r > $rss_max;
+}
+
+# CPU time per scan: CPU used by the workers over a sampling period,
+# divided by the scans handled meanwhile
+my $cpu_per_scan = $opt{'cpu-per-scan'};
+my $cpu_how = 'given with --cpu-per-scan';
+if (!defined $cpu_per_scan && @workers && $opt{sample} > 0) {
+  print STDERR "Sampling worker CPU time for $opt{sample} s (--sample 0 skips)...\n";
+  my %c0 = map { $_ => $procs->{$_}{cpu} } @workers;
+  sleep $opt{sample};
+  my @st1 = split ' ', mx('status');
+  my $p1 = processes();
+  my $dcpu = 0;
+  for (keys %$p1) {
+    next unless $master && $p1->{$_}{ppid} == $master;
+    $dcpu += $p1->{$_}{cpu} - ($c0{$_} // 0);
+  }
+  my $dmsgs = ($st1[1] // $msgs0) - $msgs0;
+  if ($dmsgs >= 5 && $dcpu > 0) {
+    $cpu_per_scan = $dcpu / $dmsgs;
+    $cpu_how = sprintf 'measured: %.1f CPU-s over %d scans in %d s', $dcpu, $dmsgs, $opt{sample};
+  } else {
+    push @notes, "only $dmsgs scans during the sample: CPU per scan not measured"
+      . ' (run at a busier time, use a longer --sample, or give --cpu-per-scan)';
+  }
+}
+
+#-----------------------------------------------------------------------
+# Arrivals: one timestamp per line (syslog "Mon DD HH:MM:SS", ISO 8601
+# or epoch seconds)
+#-----------------------------------------------------------------------
+my %MON = (Jan=>0, Feb=>1, Mar=>2, Apr=>3, May=>4, Jun=>5, Jul=>6, Aug=>7,
+           Sep=>8, Oct=>9, Nov=>10, Dec=>11);
+sub read_arrivals {
+  my ($file) = @_;
+  open my $f, '<', $file or die "$file: $!\n";
+  my $year = $opt{year} // (localtime)[5];
+  my (@t, $prev_mon);
+  while (<$f>) {
+    my $e;
+    if (/^\s*(\d{9,11})(\.\d+)?\s*$/) {
+      $e = $1;
+    } elsif (/^(\d{4})-(\d\d)-(\d\d)[T ](\d\d):(\d\d):(\d\d)/) {
+      $e = mktime($6, $5, $4, $3, $2 - 1, $1 - 1900);
+    } elsif (/^([A-Z][a-z]{2})\s+(\d+)\s+(\d\d):(\d\d):(\d\d)/ && exists $MON{$1}) {
+      # Syslog has no year; a log that runs past December wraps
+      $year++ if defined $prev_mon && $MON{$1} < $prev_mon - 6;
+      $prev_mon = $MON{$1};
+      $e = mktime($5, $4, $3, $2, $MON{$1}, $year - 1900);
+    }
+    push @t, $e if defined $e;
+  }
+  return sort { $a <=> $b } @t;
+}
+
+# Highest number of arrivals within any window of $w seconds, and the
+# 99.9th percentile of that count over the seconds that had mail
+sub window_counts {
+  my ($w, @t) = @_;
+  my (@c, $j);
+  $j = 0;
+  for my $i (0 .. $#t) {
+    $j++ while $t[$j] <= $t[$i] - $w;
+    push @c, $i - $j + 1;
+  }
+  @c = sort { $a <=> $b } @c;
+  return (0, 0) unless @c;
+  return ($c[-1], $c[int(0.999 * $#c)]);
+}
+
+#-----------------------------------------------------------------------
+# Computation
+#-----------------------------------------------------------------------
+my $S = $scan->{ms} / 1000;                     # seconds per scan
+my $rate = $scan->{secs} ? $scan->{msgs} / $scan->{secs} : 0;
+my $load_scan = $rate * $S;                      # workers busy on average
+my $load_checks = 0;
+for (values %check) {
+  next unless $_ && $_->{secs};
+  $load_checks += $_->{msgs} / $_->{secs} * $_->{ms} / 1000;
+}
+my $avg_demand = $load_scan + $load_checks;
+my $check_factor = $load_scan > 0 ? $avg_demand / $load_scan : 1;
+
+my ($peak_demand, $peak_how);
+if ($opt{arrivals}) {
+  my @t = read_arrivals($opt{arrivals});
+  die "$opt{arrivals}: no timestamps recognized\n" unless @t;
+  my $span = $t[-1] - $t[0] + 1;
+  # Not every message logged reaches the filter (local or re-injected
+  # mail, mail rejected earlier): scale by the scans per arrival
+  my $ratio = 1;
+  if ($span >= 86400 && $rate > 0) {
+    my $arr_rate = @t / $span;
+    $ratio = $rate / $arr_rate if $rate < $arr_rate;
+  }
+  my $w = $S < 1 ? 1 : ceil($S);
+  my ($max, $p999) = window_counts($w, @t);
+  $peak_demand = $p999 * $ratio * $check_factor;
+  $peak_how = sprintf '%d arrivals in %.1f days; most in %d s: %d (99.9th pct %d)%s',
+    scalar @t, $span / 86400, $w, $max, $p999,
+    ($ratio < 1 ? sprintf(', scaled by %.2f scans per arrival', $ratio) : '');
+  push @notes, sprintf('the busiest %d s of the log had %d arrivals: requests beyond -x wait in the queue', $w, $max)
+    if $max * $ratio * $check_factor > $p999 * $ratio * $check_factor * 1.5;
+} else {
+  # Without a log, assume bursts four times the average, at least 4
+  $peak_demand = $avg_demand * 4;
+  $peak_demand = 4 if $peak_demand < 4;
+  $peak_how = 'guessed as 4 x the average (give --arrivals for a real figure)';
+}
+
+my $cpu_limit;
+if ($ncpu) {
+  my $c = $cpu_per_scan;
+  if (!defined $c) {
+    $c = $S;    # assume CPU-bound: the safe side
+    push @notes, 'CPU per scan unknown: assuming scans are CPU-bound';
+  }
+  $c = $S if $c > $S;
+  $cpu_limit = ($c > 0) ? floor($ncpu * $S / $c) : undef;
+}
+my $mem_limit;
+if (defined $mem_avail && $rss_max > 0) {
+  $mem_limit = floor($opt{headroom} * ($mem_avail + $rss_sum) / $rss_max);
+}
+
+my @limits = grep { defined } ($cpu_limit, $mem_limit);
+my $limit = @limits ? (sort { $a <=> $b } @limits)[0] : undef;
+my $want = ceil($peak_demand * 1.25) + 1;
+my $x = defined $limit && $limit < $want ? $limit : $want;
+$x = 2 if $x < 2;
+if (defined $limit && $want > $limit) {
+  push @notes, sprintf('peak demand (%.1f workers) is above what the machine can serve (%d):'
+    . ' more workers would not help; let the queue absorb the bursts, or add CPU/memory', $peak_demand, $limit);
+}
+my $m = ceil($avg_demand);
+$m = 1 if $m < 1;
+$m = $x if $m > $x;
+my $q = $x < 10 ? 10 : $x;
+my $Q = ceil(4 * $S);
+$Q = 30 if $Q < 30;
+$Q = 120 if $Q > 120;
+
+#-----------------------------------------------------------------------
+# Report
+#-----------------------------------------------------------------------
+sub flag { my ($f) = @_; return $mxcmd =~ /\s\Q$f\E\s*(\S+)/ ? $1 : '-' }
+sub mib { defined $_[0] ? sprintf('%d MiB', $_[0]) : 'unknown' }
+
+printf "Multiplexor %s\n", $sock;
+printf "  workers: %d running, %d busy now, -x %d; up %.1f days, %d activations\n",
+  $live_now, $busy_now, $max_now, $uptime / 86400, $acts;
+sub span { my $s = $_[0]; return $s >= 3600 ? sprintf('%.1f h', $s / 3600) : $s >= 60 ? sprintf('%d min', $s / 60) : sprintf('%d s', $s) }
+printf "  scans: %d in the last %s, %.3f/s, %.2f s each\n",
+  $scan->{msgs}, span($scan->{secs}), $rate, $S;
+for (sort keys %check) {
+  next unless $check{$_} && $check{$_}{msgs};
+  printf "  %s: %d in the last %s, %.0f ms each\n", $_, $check{$_}{msgs}, span($check{$_}{secs}), $check{$_}{ms};
+}
+push @notes, sprintf('the statistics cover only %s: run again after a day of traffic', span($scan->{secs}))
+  if $scan->{secs} < 6 * 3600;
+printf "Machine: %s CPUs, memory %s available of %s\n",
+  $ncpu // 'unknown', mib($mem_avail), mib($mem_total);
+printf "Workers: %d, RSS largest %.0f MiB, total %.0f MiB\n", scalar @workers, $rss_max, $rss_sum
+  if @workers;
+printf "CPU per scan: %s\n",
+  defined $cpu_per_scan ? sprintf('%.2f s (%s)', $cpu_per_scan, $cpu_how) : 'unknown';
+print "\n";
+printf "Demand (workers busy): average %.2f, peak %.1f\n  peak: %s\n", $avg_demand, $peak_demand, $peak_how;
+printf "CPU limit:    %s\n", defined $cpu_limit
+  ? sprintf('%d workers (%d CPUs x %.2f s per scan / %.2f CPU-s)', $cpu_limit, $ncpu, $S,
+            $cpu_per_scan // $S) : 'unknown';
+printf "Memory limit: %s\n", defined $mem_limit
+  ? sprintf('%d workers (%.0f%% of %d MiB available + %d MiB used by workers, / %.0f MiB each)',
+            $mem_limit, 100 * $opt{headroom}, $mem_avail, $rss_sum, $rss_max) : 'unknown';
+print "\n";
+
+printf "%-12s %-8s %s\n", 'Setting', 'Now', 'Suggested';
+printf "%-12s %-8s %d   cover the peak demand + 25%%%s\n", '-x', flag('-x'), $x,
+  (defined $limit && $x == $limit ? ', capped by the CPU/memory limit' : '');
+printf "%-12s %-8s %d   the average demand\n", '-m', flag('-m'), $m;
+printf "%-12s %-8s %d   requests that may wait for a busy worker\n", '-q', flag('-q'), $q;
+printf "%-12s %-8s %d  seconds a request may wait (4 x scan time, 30-120)\n", '-Q', flag('-Q'), $Q;
+{
+  # Keep the workers of recent bursts, and do not add workers when there
+  # is no room for two more
+  my $k = $rss_max > 0 ? sprintf('min_mem=%d', ceil(2 * $rss_max)) : '';
+  my ($now) = $mxcmd =~ /\s-k(?:\s+([^-\s]\S*=\S*))?(?:\s|$)/ ? ($1 // 'on') : ('off');
+  printf "%-12s %-8s %s   keep the workers of recent bursts%s\n", '-k', $now,
+    ($k ne '' ? $k : '(on)'), ($k ne '' ? ', with room for two more' : '');
+}
+print "\n";
+print "Also pass -q to mimedefang, so that new connections may queue as well.\n";
+print "\nNotes:\n", map { "  - $_\n" } @notes if @notes;
+
+__END__
+
+=head1 NAME
+
+mimedefang-tune - suggest mimedefang-multiplexor settings for this machine
+
+=head1 SYNOPSIS
+
+mimedefang-tune [--socket PATH] [--arrivals FILE] [--sample SECONDS]
+                [--cpu-per-scan SECONDS] [--headroom FRACTION] [--year YYYY]
+
+=head1 DESCRIPTION
+
+B<mimedefang-tune> reads the state of a running B<mimedefang-multiplexor>,
+the number of CPUs, the available memory and the size of the workers, and
+suggests values for B<-x>, B<-m>, B<-q>, B<-Q> and B<-k>, with the
+reasoning behind each one.  It changes nothing.  Run it as a user that can
+connect to the multiplexor socket, at a time when mail is flowing.
+
+The suggestion follows the section "CHOOSING THE NUMBER OF WORKERS" of
+mimedefang-multiplexor(8):
+
+=over 4
+
+=item Demand
+
+The average number of busy workers is the request rate times the time per
+request (Little's law), from the hourly statistics of the multiplexor
+(B<hload>), including B<filter_relay>, B<filter_sender> and
+B<filter_recipient> calls.  The peak comes from B<--arrivals>: the most
+messages that arrived within one scan time, at the 99.9th percentile.
+
+=item CPU limit
+
+CPUs times scan time divided by CPU time per scan: beyond that many busy
+workers, the CPUs are full and more workers only slow every message down.
+The CPU time per scan is measured by sampling the CPU time of the workers
+for B<--sample> seconds.
+
+=item Memory limit
+
+A fraction (B<--headroom>) of the available memory, plus what the workers
+already use, divided by the size of the largest worker.
+
+=back
+
+B<-x> covers the peak demand plus 25%, but not more than the lower limit.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<--socket> I<PATH>, B<-s> I<PATH>
+
+The multiplexor socket (default: the first of
+F</var/spool/MIMEDefang/mimedefang-multiplexor.sock>,
+F</var/spool/mimedefang/mimedefang-multiplexor.sock> and
+F</var/run/mimedefang/mimedefang-multiplexor.sock> that exists).
+
+=item B<--arrivals> I<FILE>, B<-a> I<FILE>
+
+A file with one line per incoming message, each starting with its
+timestamp: a syslog timestamp ("Nov  7 10:00:01"), ISO 8601
+("2026-11-07T10:00:01") or seconds since the epoch.  For example, with
+Postfix:
+
+  grep -h 'postfix/cleanup.*message-id=' /var/log/maillog | cut -c1-15 > arrivals.txt
+
+If the file covers at least a day and has more messages than the
+multiplexor scanned, the peaks are scaled down by the ratio.
+
+=item B<--sample> I<SECONDS>
+
+How long to sample the CPU time of the workers (default 60; 0 skips it).
+
+=item B<--cpu-per-scan> I<SECONDS>
+
+The CPU time a scan uses, instead of measuring it.
+
+=item B<--headroom> I<FRACTION>
+
+The share of the available memory that workers may use (default 0.8).
+
+=item B<--year> I<YYYY>
+
+The year of the first syslog timestamp in B<--arrivals> (default: this
+year).
+
+=back
+
+=head1 LIMITATIONS
+
+The CPU time of the workers is attributed to scans, although they also
+run the B<filter_relay>, B<filter_sender> and B<filter_recipient> checks;
+the CPU limit errs on the safe side.  CPU time spent in other daemons on
+behalf of the filter (a SpamAssassin B<spamd>, a virus scanner) is not
+counted, but it competes for the same CPUs.  Without B<--arrivals> the
+peak is a guess.
+
+=head1 SEE ALSO
+
+mimedefang-multiplexor(8), md-mx-ctrl(8)
+
+=cut
