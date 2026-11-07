@@ -330,6 +330,14 @@ sub add_mx_sample {
     $delta = $msgs if $delta < 0;    # multiplexor restarted
   }
   $self->{mx_prev_msgs} = $msgs;
+  # The autoscaler counts the checks where demand reached maxWorkers with
+  # requests waiting; note when that counter last grew.
+  my $as = ref $snap->{autoscale} eq 'HASH' ? $snap->{autoscale} : undef;
+  if ($as) {
+    $self->{as_saturated_at} = $t
+      if defined $self->{as_saturated} && $as->{saturated} > $self->{as_saturated};
+    $self->{as_saturated} = $as->{saturated};
+  }
   my $busy = $snap->{worker_states}{busy} // 0;
   my $queued = $snap->{queued} // 0;
   my $load = $snap->{load}{scan} || {};
@@ -878,6 +886,11 @@ sub alerts {
     if (($ws->{max} // 0) > 0 && ($ws->{busy} // 0) >= $ws->{max}) {
       push @a, { level => 'serious', text => "All $ws->{max} workers are busy" };
     }
+    if (defined $st->{as_saturated_at} && $now - $st->{as_saturated_at} < 600) {
+      push @a, { level => 'warning',
+                 text => sprintf('Demand reached the maximum of %d workers with requests waiting in the last %d min: consider raising -x',
+                                 $ws->{max} // 0, 10) };
+    }
   }
   if ($self->{feed_enabled}) {
     my $age = defined $st->{last_event} ? $now - $st->{last_event} : $now - $self->{started};
@@ -943,6 +956,26 @@ sub metrics {
     $metric->('mimedefang_scan_time_ms', 'gauge', 'Average milliseconds per request', @ams);
     $metric->('mimedefang_requests_per_second', 'gauge', 'Requests per second', @mps);
     $metric->('mimedefang_busy_workers_avg', 'gauge', 'Average busy workers while handling a request', @avg);
+    # Autoscaler (-k)
+    my $as = ref $mx->{autoscale} eq 'HASH' ? $mx->{autoscale} : undef;
+    if ($as) {
+      $metric->('mimedefang_autoscale_enabled', 'gauge', 'Whether adaptive autoscaling (-k) is enabled',
+                '', ($as->{enabled} ? 1 : 0));
+      $metric->('mimedefang_autoscale_demand', 'gauge', 'Demand for workers at the last autoscaler check',
+                '', $as->{demand});
+      $metric->('mimedefang_autoscale_window_peak', 'gauge', 'Highest demand for workers in the autoscaler window',
+                '', $as->{window_peak});
+      $metric->('mimedefang_autoscale_desired_workers', 'gauge', 'Pool size the last autoscaler check called for',
+                '', $as->{desired});
+      $metric->('mimedefang_autoscale_workers_started_total', 'counter', 'Workers started while autoscaling',
+                '', $as->{started});
+      $metric->('mimedefang_autoscale_workers_stopped_total', 'counter', 'Workers stopped by the autoscaler',
+                '', $as->{stopped});
+      $metric->('mimedefang_autoscale_saturated_checks_total', 'counter',
+                'Autoscaler checks where demand reached maxWorkers with requests waiting', '', $as->{saturated});
+      $metric->('mimedefang_autoscale_blocked_checks_total', 'counter',
+                'Autoscaler checks where the resource guard prevented a scale-out', '', $as->{blocked});
+    }
   }
   return join("\n", @o) . "\n";
 }
@@ -1511,7 +1544,10 @@ Counters, source health and alerts.
 =item F</api/workers>
 
 The last multiplexor snapshot: worker list with status tags, load,
-histogram and autoscale state.
+histogram and autoscale state (see B<jsonautoscale> in md-mx-ctrl(8)).
+When the autoscaler reports that the demand reached the maximum number of
+workers with requests waiting, an alert suggests raising B<-x> for the
+next 10 minutes.
 
 =item F</api/series?range=1h|6h|24h|7d|30d>
 
@@ -1540,7 +1576,9 @@ Download events or series.
 
 =item F</metrics>
 
-Prometheus text format.
+Prometheus text format.  The B<mimedefang_autoscale_*> metrics give the demand at
+the last check and the highest in the window, the pool size called for, and counters of workers started and
+stopped and of saturated and blocked checks.
 
 =back
 
@@ -2157,7 +2195,7 @@ V4BDgUx0DUW5kUDO1v8HW58Piu5OtQIAAAAASUVORK5CYII=
           <div class="tablewrap"><table class="num" id="wk-hload"></table></div>
         </div>
         <div class="card">
-          <div class="card-h"><div class="card-t"><h2>Busy workers per request</h2><button class="info" type="button" aria-label="About this card" data-info="How many workers were busy when each request was handled, since the multiplexor started, followed by the autoscaling settings and the current busy ratio.">i</button></div></div>
+          <div class="card-h"><div class="card-t"><h2>Busy workers per request</h2><button class="info" type="button" aria-label="About this card" data-info="How many workers were busy when each request was handled, since the multiplexor started, followed by the autoscaling settings and state: the demand for workers (busy workers plus waiting or refused requests) at the last check and the highest in the window, the pool size it calls for, the workers started and stopped, and how often the pool was saturated (demand at the maximum with requests waiting: raise -x) or a scale-out was blocked by the max_load / min_mem guard.">i</button></div></div>
           <div class="chart sm" id="wk-histo"></div>
           <div class="kv" id="wk-autoscale"></div>
         </div>
@@ -2386,6 +2424,7 @@ table.log tr.new td { animation: flash 1.2s ease-out; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 12.5px; margin-top: 12px; }
 .kv dt { color: var(--ink2); }
 .kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+.kv dd.warn { color: var(--critical); font-weight: 600; }
 
 @media (max-width: 1100px) { .grid3 { grid-template-columns: 1fr; } }
 @media (max-width: 860px) {
@@ -3022,8 +3061,13 @@ table.log tr.new td { animation: flash 1.2s ease-out; }
     as.replaceChildren();
     if (d.autoscale) {
       const a = d.autoscale;
-      const kv = [['Autoscaling', a.enabled ? 'enabled' : 'disabled'], ['Busy ratio (EMA)', num(a.ema_busy, 2)], ['Scale out / in at', num(a.scale_out, 2) + ' / ' + num(a.scale_in, 2)], ['Cooldown out / in', a.out_cool + ' / ' + a.in_cool], ['Interval', a.interval + ' s']];
-      for (const [k, v] of kv) as.append(h('dt', { text: k }), h('dd', { text: v }));
+      const kv = [['Autoscaling', a.enabled ? 'enabled' : 'disabled'], ['Demand (last check)', num(a.demand) + ' workers'], ['Highest demand in window', num(a.window_peak) + ' workers']];
+      if (a.enabled) kv.push(['Pool size called for', num(a.desired)]);
+      kv.push(['Window', a.window + ' s'], ['Interval', a.interval + ' s']);
+      if (a.spare) kv.push(['Spare workers', num(a.spare)]);
+      kv.push(['Workers started / stopped', num(a.started) + ' / ' + num(a.stopped)], ['Checks saturated', num(a.saturated), a.saturated > 0]);
+      if (a.max_load > 0 || a.min_mem > 0) kv.push(['Checks blocked by guard', num(a.blocked), a.blocked > 0]);
+      for (const [k, v, warn] of kv) as.append(h('dt', { text: k }), h('dd', { text: v, class: warn ? 'warn' : null }));
     }
   }
 

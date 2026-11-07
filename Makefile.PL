@@ -400,6 +400,10 @@ my $INSTALL_DATA = $Config{install_data} // 'install';
 my $HAVE_CLOCK_MONOTONIC = probe_clock_monotonic();
 print "\nclock_gettime(CLOCK_MONOTONIC): " . ($HAVE_CLOCK_MONOTONIC ? 'yes' : 'no') . "\n";
 
+# --- getloadavg probe (autoscaler resource guard) ---------------------------
+my $HAVE_GETLOADAVG = probe_getloadavg();
+print "getloadavg: " . ($HAVE_GETLOADAVG ? 'yes' : 'no') . "\n";
+
 # --- inet_ntop probe --------------------------------------------------------
 my $HAVE_INET_NTOP = probe_inet_ntop();
 print "inet_ntop             : " . ($HAVE_INET_NTOP ? 'yes' : 'no') . "\n";
@@ -461,6 +465,7 @@ write_config_h(
     VERSION           => $FULL_VERSION,
     MIMEDEFANG_PL     => $MIMEDEFANG_PL,
     HAVE_CLOCK_MONOTONIC => $HAVE_CLOCK_MONOTONIC,
+    HAVE_GETLOADAVG   => $HAVE_GETLOADAVG,
     HAVE_INET_NTOP    => $HAVE_INET_NTOP,
     HAVE_SOCKLEN_T    => $HAVE_SOCKLEN_T,
     HAVE_MILTER       => $HAVE_MILTER,
@@ -689,6 +694,7 @@ MAKE
         my @mux_obj_list = qw(
             mimedefang-multiplexor.o
             drop_privs.o
+            autoscale.o
             dynbuf.o
             json_out.o
             event.o
@@ -1200,6 +1206,28 @@ C
     return $rc ? 1 : 0;
 }
 
+sub probe_getloadavg {
+    my $tmpdir = File::Spec->tmpdir();
+    my $src    = File::Spec->catfile($tmpdir, "conftest_$$.c");
+    my $exe    = File::Spec->catfile($tmpdir, "conftest_$$");
+
+    open my $fh, '>', $src or return 0;
+    print $fh <<'C';
+#include <stdlib.h>
+#ifdef __sun
+#include <sys/loadavg.h>
+#endif
+int main(void) {
+    double l[1];
+    return getloadavg(l, 1) == 1 ? 0 : 0;
+}
+C
+    close $fh;
+    my $rc = system("$CC -D_DEFAULT_SOURCE -o $exe $src 2>/dev/null") == 0;
+    unlink $src, $exe;
+    return $rc ? 1 : 0;
+}
+
 sub probe_inet_ntop {
     my $tmpdir = File::Spec->tmpdir();
     my $src    = File::Spec->catfile($tmpdir, "conftest_inet_$$.c");
@@ -1330,6 +1358,7 @@ sub write_config_h {
     print $fh "#ifndef HAVE_CLOCK_MONOTONIC\n#define HAVE_CLOCK_MONOTONIC\n#endif\n" if $v{HAVE_CLOCK_MONOTONIC};
     print $fh '#define MIMEDEFANG_PL     "' . $v{MIMEDEFANG_PL} . "\"\n";
     print $fh "#define HAVE_UNISTD_H 1\n";
+    print $fh "#define HAVE_GETLOADAVG 1\n"    if $v{HAVE_GETLOADAVG};
     print $fh "#ifndef HAVE_INET_NTOP\n#define HAVE_INET_NTOP\n#endif\n"   if $v{HAVE_INET_NTOP};
     print $fh "#define HAVE_SOCKLEN_T\n"       if not $v{HAVE_SOCKLEN_T};
     print $fh "#define HAVE_MILTER\n"           if $v{HAVE_MILTER};

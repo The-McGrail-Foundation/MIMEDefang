@@ -1,4 +1,6 @@
 Changelog
+autoscale.c
+autoscale.h
 config.h.in
 configure
 configure.ac
@@ -42,6 +44,7 @@ contrib/linuxorg/spam-trusted-hosts
 contrib/ml-benchmark/gliclass-train
 contrib/ml-benchmark/mimedefang-filter
 contrib/ml-benchmark/ml-benchmark
+contrib/mimedefang-tune/mimedefang-tune
 contrib/munin/mimedefang_munin_plugin
 contrib/README.md
 contrib/word-to-html
@@ -212,6 +215,7 @@ t/sender.t
 t/smtp.t
 t/spf.t
 t/test_safe_append_header.c
+t/test_autoscale.c
 t/test_json_out.c
 t/test_pidfile.c
 t/test_sanitize_header.c

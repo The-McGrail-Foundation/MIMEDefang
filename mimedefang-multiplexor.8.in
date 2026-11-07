@@ -39,7 +39,8 @@ default is zero.
 .B \-x \fImaxWorkers\fR
 The maximum number of Perl processes to run simultaneously.  If a
 request comes in and all processes are busy, a temporary failure
-is signalled to the SMTP peer.  The default is 2.
+is signalled to the SMTP peer.  The default is 2.  See the section
+"CHOOSING THE NUMBER OF WORKERS".
 
 .TP
 .B \-r \fImaxRequests\fR
@@ -347,32 +348,101 @@ Sets the tag used in the multiplexor's syslog messages to
 \fIlabel\fR instead of \fBmimedefang-multiplexor\fR.
 
 .TP
-\fB\-k\fR
+\fB\-k\fR [\fIkey=value\fR[,\fIkey=value\fR...]]
 Enable adaptive autoscaling of the worker pool.  When this option is
-supplied, \fBmimedefang-multiplexor\fR periodically computes an
-exponential moving average (EMA) of the busy-worker ratio and
-automatically starts or stops workers to match demand:
+supplied, \fBmimedefang-multiplexor\fR periodically measures the demand
+for workers and keeps the pool sized for the highest demand seen
+recently.
 
 .RS
 .PP
-If the EMA busy ratio exceeds 80%, an additional worker is activated
-(up to \fImaxWorkers\fR, as set by \fB\-x\fR).
+At each check (every 15 seconds by default) the demand is the highest
+number of busy workers seen since the previous check, plus the requests
+that had to wait in the queue (\fB\-q\fR) or were refused because no worker
+was available.  Using the peak rather than a snapshot means that a burst
+that starts and ends between two checks is not missed.
 
 .PP
-If the EMA busy ratio falls below 30%, an excess worker is killed
-(down to \fIminWorkers\fR, as set by \fB\-m\fR).
+The pool is sized for the highest demand of the last 10 minutes (the
+\fBwindow\fR key, see below), plus an optional headroom of idle workers
+(the \fBspare\fR key), never below \fIminWorkers\fR (\fB\-m\fR) nor above
+\fImaxWorkers\fR (\fB\-x\fR).  If fewer workers are running, workers are
+started, as many seconds apart as set by \fB\-w\fR (or by \fB\-W\fR, if
+that is longer); if more are running, the surplus idle workers are
+stopped.  The idle timeout (\fB\-i\fR) does not stop workers below that
+size either.
+
+.PP
+A worker is started anyway when a request arrives and no worker is free,
+so the pool always follows a rise in demand.  What the autoscaler adds is
+memory: workers that the load has needed in the window are kept, instead
+of being stopped by the idle timeout and started again, at the cost of a
+new Perl process, at the next burst.  Because the pool kept is the demand
+actually seen, not \fImaxWorkers\fR, it shrinks again once the burst has
+left the window.
 .RE
 
 .PP
-The check is performed every 15 seconds.  To avoid thrashing, a
-scale-out event cannot occur within 5 seconds of the previous
-scale-out, and a scale-in event cannot occur within 30 seconds of the
-previous scale-out or scale-in.
+If the demand reaches \fImaxWorkers\fR while requests are waiting or
+refused, a warning is logged (at most once a minute): the pool cannot grow
+further and \fB\-x\fR should probably be raised, unless the CPUs or the
+memory are already exhausted (see "CHOOSING THE NUMBER OF WORKERS").
 
 .PP
-The current autoscaling state (enabled flag, EMA value, and all
-thresholds) can be inspected at any time with the \fBautoscale\fR
-command via \fBmd-mx-ctrl\fR(8).
+The current autoscaling state can be inspected at any time with the
+\fBautoscale\fR command via \fBmd-mx-ctrl\fR(8).
+
+.PP
+The autoscaler is tuned by the word that follows \fB\-k\fR, if it is a
+comma-separated list of \fIkey=value\fR pairs (it must be a separate
+argument: \fB\-k window=900\fR).  Only the keys that are named are
+changed; the others keep their default values.  The following keys are
+understood:
+
+.RS
+.TP
+.B window
+Keep as many workers as the highest demand of this many seconds
+(0-86400, default 600).  A longer window starts fewer workers when bursts
+come close together and keeps more memory in use between them; 0 sizes the
+pool for the last check only.
+.TP
+.B spare
+Number of idle workers to keep as headroom above the demand (0-1024,
+default 0).  Spare workers are started ahead of demand, so a burst of mail
+does not have to wait for new Perl processes to start.  Useful when
+starting a worker is slow, for instance because the filter loads
+SpamAssassin.
+.TP
+.B interval
+Seconds between autoscale checks (1-3600, default 15).  \fBwindow\fR
+divided by \fBinterval\fR may not exceed 8192.
+.TP
+.B max_load
+Do not start workers on behalf of the autoscaler while the one-minute load
+average is above this value (default 0, which turns the check off).
+.TP
+.B min_mem
+Do not start workers on behalf of the autoscaler while less than this many
+MiB of memory are available (default 0, off).  On Linux the available
+memory is \fIMemAvailable\fR from \fI/proc/meminfo\fR; on FreeBSD,
+DragonFly BSD, OpenBSD and NetBSD it is the free plus the inactive memory.
+.RE
+
+.IP
+The load average is read with \fBgetloadavg\fR(3).  If \fBmax_load\fR or
+\fBmin_mem\fR is set on a system where the load or the available memory
+cannot be read, the multiplexor refuses to start.  Both limits only restrict
+the autoscaler: a worker that is needed to handle a request is still started, and
+scaling in is never blocked.  A blocked scale-out is logged at most once a
+minute.
+
+.IP
+A worker is never stopped by the autoscaler until it has been running for
+60 seconds; among the eligible idle workers, the one that has handled the
+most requests is stopped first.  For example, \fB\-k window=1800,spare=2\fR
+keeps the workers needed in the last half hour, plus two idle ones.  The
+multiplexor refuses to start if the specification is invalid.
 
 .TP
 \fB\-G\fR
@@ -458,6 +528,61 @@ specified number of workers for connections from the loopback address.  Using
 the \fB\-R\fR option has the side-effect of permitting new connections
 from the loopback address to queue.
 
+.SH CHOOSING THE NUMBER OF WORKERS
+
+The \fB\-x\fR option is the real limit on how much work runs at once; the
+autoscaler (\fB\-k\fR) only decides how much of that limit is kept
+running.  More workers help only while there is something for them to
+use: a worker that waits on DNS, on a network check or on a daemon such as
+a virus scanner uses little CPU, but a worker that computes (for example
+one that runs SpamAssassin rules) competes with the others for the CPUs.
+Once every CPU is busy, another worker does not handle more mail: it slows
+down the ones already running, and starting it costs CPU as well.  Three
+numbers bound a sensible value of \fB\-x\fR:
+
+.TP
+.B Demand
+The number of workers busy at a time is, on average, the rate of requests
+times the time a request takes (Little's law).  For example, 2 messages
+per second that take 4 seconds each keep 8 workers busy.  Bursts need more
+than the average; \fBmd-mx-ctrl load\fR shows the request rate, the
+time per request and the busy workers over several periods.
+
+.TP
+.B CPU
+If a scan takes \fIS\fR seconds of wall time, of which \fIC\fR seconds
+are CPU time, the CPUs are full at about \fIN\fR \(mu \fIS\fR / \fIC\fR
+workers busy at once, where \fIN\fR is the number of CPUs.  For example,
+8 CPUs and scans of 4 seconds that use 1 second of CPU are full at about
+32 workers.  \fIC\fR can be measured as the CPU time of the workers, as
+shown by \fBps\fR(1), divided by the number of scans they handled.  A
+filter that mostly waits has a small \fIC\fR and a high limit.
+
+.TP
+.B Memory
+Each worker is a full Perl process: the available memory divided by the
+resident size of a worker (the RSS column of \fBps\fR(1)), after leaving
+room for the MTA, the scanners and the system, is the most workers that
+fit without swapping.  For example, 2 GiB left for workers of 66 MiB each
+allow about 30.
+
+.PP
+Set \fB\-x\fR to cover the demand at peak times, but not above the
+smaller of the CPU and memory limits: beyond them, more workers make every
+message slower and may drive the machine into swap.  If the demand at
+peak times is above those limits, the machine is too small for the
+load, and more workers do not help; queueing does.  Use \fB\-q\fR and
+\fB\-Q\fR so that a short burst waits for a busy worker instead of being
+refused (see "QUEUEING REQUESTS"), and let the MTA retry what does not
+fit.  The \fBmax_load\fR and \fBmin_mem\fR keys of \fB\-k\fR keep the
+autoscaler from adding workers to an overloaded machine, but they do not
+replace a correct \fB\-x\fR: a worker needed for a request is started
+anyway.
+
+The script \fIcontrib/mimedefang-tune\fR in the MIMEDefang sources
+measures these numbers on a running system and suggests values for
+\fB\-x\fR, \fB\-m\fR, \fB\-q\fR and \fB\-Q\fR.
+
 .SH EMBEDDING PERL
 
 Normally, when \fBmimedefang-multiplexor\fR activates a worker, it forks
@@ -529,6 +654,17 @@ A worker process has begun filtering an e-mail message.
 .TP
 .B EndFilter
 A worker process has finished filtering an e-mail message.
+
+.TP
+.B Autoscale
+The autoscaler (\fB\-k\fR) started or stopped workers, was blocked by the
+resource guard, or found the pool saturated.  The \fBworker\fR key is -1.
+It carries \fBaction\fR (\fBout\fR, \fBin\fR or \fBhold\fR),
+\fBcount\fR, \fBdemand\fR (the demand at this check, in workers),
+\fBwindow_peak\fR (the highest demand in the window), \fBdesired\fR (the
+pool size it calls for), \fBblocked\fR (\fBnone\fR, \fBload\fR or \fBmem\fR) and
+\fBsaturated\fR (0 or 1).  The workers themselves are reported by
+the usual \fBStartWorker\fR and \fBKillWorker\fR events.
 
 .PP
 The possible keys in the key=value pairs are:

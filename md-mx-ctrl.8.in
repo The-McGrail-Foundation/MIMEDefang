@@ -78,13 +78,20 @@ output is a single line of key=value pairs:
 
 \fBenabled\fR is 1 if autoscaling is active, 0 otherwise.
 \fBinterval\fR is the number of seconds between autoscale checks.
-\fBema_busy\fR is the current exponential moving average of the
-busy-worker ratio.
-\fBscale_out\fR and \fBscale_in\fR are the EMA thresholds above/below
-which a worker is added or removed, respectively.
-\fBout_cool\fR and \fBin_cool\fR are the cooldown periods (in seconds)
-that must elapse before another scale-out or scale-in event may occur.
-\fBema_alpha\fR is the smoothing factor used to compute the EMA.
+\fBwindow\fR, \fBspare\fR, \fBmin_age\fR, \fBmax_load\fR and \fBmin_mem\fR
+are the corresponding settings of \fBmimedefang-multiplexor\fR(8) (see
+\fB\-k\fR there).
+\fBdemand\fR is the demand measured at the last check (busy workers plus
+queued and refused requests), \fBwindow_peak\fR the highest demand in the
+window, and \fBdesired\fR the pool size the last check called for.
+\fBlast_out_ago\fR and \fBlast_in_ago\fR are the number of seconds since
+the last worker was started or stopped (-1 if it never happened).
+\fBstarted\fR and \fBstopped\fR count the workers started (for any reason)
+and stopped by the autoscaler since the multiplexor started.
+\fBblocked\fR is the number of checks where the resource guard prevented
+a scale-out, and \fBsaturated\fR the number of checks where the demand had
+reached \fImaxWorkers\fR with requests waiting or refused: if it keeps
+growing, \fB\-x\fR is too low.
 
 Autoscaling is enabled with the \fB\-k\fR option of
 \fBmimedefang-multiplexor\fR(8).

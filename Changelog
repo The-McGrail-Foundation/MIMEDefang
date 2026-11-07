@@ -2,6 +2,38 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2026-11-07 Giovanni Bechis <g.bechis@snb.it>
+
+        * mimedefang-multiplexor: the adaptive autoscaler (`-k`) keeps the
+          pool sized for the highest demand of the last 10 minutes, instead
+          of following an average of the busy ratio, so the workers needed
+          by recent bursts are not stopped and started again.  It can be
+          tuned with `-k key=value,...` (`window`, `spare`, `interval`)
+          and kept from adding workers to an overloaded machine
+          (`max_load`, `min_mem`).
+
+        * mimedefang-multiplexor(8) explains how to choose `-x`, and
+          `contrib/mimedefang-tune` suggests `-x`, `-m`, `-q`, `-Q` and `-k`
+          settings for a running system.
+
+2026-11-07 Giovanni Bechis <g.bechis@snb.it>
+
+        * Mail::SpamAssassin is never loaded when the filter sets
+          `$Features{"SpamAssassin"} = 0`.
+
+2026-11-07 Giovanni Bechis <g.bechis@snb.it>
+
+        * Mail::MIMEDefang::Net: DNS lookups go through a per-worker
+          shared resolver (`md_shared_resolver`) and a new
+          `md_dns_query` wrapper, which caches definitive answers for
+          their TTL (at most 5 minutes, NXDOMAIN/NODATA for 1 minute);
+          SERVFAIL and timeouts are never cached.
+          Mail::MIMEDefang::Net: DNS blocklist answers are never cached.
+        * Mail::MIMEDefang::Mail: IO::Socket::SSL is loaded only when
+          `md_check_against_smtp_server` is first called, saving about
+          8 MB per worker; the function returns TEMPFAIL if the module
+          is not available.
+
 2026-11-06 Giovanni Bechis <g.bechis@snb.it>
 
         * md_graphdefang_log, md_graphdefang_log_array: `$per_message = 2`

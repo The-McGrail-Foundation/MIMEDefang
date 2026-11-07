@@ -189,6 +189,26 @@ sub t_store_mx_and_state : Test(7)
   ok(!$st2->from_state({ version => 999 }), 'unknown state version is ignored');
 }
 
+sub t_autoscale_saturation_alert : Test(4)
+{
+  my $st = MDDash::Store->new(now => 0);
+  my $app = bless { store => $st, mx_enabled => 1, feed_enabled => 0, opt => {} }, 'MDDash::App';
+  my $snap = sub {
+    my ($sat) = @_;
+    return { msgs => 0, worker_states => { max => 4, busy => 1 },
+             autoscale => { enabled => 1, window => 600, demand => 2, saturated => $sat } };
+  };
+  my $sat_alert = sub { scalar grep { $_->{text} =~ /raising -x/ } @{ $app->alerts($_[0]) } };
+
+  $st->add_mx_sample($snap->(3), 1000);
+  is($sat_alert->(1000), 0, 'no saturation alert from the first sample');
+  $st->add_mx_sample($snap->(3), 1010);
+  is($sat_alert->(1010), 0, 'no alert while the counter does not grow');
+  $st->add_mx_sample($snap->(4), 1020);
+  is($sat_alert->(1020), 1, 'alert when the saturated counter grows');
+  is($sat_alert->(1020 + 600), 0, 'the alert expires after 10 minutes');
+}
+
 sub t_store_default_colors : Test(4)
 {
   my $st = MDDash::Store->new(pinned => [qw(mail_out spam mail_in)], now => 0);
@@ -270,13 +290,15 @@ sub _http_get {
   return ($code // 0, $body // '', $head // '');
 }
 
-sub t_http_end_to_end : Test(17)
+sub t_http_end_to_end : Test(20)
 {
   my $dir = short_tempdir();
   my $snapshot = '{"version":"x","time":1,"uptime":5,"msgs":3,"activations":1,"queue_size":0,"queued":0,'
                . '"worker_states":{"max":2,"min":1,"busy":1,"idle":1,"stopped":0,"killed":0},'
                . '"load":{"scan":{"msgs_0":1,"ams_0":12.5,"msgs_1":1,"ams_1":12.5,"msgs_10":1}},'
-               . '"histo":[1,0],"workers":[{"id":0,"state":"busy","pid":10,"status_tag":"filter_begin"}]}' . "\n";
+               . '"histo":[1,0],"workers":[{"id":0,"state":"busy","pid":10,"status_tag":"filter_begin"}],'
+               . '"autoscale":{"enabled":true,"window":600,"demand":2,"window_peak":3,"desired":3,"started":7,"stopped":5,'
+               . '"saturated":0,"blocked":0,"max_load":0,"min_mem":0}}' . "\n";
   my $mx = _fake_mx("$dir/mx.sock", jsonsnapshot => $snapshot);
 
   # Pick a free port
@@ -321,6 +343,9 @@ sub t_http_end_to_end : Test(17)
 
   ($code, $body) = _http_get($port, '/metrics');
   like($body, qr/^mimedefang_events_total\{event="spam"\} 1$/m, '/metrics counts events');
+  like($body, qr/^mimedefang_autoscale_demand 2$/m, '/metrics reports the autoscaler demand');
+  like($body, qr/^mimedefang_autoscale_window_peak 3$/m, '/metrics reports the window peak');
+  like($body, qr/^mimedefang_autoscale_workers_started_total 7$/m, '/metrics reports autoscaler counters');
 
   my $head;
   ($code, $body, $head) = _http_get($port, '/');
