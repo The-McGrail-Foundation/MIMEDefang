@@ -22,6 +22,8 @@ echo ">>> rpmbuild -bb..."
 rpmbuild -bb redhat/mimedefang.spec 1>/dev/null 2>&1 || { echo "rpmbuild FAILED"; exit 1; }
 echo ">>> dnf install..."
 dnf -y install ~/rpmbuild/RPMS/x86_64/mimedefang-* || { echo "dnf install FAILED"; exit 1; }
+# HTTPS support for LWP (needed by the MTA-STS live tests)
+dnf install -y perl-LWP-Protocol-https 1>/dev/null 2>&1 || true
 
 cp t/data/mimedefang-test-filter /etc/mail/mimedefang-filter
 
@@ -75,6 +77,9 @@ echo "Starting mimedefang..."
 /usr/bin/mimedefang -D -m /var/spool/MIMEDefang/mimedefang-multiplexor.sock \
     -U defang -q -p inet:10997 \
     >/var/log/mimedefang-milter.log 2>&1 &
+
+# Build /etc/aliases.db, without it local recipients get "Temporary lookup failure"
+newaliases
 
 echo "Starting postfix..."
 /usr/sbin/postfix start

@@ -156,8 +156,8 @@ sub t_mta_sts_live : Test(3)
         if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
             skip "Net test disabled", 3;
         }
-        eval { require LWP::UserAgent; 1 }
-            or skip "LWP::UserAgent not available", 3;
+        eval { require LWP::UserAgent; require LWP::Protocol::https; 1 }
+            or skip "LWP::Protocol::https not available", 3;
 
         # gmail.com publishes MTA-STS
         my $res = md_check_mta_sts('gmail.com');

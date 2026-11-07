@@ -15,12 +15,35 @@ sub _mx_sock {
 	return $ENV{'MX_SOCK'} // '/var/spool/MIMEDefang/mimedefang-multiplexor.sock';
 }
 
+my $FILTER = '/etc/mail/mimedefang-filter';
+my $BACKUP = "$FILTER.smtp-t.bak";
+
 # Install a filter file and tell the multiplexor to reload it.
+# The current filter is saved once, so _restore_filter can put it back.
 # Returns true on success.
 sub _install_filter {
 	my ($src) = @_;
-	copy($src, '/etc/mail/mimedefang-filter') or do {
-		diag("Cannot copy $src to /etc/mail/mimedefang-filter: $!");
+	if (! -e $BACKUP) {
+		copy($FILTER, $BACKUP) or do {
+			diag("Cannot back up $FILTER to $BACKUP: $!");
+			return 0;
+		};
+	}
+	return _load_filter($src);
+}
+
+# Put back the filter saved by _install_filter.
+sub _restore_filter {
+	return 0 unless -e $BACKUP;
+	_load_filter($BACKUP) or return 0;
+	unlink $BACKUP;
+	return 1;
+}
+
+sub _load_filter {
+	my ($src) = @_;
+	copy($src, $FILTER) or do {
+		diag("Cannot copy $src to $FILTER: $!");
 		return 0;
 	};
 	my $sock = _mx_sock();
@@ -81,7 +104,7 @@ sub t3_smtp_async_basic : Test(2)
 		my $ret = Mail::MIMEDefang::Unit::smtp_mail('defang', 'defang', 't/data/multipart.eml');
 		unlike($ret, qr/[45]\.\d+\.\d+ /, 'async filter: clean message accepted');
 
-		pass("async filter: original filter restored");
+		ok(-e $BACKUP, "async filter: original filter saved");
 	};
 }
 
@@ -93,7 +116,7 @@ sub t4_smtp_async_gtube : Test(2)
 		my $ret = Mail::MIMEDefang::Unit::smtp_mail('defang', 'defang', 't/data/gtube.eml');
 		like($ret, qr/[45]\.\d+\.\d+ /, 'async filter: GTUBE rejected or tempfailed');
 
-		pass("async filter: original filter restored after gtube test");
+		ok(_restore_filter(), "async filter: original filter restored after gtube test");
 	};
 }
 
