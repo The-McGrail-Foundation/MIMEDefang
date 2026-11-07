@@ -708,7 +708,9 @@ like SpamAssassin, rbl checks, zip file listing and HTML parsing.
 # $Features{"AutoDetectPerlModules"} = 0;
 
 sub detect_and_load_perl_modules() {
-    my ($use_sa, $use_html, $use_zip, $use_dns);
+    # Start from 0, so that a feature disabled by the filter stays 0
+    # (and is not loaded) when this function is called again
+    my ($use_sa, $use_html, $use_zip, $use_dns) = (0, 0, 0, 0);
     local $@;
     if (!defined($Features{"AutoDetectPerlModules"}) or
       $Features{"AutoDetectPerlModules"}) {

@@ -773,7 +773,11 @@ detect_and_load_perl_modules() function has been called.  The defined
 features are:
 
 $Features{"SpamAssassin"} is 1 if SpamAssassin 1.6 or better is installed;
-0 otherwise.
+0 otherwise.  Mail::SpamAssassin is loaded by every worker when it starts.
+If your filter does not use SpamAssassin, set $Features{"SpamAssassin"} to 0 in your filter file,
+before any call to detect_and_load_perl_modules(), so that it is not loaded.  In the same way, setting $Features{"Archive::Zip"}
+to 0 saves more memory per worker if you do not use
+\fBre_match_in_zip_directory\fR.
 
 $Features{"HTML::Parser"} is 1 if HTML::Parser is installed; 0 otherwise.
 

@@ -23,8 +23,6 @@ package Mail::MIMEDefang::Mail;
 use strict;
 use warnings;
 
-use IO::Socket::SSL;
-
 use Mail::MIMEDefang;
 use Mail::MIMEDefang::MIME;
 use Mail::MIMEDefang::Utils;
@@ -404,6 +402,23 @@ The method returns:
 
 =cut
 
+# Loads IO::Socket::SSL the first time it is needed.  Returns true if
+# it is available; a load failure is logged only once.
+my $IOSocketSSLLoaded;
+sub _load_io_socket_ssl {
+  return $IOSocketSSLLoaded if defined($IOSocketSSLLoaded);
+  local $@;
+  if (eval { require IO::Socket::SSL; 1 }) {
+    $IOSocketSSLLoaded = 1;
+  } else {
+    my $err = $@;
+    $err =~ s/\s+\z//;
+    md_syslog('err', "Cannot load Perl module IO::Socket::SSL: $err");
+    $IOSocketSSLLoaded = 0;
+  }
+  return $IOSocketSSLLoaded;
+}
+
 #***********************************************************************
 # %PROCEDURE: md_check_against_smtp_server
 # %ARGUMENTS:
@@ -435,6 +450,12 @@ sub md_check_against_smtp_server {
     $recip = "<$recip>";
   }
 
+  # IO::Socket::SSL is big, so it is only loaded by the workers
+  # that get here
+  unless (_load_io_socket_ssl()) {
+    return ('TEMPFAIL', "md_check_against_smtp_server: Perl module IO::Socket::SSL is not available");
+  }
+
   # Set SSL_startHandshake to start in plain mode,
   # SSL_verify_mode to SSL_VERIFY_NONE to make the check work
   # with self-signed certificates and SSL_hostname for SNI
@@ -442,7 +463,7 @@ sub md_check_against_smtp_server {
   my $plaintext = 0;
   $sock = IO::Socket::SSL->new(PeerAddr => $server,
            SSL_startHandshake => 0,
-           SSL_verify_mode => SSL_VERIFY_NONE,
+           SSL_verify_mode => IO::Socket::SSL::SSL_VERIFY_NONE(),
            SSL_hostname => "$server",
            SSL_version => 'SSLv23',
            SSL_cipher_list => 'ALL',
