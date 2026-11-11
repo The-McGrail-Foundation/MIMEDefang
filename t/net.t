@@ -75,16 +75,34 @@ sub t_reverse_ip : Test(2)
   is(reverse_ip_address_for_rbl($ipv6), 'e.4.6.a.9.3.b.f.b.d.4.3.1.2.1.1.0.0.0.0.0.0.0.0.0.0.0.0.0.8.e.f');
 }
 
-sub t_get_ptr_record : Test(1)
+sub t_get_ptr_record : Test(2)
 {
   my $ipv4 = '1.1.1.1';
+  my $ipv6 = '2606:4700:4700::1111';
 
   SKIP: {
     if ( (not defined $ENV{'NET_TEST'}) or ($ENV{'NET_TEST'} ne 'yes' )) {
-      skip "Net test disabled", 1
+      skip "Net test disabled", 2
     }
     is(Mail::MIMEDefang::Net::get_ptr_record($ipv4), 'one.one.one.one');
+    is(Mail::MIMEDefang::Net::get_ptr_record($ipv6), 'one.one.one.one');
   }
+}
+
+sub t_get_ptr_record_ipv6_zone : Test(2)
+{
+  my @asked;
+  md_dns_cache_clear();
+  no warnings 'redefine';
+  local *Net::DNS::Resolver::Base::send = sub {
+    my (undef, $name, $type) = @_;
+    push(@asked, $name);
+    return _fake_reply($name, $type, 'NOERROR', "$name. 300 IN PTR host.example.org.");
+  };
+  is(Mail::MIMEDefang::Net::get_ptr_record('2001:db8::1'), 'host.example.org');
+  is($asked[0], '1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa',
+     'IPv6 PTR lookups go to ip6.arpa');
+  md_dns_cache_clear();
 }
 
 sub t_relay_is_blacklisted_multi : Test(1)
@@ -321,6 +339,42 @@ sub t_rbl_multi_uses_md_dns_query : Test(3)
   is($ans->{'rbl.example.org'}, 'SERVFAIL', 'no answer within the timeout');
   is(scalar(@resolvers), 1, 'one bgsend per blocklist');
   is($resolvers[0], md_shared_resolver(), 'the shared resolver is used');
+}
+
+# Fake zone for the MX tests: name/type => list of RRs
+my %MX_ZONE = (
+  'mx.example.org MX'      => ['mx.example.org. 300 IN MX 10 mail.example.org.',
+                               'mx.example.org. 300 IN MX 20 mail6.example.org.'],
+  'mail.example.org A'     => ['mail.example.org. 300 IN A 192.0.2.10'],
+  'mail.example.org AAAA'  => ['mail.example.org. 300 IN AAAA 2001:4860:0:0::10'],
+  'mail6.example.org AAAA' => ['mail6.example.org. 300 IN AAAA fe80::1'],
+  'nomx.example.org A'     => ['nomx.example.org. 300 IN A 10.0.0.1'],
+  'nomx.example.org AAAA'  => ['nomx.example.org. 300 IN AAAA 2001:4860::20'],
+);
+
+sub _fake_mx_send
+{
+  my (undef, $name, $type) = @_;
+  $name =~ s/\.$//;
+  my $rrs = $MX_ZONE{"$name $type"} // [];
+  return _fake_reply($name, $type, 'NOERROR', @$rrs);
+}
+
+sub t_get_mx_ip_addresses_ipv6 : Test(3)
+{
+  md_dns_cache_clear();
+  no warnings 'redefine';
+  local *Net::DNS::Resolver::Base::send = \&_fake_mx_send;
+
+  my @res = get_mx_ip_addresses('mx.example.org');
+  is_deeply(\@res, ['192.0.2.10', '2001:4860::10', 'fe80::1'],
+            'A and AAAA records of every MX host');
+  @res = get_mx_ip_addresses('nomx.example.org');
+  is_deeply(\@res, ['10.0.0.1', '2001:4860::20'],
+            'no MX: A and AAAA records of the domain');
+  @res = md_get_bogus_mx_hosts('mx.example.org');
+  is_deeply(\@res, ['fe80::1'], 'IPv6 MX hosts are checked as IPv6');
+  md_dns_cache_clear();
 }
 
 __PACKAGE__->runtests();

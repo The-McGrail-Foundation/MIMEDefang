@@ -231,8 +231,12 @@ sub get_host_name {
 
   $PrivateMyHostName = "localhost" unless defined($PrivateMyHostName);
 
-  # Now make it FQDN
-  my($fqdn) = gethostbyname($PrivateMyHostName);
+  # Now make it FQDN; getaddrinfo() also works on IPv6-only hosts
+  my $fqdn;
+  my ($err, @ai) = Socket::getaddrinfo($PrivateMyHostName, undef,
+                                       { flags => Socket::AI_CANONNAME() });
+  $fqdn = $ai[0]->{canonname} if (!$err and @ai);
+  ($fqdn) = gethostbyname($PrivateMyHostName) unless defined($fqdn);
   $PrivateMyHostName = $fqdn if (defined $fqdn) and length($fqdn) > length($PrivateMyHostName);
 
   return $PrivateMyHostName;
@@ -327,10 +331,32 @@ sub is_public_ip6_address {
 	return 1;
 }
 
+# Return the IPv4 (A) and then the IPv6 (AAAA) addresses of $host.
+sub _md_host_addresses {
+	my ($res, $host) = @_;
+	my @addrs;
+	foreach my $type ('A', 'AAAA') {
+		my $packet = md_dns_query($res, $host, $type);
+		next unless defined($packet);
+		next if $packet->header->rcode eq 'SERVFAIL';
+		next if $packet->header->rcode eq 'NXDOMAIN';
+		foreach my $rr ($packet->answer) {
+			next unless $rr->type eq $type;
+			if ($type eq 'AAAA' and $rr->can('address_short')) {
+				push(@addrs, $rr->address_short);
+			} else {
+				push(@addrs, $rr->address);
+			}
+		}
+	}
+	return @addrs;
+}
+
 =item get_mx_ip_addresses $domain [$resolver_object]
 
-Get IP addresses of all MX hosts for given domain.  If there are
-no MX hosts, then return A records.
+Get the IPv4 and IPv6 addresses (A and AAAA records) of all MX hosts
+for given domain.  If there are no MX hosts, then return the A and
+AAAA records of the domain itself.
 
 =cut
 
@@ -348,14 +374,8 @@ sub get_mx_ip_addresses {
 	    $packet->header->rcode eq 'SERVFAIL' ||
 	    $packet->header->rcode eq 'NXDOMAIN' ||
 	    !defined($packet->answer)) {
-		# No MX records; try A records
-		$packet = md_dns_query($res, $domain, 'A');
-		if (!defined($packet) ||
-		    $packet->header->rcode eq 'SERVFAIL' ||
-		    $packet->header->rcode eq 'NXDOMAIN' ||
-		    !defined($packet->answer)) {
-			return (@results);
-		}
+		# No MX records; try A and AAAA records
+		return _md_host_addresses($res, $domain);
 	}
 	foreach my $item ($packet->answer) {
 		if ($item->type eq 'MX') {
@@ -382,18 +402,21 @@ sub get_mx_ip_addresses {
 				}
 			}
 
-			my $packet2 = md_dns_query($res, $item->exchange, 'A');
-			next unless defined($packet2);
-			next if $packet2->header->rcode eq 'SERVFAIL';
-			next if $packet2->header->rcode eq 'NXDOMAIN';
-			next unless defined($packet2->answer);
-			foreach my $item2 ($packet2->answer) {
-				if ($item2->type eq 'A') {
-					push(@results, $item2->address);
+			# Same for something that looks like an IPv6 address
+			if ($item->exchange =~ /:/) {
+				my $ip6 = $item->exchange;
+				$ip6 =~ s/\.$//;
+				if (defined(Socket::inet_pton(Socket::AF_INET6(), $ip6))) {
+					push(@results, $ip6);
+					next;
 				}
 			}
+
+			push(@results, _md_host_addresses($res, $item->exchange));
 		} elsif ($item->type eq 'A') {
 			push(@results, $item->address);
+		} elsif ($item->type eq 'AAAA') {
+			push(@results, $item->can('address_short') ? $item->address_short : $item->address);
 		}
 	}
 	return (@results);
@@ -403,6 +426,7 @@ sub get_mx_ip_addresses {
 
 Returns a list of "bogus" IP addresses that are in $domain's list of MX
 records.  A "bogus" IP address is loopback/private/multicast/etc.
+Both IPv4 and IPv6 addresses are checked.
 
 =cut
 
@@ -411,7 +435,9 @@ sub md_get_bogus_mx_hosts {
 	my @bogus_hosts = ();
 	my @mx = get_mx_ip_addresses($domain);
 	foreach my $mx (@mx) {
-		if (!is_public_ip4_address($mx)) {
+		my $public = ($mx =~ /:/) ? is_public_ip6_address($mx)
+		                          : is_public_ip4_address($mx);
+		if (!$public) {
 			push(@bogus_hosts, $mx);
 		}
 	}
@@ -420,7 +446,7 @@ sub md_get_bogus_mx_hosts {
 
 =item get_ptr_record $ip_address [$resolver_object]
 
-Get PTR record for given IP address.
+Get PTR record for given IPv4 or IPv6 address.
 
 =cut
 
@@ -432,7 +458,8 @@ sub get_ptr_record {
         }
         $res = md_shared_resolver() unless defined($res);
 
-        my $packet = md_dns_query($res, reverse_ip_address_for_rbl($ip) . ".in-addr.arpa", 'PTR');
+        my $suffix = ($ip =~ /:/) ? '.ip6.arpa' : '.in-addr.arpa';
+        my $packet = md_dns_query($res, reverse_ip_address_for_rbl($ip) . $suffix, 'PTR');
         if (!defined($packet) ||
             $packet->header->rcode eq 'SERVFAIL' ||
             $packet->header->rcode eq 'NXDOMAIN' ||

@@ -1821,12 +1821,16 @@ the relay was blacklisted.
 .B md_get_bogus_mx_hosts($domain)
 
 This function looks up all the MX records for the specified domain (or
-A records if there are no MX records) and returns a list of "bogus" IP
-addresses found amongst the records.  A "bogus" IP address is an IP
+A and AAAA records if there are no MX records) and returns a list of
+"bogus" IP addresses found amongst the A and AAAA records of the MX hosts.
+A "bogus" IPv4 address is an IP
 address in a private network (10.0.0.0/8, 172.16.0.0/12,
 192.168.0.0/16), the loopback network (127.0.0.0/8), local-link for
 auto-DHCP (169.254.0.0/16), IPv4 multicast (224.0.0.0/4) or reserved
-(240.0.0.0/4).
+(240.0.0.0/4).  A "bogus" IPv6 address is the unspecified or loopback
+address (:: and ::1), a unique-local (fc00::/7), link-local (fe80::/10),
+multicast (ff00::/8), discard-only (100::/64) or documentation
+(2001:db8::/32) address, or an IPv4-mapped address whose IPv4 part is bogus.
 
 .PP
 Here's how you might use the function in filter_sender:

@@ -1600,9 +1600,15 @@ sub read_commands_file {
 	    } elsif ($cmd eq "J") {
 	      $WasResent = 1;
 	      $RelayAddr = $arg;
-	      my($iaddr, $iname);
-	      $iaddr = inet_aton($RelayAddr);
-	      $iname = gethostbyaddr($iaddr, AF_INET);
+	      my($af, $iaddr, $iname);
+	      if ($RelayAddr =~ /:/) {
+		      $af = AF_INET6;
+		      $iaddr = Socket::inet_pton(AF_INET6, $RelayAddr);
+	      } else {
+		      $af = AF_INET;
+		      $iaddr = inet_aton($RelayAddr);
+	      }
+	      $iname = gethostbyaddr($iaddr, $af) if defined($iaddr);
 	      if (defined($iname)) {
 		      $RelayHostname = $iname;
 	      } else {
