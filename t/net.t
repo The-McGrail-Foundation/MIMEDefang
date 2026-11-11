@@ -350,6 +350,12 @@ my %MX_ZONE = (
   'mail6.example.org AAAA' => ['mail6.example.org. 300 IN AAAA fe80::1'],
   'nomx.example.org A'     => ['nomx.example.org. 300 IN A 10.0.0.1'],
   'nomx.example.org AAAA'  => ['nomx.example.org. 300 IN AAAA 2001:4860::20'],
+  'pref.example.org MX'    => ['pref.example.org. 300 IN MX 20 backup.example.org.',
+                               'pref.example.org. 300 IN MX 10 primary.example.org.',
+                               'pref.example.org. 300 IN MX 20 backup2.example.org.'],
+  'primary.example.org A'  => ['primary.example.org. 300 IN A 192.0.2.1'],
+  'backup.example.org A'   => ['backup.example.org. 300 IN A 192.0.2.2'],
+  'backup2.example.org A'  => ['backup2.example.org. 300 IN A 192.0.2.3'],
 );
 
 sub _fake_mx_send
@@ -374,6 +380,21 @@ sub t_get_mx_ip_addresses_ipv6 : Test(3)
             'no MX: A and AAAA records of the domain');
   @res = md_get_bogus_mx_hosts('mx.example.org');
   is_deeply(\@res, ['fe80::1'], 'IPv6 MX hosts are checked as IPv6');
+  md_dns_cache_clear();
+}
+
+sub t_get_mx_ip_addresses_sorted : Test(2)
+{
+  md_dns_cache_clear();
+  no warnings 'redefine';
+  local *Net::DNS::Resolver::Base::send = \&_fake_mx_send;
+
+  my @res = get_mx_ip_addresses('pref.example.org');
+  is_deeply(\@res, ['192.0.2.2', '192.0.2.1', '192.0.2.3'],
+            'without the flag the DNS answer order is kept');
+  @res = get_mx_ip_addresses('pref.example.org', undef, 1);
+  is_deeply(\@res, ['192.0.2.1', '192.0.2.2', '192.0.2.3'],
+            'with the flag addresses are sorted by MX preference');
   md_dns_cache_clear();
 }
 

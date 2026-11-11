@@ -352,16 +352,21 @@ sub _md_host_addresses {
 	return @addrs;
 }
 
-=item get_mx_ip_addresses $domain [$resolver_object]
+=item get_mx_ip_addresses $domain [$resolver_object] [$sort_by_pref]
 
 Get the IPv4 and IPv6 addresses (A and AAAA records) of all MX hosts
 for given domain.  If there are no MX hosts, then return the A and
 AAAA records of the domain itself.
 
+If C<$sort_by_pref> is true, the addresses are returned in ascending
+order of MX preference (hosts with equal preference keep the resolver
+order).  Otherwise they are returned in the order of the DNS answer.
+Pass C<undef> as C<$resolver_object> to use the shared resolver.
+
 =cut
 
 sub get_mx_ip_addresses {
-	my($domain, $res) = @_;
+	my($domain, $res, $sort_by_pref) = @_;
 	my @results;
 	unless ($Features{"Net::DNS"}) {
     md_syslog('err', "Attempted to call get_mx_ip_addresses, but Perl module Net::DNS is not installed");
@@ -377,7 +382,16 @@ sub get_mx_ip_addresses {
 		# No MX records; try A and AAAA records
 		return _md_host_addresses($res, $domain);
 	}
-	foreach my $item ($packet->answer) {
+	my @answer = $packet->answer;
+	if ($sort_by_pref) {
+		# Perl's sort is stable: equal preferences keep resolver order.
+		# Non-MX records go last.
+		@answer = sort {
+			($a->type eq 'MX' ? $a->preference : 65536) <=>
+			($b->type eq 'MX' ? $b->preference : 65536)
+		} @answer;
+	}
+	foreach my $item (@answer) {
 		if ($item->type eq 'MX') {
 
 			# Weird MX record of "." or ""
