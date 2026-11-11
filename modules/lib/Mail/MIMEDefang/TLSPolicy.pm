@@ -152,8 +152,14 @@ sub md_check_mta_sts {
     # DNS TXT lookup for _mta-sts.<domain>
     my $res = Mail::MIMEDefang::Net::md_shared_resolver();
 
-    my $txt_record = md_dns_txt($res, "_mta-sts.$domain");
-    return unless defined $txt_record && $txt_record =~ /\bv=STSv1\b/i;
+    # RFC 8461 3.1: ignore records not starting with v=STSv1, and assume
+    # no policy when more than one such record is published.
+    my @txt = md_dns_txt($res, "_mta-sts.$domain", qr/^v=STSv1\s*(?:;|$)/);
+    if (@txt > 1) {
+        md_syslog('info', "md_check_mta_sts: multiple STSv1 records for _mta-sts.$domain, ignoring policy");
+    }
+    return unless @txt == 1;
+    my $txt_record = $txt[0];
 
     my $policy_id;
     $policy_id = $1 if $txt_record =~ /\bid=([^;]+)/i;

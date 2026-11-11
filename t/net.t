@@ -265,9 +265,30 @@ sub t_dns_txt_uses_cache : Test(2)
     return _fake_reply('_dmarc.example.net', 'TXT', 'NOERROR',
                        '_dmarc.example.net. 300 IN TXT "v=DMARC1; p=none"');
   };
-  is(md_dns_txt($res, '_dmarc.example.net', qr/^v=DMARC1/), 'v=DMARC1; p=none');
+  is(scalar(md_dns_txt($res, '_dmarc.example.net', qr/^v=DMARC1/)), 'v=DMARC1; p=none');
   md_dns_txt($res, '_dmarc.example.net', qr/^v=DMARC1/);
   is($calls, 1, 'md_dns_txt goes through the cache');
+}
+
+sub t_dns_txt_multiple : Test(5)
+{
+  my $res = md_shared_resolver();
+  md_dns_cache_clear();
+  no warnings 'redefine';
+  local *Net::DNS::Resolver::Base::send = sub {
+    return _fake_reply('multi.example.net', 'TXT', 'NOERROR',
+                       'multi.example.net. 300 IN TXT "google-site-verification=abc"',
+                       'multi.example.net. 300 IN TXT "v=spf1 " "-all"',
+                       'multi.example.net. 300 IN TXT "v=spf1 +all"');
+  };
+  my @all = md_dns_txt($res, 'multi.example.net');
+  is(scalar(@all), 3, 'list context returns every TXT record');
+  my @spf = md_dns_txt($res, 'multi.example.net', qr/^v=spf1\b/);
+  is_deeply(\@spf, ['v=spf1 -all', 'v=spf1 +all'], 'filter applies to every record, strings concatenated');
+  is(scalar(md_dns_txt($res, 'multi.example.net', qr/^v=spf1\b/)), 'v=spf1 -all', 'scalar context returns the first match');
+  my @none = md_dns_txt($res, 'multi.example.net', qr/^v=DMARC1/);
+  is(scalar(@none), 0, 'no match is an empty list');
+  ok(!defined scalar(md_dns_txt($res, 'multi.example.net', qr/^v=DMARC1/)), 'no match is undef in scalar context');
 }
 
 sub t_dns_query_nocache : Test(3)

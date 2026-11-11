@@ -688,11 +688,13 @@ sub relay_is_blacklisted_multi_list {
 =item md_dns_txt($resolver, $name [, $filter])
 
 Query C<$name> for TXT records using the supplied C<Net::DNS::Resolver>
-object and return the first TXT string found, or C<undef> on any error
-(NXDOMAIN, SERVFAIL, no TXT records).
+object.  In list context it returns every TXT string found, in scalar
+context only the first one; on any error (NXDOMAIN, SERVFAIL, no TXT
+records) it returns an empty list or C<undef>.  The character-strings
+of a TXT record are concatenated without separators (RFC 7208 3.3).
 
 The optional C<$filter> argument is a C<Regexp> (e.g. C<qr/^v=spf1\b/i>);
-when given, only a TXT record whose text matches C<$filter> is returned,
+when given, only TXT records whose text matches C<$filter> are returned,
 which lets callers pick a specific record type (SPF, BIMI, ...) out of a
 domain that publishes several unrelated TXT records.
 
@@ -706,15 +708,14 @@ sub md_dns_txt {
     return if $packet->header->rcode eq 'SERVFAIL';
     return unless defined $packet->answer;
 
+    my @txt;
     for my $rr ($packet->answer) {
         next unless $rr->type eq 'TXT';
-        my $txt = $rr->rdstring;
-        $txt =~ s/^"|"$//g;
-        $txt =~ s/"\s*"//g;
+        my $txt = join('', $rr->txtdata);
         next if defined $filter and $txt !~ $filter;
-        return $txt;
+        push @txt, $txt;
     }
-    return;
+    return wantarray ? @txt : $txt[0];
 }
 
 =item md_shared_resolver()
