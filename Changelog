@@ -2,6 +2,13 @@ WARNING: Before upgrading MIMEDefang, please search this file for
 *** NOTE INCOMPATIBILITY ** to see if anything has changed that might
 affect your filter.
 
+2026-11-18 Giovanni Bechis <gbechis@pccc.com>
+
+        * `action_*_header_now` accept an optional last `inputmsg_only`
+          argument to patch only ./INPUTMSG without changing the email
+          delivered by the MTA, useful for headers that should only be
+          parsed by SpamAssassin/rspamd
+
 2026-11-07 Giovanni Bechis <g.bechis@snb.it>
 
         * mimedefang-multiplexor: the adaptive autoscaler (`-k`) keeps the

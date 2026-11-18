@@ -455,6 +455,19 @@ Like C<action_insert_header>, but also patches C<./INPUTMSG> immediately,
 so a C<spam_assassin_check>/C<spam_assassin_is_spam>/C<rspamd_check> call
 later in the same filter invocation sees the new header.
 
+All the C<action_*_header_now> functions accept an optional last
+C<inputmsg_only> argument: if true, only C<./INPUTMSG> is patched and no
+command is sent to the milter, so the email delivered by the MTA is not
+modified. Use it for headers that should only be seen by the
+SpamAssassin/Rspamd checks, e.g.:
+
+    # pass undef to use the default position/index
+    action_insert_header_now('X-Scan-Info', 'value', undef, 1);
+    action_add_header_now('X-Scan-Info', 'value', 1);
+    action_change_header_now('X-Scan-Info', 'value', undef, 1);
+    action_delete_header_now('X-Spam-Status', undef, 1);
+    action_delete_all_headers_now('X-Spam-Status', 1);
+
 =cut
 
 #***********************************************************************
@@ -463,6 +476,7 @@ later in the same filter invocation sees the new header.
 #  header -- header name (eg: X-My-Header)
 #  value -- header value (eg: any text goes here)
 #  position -- where to place it (eg: 0 [default] to make it first)
+#  inputmsg_only -- if true, only patch ./INPUTMSG (no milter command)
 # %RETURNS:
 #  1 on success, 0 on failure
 # %DESCRIPTION:
@@ -472,13 +486,13 @@ later in the same filter invocation sees the new header.
 #  run later in the same filter invocation.
 #***********************************************************************
 sub action_insert_header_now {
-    my($header, $value, $pos) = @_;
+    my($header, $value, $pos, $inputmsg_only) = @_;
     return 0 if (!in_message_context("action_insert_header_now"));
     $pos = 0 unless defined($pos);
     my $line = _header_line($header, $value);
     return 0 unless defined($line);
 
-    action_insert_header($header, $value, $pos);
+    action_insert_header($header, $value, $pos) unless $inputmsg_only;
 
     return _rewrite_inputmsg_headers(sub {
         my($headers) = @_;
@@ -502,6 +516,7 @@ later in the same filter invocation sees the new header.
 # %ARGUMENTS:
 #  header -- header name (eg: X-My-Header)
 #  value -- header value (eg: any text goes here)
+#  inputmsg_only -- if true, only patch ./INPUTMSG (no milter command)
 # %RETURNS:
 #  1 on success, 0 on failure
 # %DESCRIPTION:
@@ -511,12 +526,12 @@ later in the same filter invocation sees the new header.
 #  invocation.
 #***********************************************************************
 sub action_add_header_now {
-    my($header, $value) = @_;
+    my($header, $value, $inputmsg_only) = @_;
     return 0 if (!in_message_context("action_add_header_now"));
     my $line = _header_line($header, $value);
     return 0 unless defined($line);
 
-    action_add_header($header, $value);
+    action_add_header($header, $value) unless $inputmsg_only;
 
     return _rewrite_inputmsg_headers(sub {
         my($headers) = @_;
@@ -539,6 +554,7 @@ If the header does not exist it is added, as C<action_change_header> does.
 #  header -- header name (eg: X-My-Header)
 #  value -- header value (eg: any text goes here)
 #  index -- index of header to change (default 1)
+#  inputmsg_only -- if true, only patch ./INPUTMSG (no milter command)
 # %RETURNS:
 #  1 on success, 0 on failure
 # %DESCRIPTION:
@@ -548,13 +564,13 @@ If the header does not exist it is added, as C<action_change_header> does.
 #  invocation.
 #***********************************************************************
 sub action_change_header_now {
-    my($header, $value, $idx) = @_;
+    my($header, $value, $idx, $inputmsg_only) = @_;
     return 0 if (!in_message_context("action_change_header_now"));
     $idx = 1 unless defined($idx);
     my $line = _header_line($header, $value);
     return 0 unless defined($line);
 
-    action_change_header($header, $value, $idx);
+    action_change_header($header, $value, $idx) unless $inputmsg_only;
 
     return _rewrite_inputmsg_headers(sub {
         my($headers) = @_;
@@ -586,6 +602,7 @@ later in the same filter invocation no longer sees the deleted header.
 # %ARGUMENTS:
 #  header -- header name (eg: X-My-Header)
 #  index -- index of header to delete (default 1)
+#  inputmsg_only -- if true, only patch ./INPUTMSG (no milter command)
 # %RETURNS:
 #  1 on success, 0 on failure
 # %DESCRIPTION:
@@ -595,11 +612,11 @@ later in the same filter invocation no longer sees the deleted header.
 #  invocation.
 #***********************************************************************
 sub action_delete_header_now {
-    my($header, $idx) = @_;
+    my($header, $idx, $inputmsg_only) = @_;
     return 0 if (!in_message_context("action_delete_header_now"));
     $idx = 1 unless defined($idx);
 
-    action_delete_header($header, $idx);
+    action_delete_header($header, $idx) unless $inputmsg_only;
 
     return _rewrite_inputmsg_headers(sub {
         my($headers) = @_;
@@ -628,6 +645,7 @@ any instance of the deleted header.
 # %PROCEDURE: action_delete_all_headers_now
 # %ARGUMENTS:
 #  header -- header name (eg: X-My-Header)
+#  inputmsg_only -- if true, only patch ./INPUTMSG (no milter command)
 # %RETURNS:
 #  1 on success, 0 on failure
 # %DESCRIPTION:
@@ -637,14 +655,14 @@ any instance of the deleted header.
 #  same filter invocation.
 #***********************************************************************
 sub action_delete_all_headers_now {
-    my($header) = @_;
+    my($header, $inputmsg_only) = @_;
     return 0 if (!in_message_context("action_delete_all_headers_now"));
     if (!defined($header) || $header eq '') {
         md_syslog('warning', 'action_delete_all_headers_now called without a header name');
         return 0;
     }
 
-    action_delete_all_headers($header);
+    action_delete_all_headers($header) unless $inputmsg_only;
 
     return _rewrite_inputmsg_headers(sub {
         my($headers) = @_;

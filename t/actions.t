@@ -620,6 +620,44 @@ sub t_delete_all_headers_now : Test(2)
   unlink('./HEADERS') if -f './HEADERS';
 }
 
+sub t_header_now_inputmsg_only : Test(7)
+{
+  no warnings qw(redefine once);
+  local *::md_syslog = sub {};
+  use warnings qw(redefine once);
+
+  init_globals();
+  $CWD = '.';
+  $InMessageContext = 1;
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+
+  open(my $fh, '>', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  print $fh "X-Dup: one\nSubject: Hello\nX-Dup: two\nX-Spam: a\nX-Spam: b\n\nBody\n";
+  close($fh);
+
+  is(action_insert_header_now('X-First', 'v1', undef, 1), 1, 'action_insert_header_now inputmsg_only returns 1');
+  is(action_add_header_now('X-Last', 'v2', 1), 1, 'action_add_header_now inputmsg_only returns 1');
+  is(action_change_header_now('X-Dup', 'changed', 2, 1), 1, 'action_change_header_now inputmsg_only returns 1');
+  is(action_delete_header_now('X-Dup', undef, 1), 1, 'action_delete_header_now inputmsg_only returns 1');
+  is(action_delete_all_headers_now('X-Spam', 1), 1, 'action_delete_all_headers_now inputmsg_only returns 1');
+  if (defined $results_fh) {
+    close $results_fh;
+    undef $results_fh;
+  }
+
+  ok(!-s './RESULTS', 'no milter command written to RESULTS');
+
+  open(my $ifh, '<', './INPUTMSG') or die "Cannot open INPUTMSG: $!";
+  my $msg = do { local $/; <$ifh> };
+  close($ifh);
+  is($msg, "X-First: v1\nSubject: Hello\nX-Dup: changed\nX-Last: v2\n\nBody\n",
+     'INPUTMSG patched by all the inputmsg_only calls');
+
+  unlink('./RESULTS') if -f './RESULTS';
+  unlink('./INPUTMSG') if -f './INPUTMSG';
+}
+
 sub t_delete_all_headers_undef : Test(4)
 {
   no warnings qw(redefine once);
