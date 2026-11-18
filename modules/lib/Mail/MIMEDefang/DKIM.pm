@@ -29,6 +29,7 @@ use Mail::DKIM::Signer;
 use Mail::DKIM::Verifier;
 
 use Mail::MIMEDefang;
+use Mail::MIMEDefang::Net ();
 
 our @ISA = qw(Exporter);
 our @EXPORT;
@@ -186,6 +187,11 @@ If the sub is called in scalar context, the C<$dkim> object is returned.
 =cut
 
 sub md_dkim_verify {
+
+  # Cache DNS answers in the worker, unless the filter has set its own resolver
+  if ($Features{"Net::DNS"} and not defined(Mail::DKIM::DNS::resolver())) {
+    Mail::DKIM::DNS::resolver(Mail::MIMEDefang::Net::md_caching_resolver());
+  }
 
   my $dkim = Mail::DKIM::Verifier->new();
 

@@ -9,7 +9,7 @@ use Sys::Hostname;
 
 use Mail::MIMEDefang;
 use Mail::MIMEDefang::Net;
-use Mail::MIMEDefang::Net qw(md_shared_resolver md_dns_query md_dns_cache_clear);
+use Mail::MIMEDefang::Net qw(md_shared_resolver md_caching_resolver md_dns_query md_dns_cache_clear);
 use Net::DNS;
 
 init_globals;
@@ -270,6 +270,42 @@ sub t_dns_query_cache : Test(11)
   md_dns_cache_clear();
   md_dns_query($res, 'a.example.org', 'A');
   is($calls, 2, 'md_dns_cache_clear empties the cache');
+}
+
+sub t_caching_resolver : Test(7)
+{
+  my $calls = 0;
+  my $reply;
+  my $res = md_shared_resolver();
+  md_dns_cache_clear();
+  no warnings 'redefine';
+  local *Net::DNS::Resolver::Base::send = sub { $calls++; return $reply; };
+
+  my $cr = md_caching_resolver();
+  $reply = _fake_reply('c.example.org', 'TXT', 'NOERROR', 'c.example.org. 120 IN TXT "v=spf1 -all"');
+  my $p = $cr->send('c.example.org', 'TXT');
+  is(($p->answer)[0]->txtdata, 'v=spf1 -all');
+  $cr->send('c.example.org.', 'TXT', 'IN');
+  is($calls, 1, 'send answered from the cache');
+
+  # errorstring describes the last lookup, not the shared resolver state
+  $res->errorstring('query timed out');
+  $cr->send('c.example.org', 'TXT');
+  is($cr->errorstring, 'NOERROR', 'errorstring of a cached answer');
+  $reply = undef;
+  $res->errorstring('query timed out');
+  is($cr->send('to.example.org', 'A'), undef);
+  is($cr->errorstring, 'query timed out', 'errorstring of a failed lookup');
+
+  # non-IN classes are not cached
+  $calls = 0;
+  $reply = _fake_reply('ch.example.org', 'TXT', 'NOERROR');
+  $cr->send('ch.example.org', 'TXT', 'CH') for 1..2;
+  is($calls, 2, 'CH class bypasses the cache');
+
+  # other methods are passed to the shared resolver
+  is($cr->defnames, $res->defnames, 'unknown methods are delegated');
+  md_dns_cache_clear();
 }
 
 sub t_dns_txt_uses_cache : Test(2)

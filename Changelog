@@ -8,6 +8,10 @@ affect your filter.
           argument to patch only ./INPUTMSG without changing the email
           delivered by the MTA, useful for headers that should only be
           parsed by SpamAssassin/rspamd
+        * `md_spf_verify` and `md_dkim_verify` look up DNS records through
+          the new `md_caching_resolver`, so their answers are cached in the
+          worker like the other `md_dns_query` lookups.  `md_dkim_verify`
+          keeps a resolver set by the filter with `Mail::DKIM::DNS::resolver`
 
 2026-11-07 Giovanni Bechis <g.bechis@snb.it>
 

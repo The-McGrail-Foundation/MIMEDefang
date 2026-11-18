@@ -39,7 +39,7 @@ our @EXPORT = qw(expand_ipv6_address reverse_ip_address_for_rbl relay_is_blackli
                  is_public_ip4_address is_public_ip6_address md_get_bogus_mx_hosts get_mx_ip_addresses
                  md_get_dmarc_record md_dns_txt);
 our @EXPORT_OK = qw(get_host_name get_ptr_record md_init
-                    md_shared_resolver md_dns_query md_dns_cache_clear);
+                    md_shared_resolver md_caching_resolver md_dns_query md_dns_cache_clear);
 
 # Shared resolver and DNS answer cache, see md_shared_resolver() and
 # md_dns_query().  Both live as long as the worker process does.
@@ -778,6 +778,22 @@ sub md_shared_resolver {
   return $SharedResolver;
 }
 
+=item md_caching_resolver()
+
+Returns an object that can be used where a C<Net::DNS::Resolver> is
+expected by modules that only call its C<send> and C<errorstring>
+methods, like C<Mail::SPF::Server> (C<dns_resolver> option) and
+C<Mail::DKIM::DNS::resolver()>.  Lookups go through C<md_dns_query> on
+the resolver returned by C<md_shared_resolver>, so their answers are
+cached; C<errorstring> refers to the last lookup made through the object.
+Every other method is passed to the shared resolver.
+
+=cut
+
+sub md_caching_resolver {
+  return Mail::MIMEDefang::Net::CachingResolver->new;
+}
+
 =item md_dns_cache_clear()
 
 Empties the DNS answer cache used by L</md_dns_query>.
@@ -866,5 +882,56 @@ sub _dns_cache_ttl {
 =back
 
 =cut
+
+# Net::DNS::Resolver look-alike returned by md_caching_resolver()
+package Mail::MIMEDefang::Net::CachingResolver;
+
+use strict;
+use warnings;
+
+our $AUTOLOAD;
+
+sub new {
+  my ($class) = @_;
+  return bless { errorstring => undef }, $class;
+}
+
+sub _lookup {
+  my ($self, $method, $name, $type, $class) = @_;
+  my $res = Mail::MIMEDefang::Net::md_shared_resolver();
+  $type = 'A' unless defined($type);
+  if (defined($class) and uc($class) ne 'IN') {
+    # Only IN answers are cached
+    my $packet = $res->$method($name, $type, $class);
+    $self->{errorstring} = $res->errorstring;
+    return $packet;
+  }
+  my $packet = Mail::MIMEDefang::Net::md_dns_query($res, $name, $type, $method);
+  # A cached answer does not touch the shared resolver, whose errorstring
+  # could be left over from an unrelated failed lookup
+  if (defined($packet)) {
+    $self->{errorstring} = $packet->header->rcode;
+  } else {
+    $self->{errorstring} = $res->errorstring;
+  }
+  return $packet;
+}
+
+sub send  { my $self = shift; return $self->_lookup('send', @_); }
+sub query { my $self = shift; return $self->_lookup('query', @_); }
+
+sub errorstring {
+  my ($self) = @_;
+  return $self->{errorstring} // Mail::MIMEDefang::Net::md_shared_resolver()->errorstring;
+}
+
+sub AUTOLOAD {
+  my $self = shift;
+  my $method = $AUTOLOAD;
+  $method =~ s/.*:://;
+  return Mail::MIMEDefang::Net::md_shared_resolver()->$method(@_);
+}
+
+sub DESTROY { }
 
 1;

@@ -26,7 +26,7 @@ use warnings;
 require Exporter;
 
 use Mail::MIMEDefang;
-use Mail::MIMEDefang::Net qw(md_dns_txt);
+use Mail::MIMEDefang::Net qw(md_dns_txt md_caching_resolver);
 use Mail::SPF;
 use Net::DNS;
 
@@ -87,7 +87,10 @@ sub md_spf_verify {
   # RFC 4408 defines the maximum number of terms (mechanisms and modifiers) per SPF check that perform DNS look-ups
   # to 10.
   # In practice 10 lookups are not enough for some domains.
-  my $spf_server  = Mail::SPF::Server->new(max_dns_interactive_terms => 20);
+  # DNS answers are cached in the worker, see md_caching_resolver
+  my %spf_options = (max_dns_interactive_terms => 20);
+  $spf_options{'dns_resolver'} = md_caching_resolver() if $Features{"Net::DNS"};
+  my $spf_server  = Mail::SPF::Server->new(%spf_options);
   my ($spfres, $helo_spfres);
   my ($request, $helo_request);
   $spfmail =~ s/^<//;
