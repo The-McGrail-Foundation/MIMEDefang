@@ -55,7 +55,7 @@ my $MessageStartTime;
 our @EXPORT;
 our @EXPORT_OK;
 
-our $VERSION = '3.8.0';
+our $VERSION = '3.8.1';
 # 1 on development snapshots, 0 for release candidates and releases
 our $DEV = 0;
 
