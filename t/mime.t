@@ -5,6 +5,12 @@ use lib qw(modules/lib);
 use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
+BEGIN {
+  unless (eval { require HTML::Parser; 1 }) {
+    plan skip_all => 'HTML::Parser not installed';
+  }
+}
+
 use HTML::Parser;
 use MIME::Base64 qw(encode_base64);
 use MIME::Parser;

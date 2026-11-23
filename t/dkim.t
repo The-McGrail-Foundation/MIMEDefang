@@ -5,6 +5,12 @@ use lib qw(modules/lib);
 use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
+BEGIN {
+  unless (eval { require Mail::DKIM::Verifier; 1 }) {
+    plan skip_all => 'Mail::DKIM not installed';
+  }
+}
+
 use Mail::MIMEDefang;
 use Mail::MIMEDefang::DKIM;
 

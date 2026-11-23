@@ -109,9 +109,12 @@ my %REQUIRED_MODULES = (
     'Carp'           => 0,
     'Socket'         => 0,
     'Errno'          => 0,
+    'Net::DNS'       => 0,
 );
 
-# Optional (one of these must be present for syslog support)
+# Syslog: one of these is required (md_openlog croaks without both).
+# Unix::Syslog is preferred when installed; Sys::Syslog is the one
+# declared as a prerequisite, since it is a core module.
 my @SYSLOG_MODULES = qw(Unix::Syslog Sys::Syslog);
 
 # ---------------------------------------------------------------------------
@@ -272,6 +275,12 @@ my $ENABLE_PTHREAD_FLAG      = opt('ENABLE_PTHREAD_FLAG',      0);
 
 # --- Required Perl module check --------------------------------------------
 if ($ENABLE_CHECK_PERL_MODULES) {
+    # Under a CPAN client, go on and write the Makefile: the client
+    # reads PREREQ_PM from MYMETA and installs the missing modules.
+    my $under_cpan = $ENV{PERL5_CPAN_IS_RUNNING}
+                  || $ENV{PERL5_CPANPLUS_IS_RUNNING}
+                  || $ENV{PERL5_CPANM_IS_RUNNING};
+
     print "\nChecking required Perl modules:\n";
     my $all_ok = 1;
     for my $mod (sort keys %REQUIRED_MODULES) {
@@ -282,11 +291,7 @@ if ($ENABLE_CHECK_PERL_MODULES) {
         $all_ok = 0 unless $ok;
     }
     unless ($all_ok) {
-        # Under a CPAN client, go on and write the Makefile: the client
-        # reads PREREQ_PM from MYMETA and installs the missing modules.
-        if ($ENV{PERL5_CPAN_IS_RUNNING}
-            || $ENV{PERL5_CPANPLUS_IS_RUNNING}
-            || $ENV{PERL5_CPANM_IS_RUNNING}) {
+        if ($under_cpan) {
             warn "\nWARNING: One or more required Perl modules are missing.\n"
                . "         They are listed as prerequisites and will be\n"
                . "         installed by the CPAN client.\n";
@@ -307,9 +312,18 @@ if ($ENABLE_CHECK_PERL_MODULES) {
         printf "  %-35s %s\n", $mod, $ok ? 'found' : 'not found';
         $have_syslog = 1 if $ok;
     }
-    warn "\nWARNING: Neither Unix::Syslog nor Sys::Syslog is installed.\n"
-       . "         MIMEDefang will not be able to log to syslog.\n"
-       unless $have_syslog;
+    unless ($have_syslog) {
+        if ($under_cpan) {
+            warn "\nWARNING: Neither Unix::Syslog nor Sys::Syslog is installed.\n"
+               . "         Sys::Syslog is listed as a prerequisite and will be\n"
+               . "         installed by the CPAN client.\n";
+        } else {
+            die "\nERROR: Neither Unix::Syslog nor Sys::Syslog is installed.\n"
+              . "       One of them is required: install Sys::Syslog (or\n"
+              . "       Unix::Syslog), then re-run perl Makefile.PL, or skip\n"
+              . "       this check with ENABLE_CHECK_PERL_MODULES=0\n";
+        }
+    }
 }
 
 # AnyEvent optional module check
@@ -554,7 +568,6 @@ WriteMakefile(
             runtime => {
                 recommends => {
                     'Unix::Syslog'          => 0,
-                    'Sys::Syslog'           => 0,
                     'AnyEvent'              => 0,
                     'AnyEvent::DNS'         => 0,
                     'AnyEvent::Socket'      => 0,
@@ -566,13 +579,23 @@ WriteMakefile(
                     'HTML::Parser'          => 0,
                     'IO::Socket::SSL'       => 0,
                     'JSON'                  => 0,
+                    'JSON::PP'              => 0,
                     'LWP::UserAgent'        => 0,
+                    'HTTP::Request'         => 0,
+                    'Archive::Zip'          => 0,
+                    'HTML::TreeBuilder'     => 0,
+                    'HTML::FormatText'      => 0,
+                },
+            },
+            test => {
+                requires => {
+                    'Test::Class'        => 0,
+                    'Test::Most'         => 0,
+                    'JSON::PP'           => 0,
                 },
             },
             develop => {
                 requires => {
-                    'Test::Class'        => 0,
-                    'Test::Most'         => 0,
                     'Test::Perl::Critic' => 0,
                 },
             },
@@ -587,7 +610,7 @@ WriteMakefile(
     MAN1PODS              => {},
     MAN3PODS              => {},
 
-    PREREQ_PM        => \%REQUIRED_MODULES,
+    PREREQ_PM        => { %REQUIRED_MODULES, 'Sys::Syslog' => 0 },
 
     macro            => {
         MD_CC              => $CC,

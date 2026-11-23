@@ -11,7 +11,7 @@ use warnings;
 use lib qw(modules/lib);
 use Test::More;
 
-my @required = qw(AnyEvent AnyEvent::DNS AnyEvent::Socket);
+my @required = qw(AnyEvent AnyEvent::DNS AnyEvent::Socket Mail::SPF);
 for my $mod (@required) {
     eval "require $mod";
     if ($@) {
