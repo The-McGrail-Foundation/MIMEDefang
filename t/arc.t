@@ -5,6 +5,12 @@ use lib qw(modules/lib);
 use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
+BEGIN {
+  unless (eval { require Mail::DKIM::ARC::Signer; 1 }) {
+    plan skip_all => 'Mail::DKIM (with ARC support) not installed';
+  }
+}
+
 use Mail::MIMEDefang;
 use Mail::MIMEDefang::DKIM::ARC;
 

@@ -5,6 +5,12 @@ use lib qw(modules/lib);
 use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
+BEGIN {
+  unless (eval { require Mail::SPF; 1 }) {
+    plan skip_all => 'Mail::SPF not installed';
+  }
+}
+
 use Mail::MIMEDefang;
 use Mail::MIMEDefang::Net;
 use Mail::MIMEDefang::SPF;

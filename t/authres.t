@@ -5,6 +5,14 @@ use lib qw(modules/lib);
 use base qw(Mail::MIMEDefang::Unit);
 use Test::Most;
 
+BEGIN {
+  for my $mod (qw(Mail::DKIM::Verifier Mail::SPF)) {
+    unless (eval "require $mod; 1") {
+      plan skip_all => "$mod not installed";
+    }
+  }
+}
+
 use Mail::MIMEDefang;
 use Mail::MIMEDefang::Authres;
 use Mail::MIMEDefang::BIMI;
