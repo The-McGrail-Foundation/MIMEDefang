@@ -1,0 +1,20 @@
+Return-Path: <alice@example.com>
+Received: from mail.example.com (mail.example.com [192.0.2.1])
+	by mx.example.org (8.14.4) with ESMTP id test123
+	for <bob@example.org>; Mon, 1 Jan 2024 00:00:00 +0000
+Message-Id: <test@example.com>
+Date: Mon, 1 Jan 2024 00:00:00 +0000
+From: alice@example.com
+To: bob@example.org
+Subject: ARC test
+Mime-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+DKIM-Signature: a=rsa-sha1; q=dns; l=14; t=1128407653; x=-1019075996;
+	c=nowsp; s=selector; h=Subject:From:To:Date:Content-Type;
+	d=example.com; i=alice@example.com;
+	b=dummydummydummy;
+Authentication-Results: mx.example.org; header.From=alice@example.com;
+	dkim=pass reason="dns: lookup ok" (verified);
+
+This is a test.
