@@ -148,7 +148,7 @@ sub md_arc_sign {
   if($arc->result eq "sealed") {
     my @pre_headers = $arc->as_strings();
     foreach my $arc_h ( @pre_headers ) {
-      if($arc_h =~ /^(.*):\s(.*)$/s) {
+      if($arc_h =~ /^([^\s:]+):[ \t]?(.*)$/s) {
         $h = $1;
         $v = $2;
         $v =~ s/\r//gs;
